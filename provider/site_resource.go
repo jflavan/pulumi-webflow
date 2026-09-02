@@ -31,14 +31,19 @@ type SiteArgs struct {
 	// Examples: "My Marketing Site", "Company Blog", "Product Landing Page"
 	DisplayName string `pulumi:"displayName"`
 	// ParentFolderID is the folder ID where the site will be organized in the Webflow dashboard.
-	// Optional - site will be placed at workspace root if not specified.
+	// Optional - site will be placed at workspace root if not specified. Removing it from the
+	// program moves the site back to the workspace root.
 	ParentFolderID string `pulumi:"parentFolderId,optional"`
 	// Publish triggers automatic site publishing after create/update.
-	// When set to true, the provider will publish the site to production after successfully creating or updating it.
+	// When set to true, the provider will publish the site after successfully creating or updating it.
 	// Default: false (manual publishing required).
-	// Note: Site must have at least one published version before automatic publishing will work.
-	// Optional - defaults to false.
 	Publish bool `pulumi:"publish,optional"`
+	// PublishToWebflowSubdomain publishes to the site's default webflow.io subdomain when Publish is true.
+	PublishToWebflowSubdomain bool `pulumi:"publishToWebflowSubdomain,optional"`
+	// PublishCustomDomains lists the custom domain IDs to publish to when Publish is true.
+	PublishCustomDomains []string `pulumi:"publishCustomDomains,optional"`
+	// PublishPageID limits the publish to a single page ID when Publish is true.
+	PublishPageID string `pulumi:"publishPageId,optional"`
 	// TemplateName is the template to use for site creation.
 	// Optional - used only during site creation, cannot be changed after creation (IMMUTABLE).
 	// WARNING: Changing this value will DELETE the existing site and CREATE a new one (DESTRUCTIVE).
@@ -76,6 +81,9 @@ type SiteState struct {
 	// DataCollectionType is the type of data collection enabled (read-only).
 	// Values: always, optOut, disabled. Controlled by Webflow workspace settings.
 	DataCollectionType string `pulumi:"dataCollectionType,optional"`
+	// PublishScope reports whether the last provider-triggered publish covered the whole site
+	// ("site") or a single page ("page"), as returned by the publish endpoint (read-only).
+	PublishScope string `pulumi:"publishScope,optional"`
 }
 
 // Annotate adds descriptions and constraints to the Site resource.
@@ -103,19 +111,32 @@ func (args *SiteArgs) Annotate(a infer.Annotator) {
 	a.Describe(&args.ParentFolderID,
 		"The folder ID where the site will be organized in the Webflow dashboard. "+
 			"Optional - the site will be placed at the workspace root if not specified. "+
+			"Removing this property from your program moves the site back to the workspace root. "+
 			"This is useful for organizing multiple sites into logical groups within your workspace.")
 
 	a.Describe(&args.Publish,
 		"Automatically publish the site after creation or updates. "+
-			"When set to true, the provider will publish the site to production after "+
-			"successfully creating or updating it. "+
+			"When set to true, the provider calls the Webflow publish endpoint after "+
+			"successfully creating or updating the site, using `publishToWebflowSubdomain`, "+
+			"`publishCustomDomains` and `publishPageId` to build the publish request. "+
+			"If neither `publishToWebflowSubdomain` nor `publishCustomDomains` is set, the site is "+
+			"published to its webflow.io subdomain. "+
 			"Default: false (manual publishing required). "+
-			"Note: Site must have at least one published version before automatic "+
-			"publishing will work. "+
-			"If publishing fails, the entire operation will fail with an error "+
-			"(site may exist but Pulumi will report failure). "+
-			"Recommendation: Set to false for initial site creation, then enable "+
-			"after first manual publish.")
+			"If publishing fails, the operation fails with an error "+
+			"(the site may exist but Pulumi will report failure).")
+
+	a.Describe(&args.PublishToWebflowSubdomain,
+		"When `publish` is true, publish to the site's default webflow.io subdomain. "+
+			"Maps to the `publishToWebflowSubdomain` field of the Webflow publish endpoint. Default: false.")
+
+	a.Describe(&args.PublishCustomDomains,
+		"When `publish` is true, the list of custom domain IDs (not host names) to publish to. "+
+			"Maps to the `customDomains` field of the Webflow publish endpoint. "+
+			"Custom domain IDs can be read from the Webflow site settings or the sites API.")
+
+	a.Describe(&args.PublishPageID,
+		"When `publish` is true, publish only the page with this ID instead of the whole site. "+
+			"Maps to the `pageId` field of the Webflow publish endpoint.")
 
 	a.Describe(&args.TemplateName,
 		"The template to use for site creation. "+
@@ -166,6 +187,11 @@ func (state *SiteState) Annotate(a infer.Annotator) {
 		"The type of data collection enabled for the site (read-only). "+
 			"Possible values: 'always' (always collect), 'optOut' (collect by default), 'disabled' (no collection). "+
 			"Controlled by your Webflow workspace settings, not per-site.")
+
+	a.Describe(&state.PublishScope,
+		"Scope of the last publish triggered by this provider (read-only): "+
+			"'site' when the whole site was published, 'page' when only `publishPageId` was published. "+
+			"Empty when the provider has not published the site.")
 }
 
 // Diff determines what changes need to be made to the site resource.
@@ -203,45 +229,84 @@ func (r *SiteResource) Diff(
 
 	// Check mutable fields - can be updated in place
 	// CRITICAL: Accumulate all changes in SINGLE map (don't overwrite!)
-
-	if req.Inputs.DisplayName != req.State.DisplayName {
-		diff.HasChanges = true
-		diff.DetailedDiff["displayName"] = p.PropertyDiff{
-			Kind: p.Update,
+	update := func(name string, changed bool) {
+		if changed {
+			diff.HasChanges = true
+			diff.DetailedDiff[name] = p.PropertyDiff{Kind: p.Update}
 		}
 	}
 
+	update("displayName", req.Inputs.DisplayName != req.State.DisplayName)
 	// Note: shortName is read-only (auto-generated by Webflow) - not diffed
 	// Note: TimeZone is read-only (output only) - cannot be changed via API
-
-	if req.Inputs.ParentFolderID != req.State.ParentFolderID {
-		diff.HasChanges = true
-		diff.DetailedDiff["parentFolderId"] = p.PropertyDiff{
-			Kind: p.Update,
-		}
-	}
-
-	if req.Inputs.Publish != req.State.Publish {
-		diff.HasChanges = true
-		diff.DetailedDiff["publish"] = p.PropertyDiff{
-			Kind: p.Update,
-		}
-	}
+	update("parentFolderId", req.Inputs.ParentFolderID != req.State.ParentFolderID)
+	update("publish", req.Inputs.Publish != req.State.Publish)
+	update("publishToWebflowSubdomain", req.Inputs.PublishToWebflowSubdomain != req.State.PublishToWebflowSubdomain)
+	update("publishCustomDomains", !stringSlicesEqual(req.Inputs.PublishCustomDomains, req.State.PublishCustomDomains))
+	update("publishPageId", req.Inputs.PublishPageID != req.State.PublishPageID)
 
 	return diff, nil
+}
+
+// buildPublishRequest maps the publish-related inputs onto the publish endpoint body.
+// When neither a custom domain nor the subdomain is selected the request would publish
+// nothing, so the provider falls back to the webflow.io subdomain and says so.
+func buildPublishRequest(log *LogContext, args SiteArgs) SitePublishRequest {
+	request := SitePublishRequest{
+		CustomDomains:             args.PublishCustomDomains,
+		PublishToWebflowSubdomain: args.PublishToWebflowSubdomain,
+		PageID:                    args.PublishPageID,
+	}
+	if len(request.CustomDomains) == 0 && !request.PublishToWebflowSubdomain {
+		log.Warn("publish is true but neither publishToWebflowSubdomain nor publishCustomDomains is set; " +
+			"publishing to the webflow.io subdomain. Set publishToWebflowSubdomain or publishCustomDomains " +
+			"explicitly to silence this warning")
+		request.PublishToWebflowSubdomain = true
+	}
+	return request
+}
+
+// applySiteResponse copies the read-only fields of an API site object into state.
+func applySiteResponse(state *SiteState, site *Site) {
+	state.ShortName = site.ShortName
+	state.TimeZone = site.TimeZone
+	state.LastPublished = site.LastPublished
+	state.LastUpdated = site.LastUpdated
+	state.PreviewURL = site.PreviewURL
+	if site.CustomDomains != nil {
+		state.CustomDomains = []string(site.CustomDomains)
+	}
+	state.DataCollectionEnabled = site.DataCollectionEnabled
+	state.DataCollectionType = site.DataCollectionType
 }
 
 // Create creates a new site in Webflow.
 func (r *SiteResource) Create(
 	ctx context.Context, req infer.CreateRequest[SiteArgs],
 ) (infer.CreateResponse[SiteState], error) {
-	// Log the start of site creation
 	log := NewLogContext(ctx).
 		WithField("workspaceId", req.Inputs.WorkspaceID).
 		WithField("displayName", req.Inputs.DisplayName)
 	log.Info("Creating Webflow site")
 
-	// Step 1: Validate inputs BEFORE any operations
+	state := SiteState{
+		SiteArgs: req.Inputs,
+		// Read-only fields will be populated from API response
+	}
+
+	// Preview: return the expected state without validating or calling the API.
+	// Inputs may still be unknown at this point (they arrive zeroed), so validation
+	// is deferred to apply time when every value is resolved.
+	if req.DryRun {
+		log.Debug("Dry run mode - skipping API call")
+		previewID := fmt.Sprintf("preview-%d", time.Now().Unix())
+		return infer.CreateResponse[SiteState]{
+			ID:     previewID,
+			Output: state,
+		}, nil
+	}
+
+	// Validate inputs BEFORE any API call
 	if err := ValidateWorkspaceID(req.Inputs.WorkspaceID); err != nil {
 		log.Errorf("Validation failed: %v", err)
 		return infer.CreateResponse[SiteState]{}, fmt.Errorf("validation failed for Site resource: %w", err)
@@ -250,34 +315,14 @@ func (r *SiteResource) Create(
 		log.Errorf("Validation failed: %v", err)
 		return infer.CreateResponse[SiteState]{}, fmt.Errorf("validation failed for Site resource: %w", err)
 	}
-	// Note: shortName validation removed — shortName is read-only (auto-generated by Webflow)
+	// Note: shortName is read-only (auto-generated by Webflow) and is not validated
 
-	// Step 2: Initialize state from inputs
-	state := SiteState{
-		SiteArgs: req.Inputs,
-		// Read-only fields will be populated from API response
-	}
-
-	// Step 3: Handle DryRun mode (preview without API call)
-	if req.DryRun {
-		log.Debug("Dry run mode - skipping API call")
-		// Return preview state with preview ID
-		// Use consistent "preview-" prefix format for dry-run previews
-		previewID := fmt.Sprintf("preview-%d", time.Now().Unix())
-		return infer.CreateResponse[SiteState]{
-			ID:     previewID,
-			Output: state,
-		}, nil
-	}
-
-	// Step 4: Get authenticated HTTP client
 	client, err := GetHTTPClient(ctx, providerVersion)
 	if err != nil {
 		log.Errorf("Failed to create HTTP client: %v", err)
 		return infer.CreateResponse[SiteState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Step 5: Call Webflow API to create site
 	log.Debug("Calling Webflow API to create site")
 	response, err := PostSite(
 		ctx, client,
@@ -289,7 +334,6 @@ func (r *SiteResource) Create(
 		return infer.CreateResponse[SiteState]{}, fmt.Errorf("failed to create site: %w", err)
 	}
 
-	// Step 6: Defensive check - ensure API returned valid site ID
 	if response.ID == "" {
 		log.Error("API returned empty site ID")
 		return infer.CreateResponse[SiteState]{}, errors.New(
@@ -298,37 +342,20 @@ func (r *SiteResource) Create(
 	}
 
 	log.WithField("siteId", response.ID).Info("Site created successfully")
+	applySiteResponse(&state, response)
 
-	// Step 7: Populate state with API response data
-	state.LastPublished = response.LastPublished
-	state.LastUpdated = response.LastUpdated
-	state.PreviewURL = response.PreviewURL
-	// Note: CustomDomains, DataCollectionEnabled, DataCollectionType are read-only workspace settings
-	// We don't populate them from user inputs, only from API responses
-	if response.CustomDomains != nil {
-		state.CustomDomains = response.CustomDomains
-	}
-	state.DataCollectionEnabled = response.DataCollectionEnabled
-	state.DataCollectionType = response.DataCollectionType
-	state.TimeZone = response.TimeZone // Read-only output from Webflow
-
-	// shortName is read-only — always use whatever Webflow auto-generated from displayName.
-	// The Webflow API does not support setting shortName on create or update.
-	state.ShortName = response.ShortName
-
-	// Step 8: Optionally publish site after creation
 	if req.Inputs.Publish {
 		log.WithField("siteId", response.ID).Debug("Publishing site after creation")
-		if _, err := PublishSite(ctx, client, response.ID, nil); err != nil {
-			// Site was created successfully, publishing is optional enhancement
-			// Return error message explaining what succeeded and what failed
+		publishResp, err := PublishSite(ctx, client, response.ID, buildPublishRequest(log, req.Inputs))
+		if err != nil {
 			log.WithField("siteId", response.ID).Errorf("Publishing failed: %v", err)
 			return infer.CreateResponse[SiteState]{}, fmt.Errorf("site created successfully but publishing failed: %w", err)
 		}
-		log.WithField("siteId", response.ID).Info("Site published successfully")
+		state.PublishScope = publishResp.PublishScope
+		log.WithField("siteId", response.ID).WithField("publishScope", publishResp.PublishScope).
+			Info("Site publish accepted")
 	}
 
-	// Step 9: Return successful response with siteId as resource ID
 	return infer.CreateResponse[SiteState]{
 		ID:     response.ID,
 		Output: state,
@@ -337,7 +364,8 @@ func (r *SiteResource) Create(
 
 // Read retrieves the current state of a site from Webflow.
 // This is called by Pulumi during preview, refresh, update, and IMPORT operations to detect drift.
-// If the site was deleted externally, Read returns empty inputs to signal deletion.
+// If the site was deleted externally (404), Read returns an empty ID to signal deletion; any
+// other error is returned so transient failures never look like a deleted site.
 //
 // Import Support: Accepts siteId directly
 // Example: pulumi import webflow:index:Site my-site "69307a0ff82ccd49b929ed6d"
@@ -345,57 +373,45 @@ func (r *SiteResource) Create(
 func (r *SiteResource) Read(
 	ctx context.Context, req infer.ReadRequest[SiteArgs, SiteState],
 ) (infer.ReadResponse[SiteArgs, SiteState], error) {
-	// Get authenticated HTTP client
+	// Resource ID is just the siteId; validate it before it is used in a URL
+	siteID := req.ID
+	if err := ValidateSiteID(siteID); err != nil {
+		return infer.ReadResponse[SiteArgs, SiteState]{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
+
 	client, err := GetHTTPClient(ctx, providerVersion)
 	if err != nil {
 		return infer.ReadResponse[SiteArgs, SiteState]{}, fmt.Errorf("failed to get HTTP client: %w", err)
 	}
 
-	// Resource ID is just the siteId
-	siteID := req.ID
-
-	// Call GetSite API - only needs siteId, returns workspaceId
+	// GetSite returns nil, nil only for a 404 (IsNotFound); every other failure is an error.
 	siteData, err := GetSite(ctx, client, siteID)
 	if err != nil {
 		return infer.ReadResponse[SiteArgs, SiteState]{}, fmt.Errorf("failed to read site (site ID: %s): %w", siteID, err)
 	}
-
-	// Handle site not found (404) - site was deleted externally
 	if siteData == nil {
-		// Return empty inputs to signal deletion to Pulumi
-		// Pulumi will mark this resource for recreation or removal from state
-		return infer.ReadResponse[SiteArgs, SiteState]{
-			Inputs: SiteArgs{},
-			State: SiteState{
-				SiteArgs: SiteArgs{},
-			},
-		}, nil
+		// Site was deleted externally: an empty ID tells Pulumi the resource is gone.
+		return infer.ReadResponse[SiteArgs, SiteState]{ID: ""}, nil
 	}
 
-	// Map API response to SiteState
-	// WorkspaceID is fetched from the API response
+	// Publish-related properties are not returned by GET - preserve them from the existing state
 	currentInputs := SiteArgs{
-		WorkspaceID:    siteData.WorkspaceID,
-		DisplayName:    siteData.DisplayName,
-		ParentFolderID: siteData.ParentFolderID,
-		// Publish property is not returned by GET API - preserve existing value
-		Publish: req.State.Publish,
+		WorkspaceID:               siteData.WorkspaceID,
+		DisplayName:               siteData.DisplayName,
+		ParentFolderID:            siteData.ParentFolderID,
+		Publish:                   req.State.Publish,
+		PublishToWebflowSubdomain: req.State.PublishToWebflowSubdomain,
+		PublishCustomDomains:      req.State.PublishCustomDomains,
+		PublishPageID:             req.State.PublishPageID,
+		TemplateName:              req.State.TemplateName,
 	}
 
 	currentState := SiteState{
-		SiteArgs:              currentInputs,
-		ShortName:             siteData.ShortName, // Read-only output from Webflow
-		TimeZone:              siteData.TimeZone,  // Read-only output from Webflow
-		LastPublished:         siteData.LastPublished,
-		LastUpdated:           siteData.LastUpdated,
-		PreviewURL:            siteData.PreviewURL,
-		CustomDomains:         siteData.CustomDomains,
-		DataCollectionEnabled: siteData.DataCollectionEnabled,
-		DataCollectionType:    siteData.DataCollectionType,
+		SiteArgs:     currentInputs,
+		PublishScope: req.State.PublishScope,
 	}
+	applySiteResponse(&currentState, siteData)
 
-	// Return current inputs and state with siteId as resource ID
-	// Pulumi will compare currentInputs with code-defined inputs for drift detection
 	return infer.ReadResponse[SiteArgs, SiteState]{
 		ID:     siteID,
 		Inputs: currentInputs,
@@ -407,23 +423,13 @@ func (r *SiteResource) Read(
 func (r *SiteResource) Update(
 	ctx context.Context, req infer.UpdateRequest[SiteArgs, SiteState],
 ) (infer.UpdateResponse[SiteState], error) {
-	// Step 1: Resource ID is just the siteId
 	siteID := req.ID
 
-	// Log the start of site update
 	log := NewLogContext(ctx).
 		WithField("siteId", siteID).
 		WithField("displayName", req.Inputs.DisplayName)
 	log.Info("Updating Webflow site")
 
-	// Step 2: Validate all inputs BEFORE any operations
-	// Note: shortName validation removed — shortName is read-only (auto-generated by Webflow)
-	if err := ValidateDisplayName(req.Inputs.DisplayName); err != nil {
-		log.Errorf("Validation failed: %v", err)
-		return infer.UpdateResponse[SiteState]{}, fmt.Errorf("validation failed for Site resource: %w", err)
-	}
-
-	// Step 3: Initialize state with current inputs
 	state := SiteState{
 		SiteArgs: req.Inputs,
 		// Preserve read-only fields from previous state
@@ -435,9 +441,10 @@ func (r *SiteResource) Update(
 		CustomDomains:         req.State.CustomDomains,
 		DataCollectionEnabled: req.State.DataCollectionEnabled,
 		DataCollectionType:    req.State.DataCollectionType,
+		PublishScope:          req.State.PublishScope,
 	}
 
-	// Step 4: Handle DryRun mode (preview without API call)
+	// Preview: return the expected state without validating (inputs may be unknown) or calling the API.
 	if req.DryRun {
 		log.Debug("Dry run mode - skipping API call")
 		return infer.UpdateResponse[SiteState]{
@@ -445,20 +452,36 @@ func (r *SiteResource) Update(
 		}, nil
 	}
 
-	// Step 5: Get authenticated HTTP client
+	if err := ValidateSiteID(siteID); err != nil {
+		log.Errorf("Validation failed: %v", err)
+		return infer.UpdateResponse[SiteState]{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
+	if err := ValidateDisplayName(req.Inputs.DisplayName); err != nil {
+		log.Errorf("Validation failed: %v", err)
+		return infer.UpdateResponse[SiteState]{}, fmt.Errorf("validation failed for Site resource: %w", err)
+	}
+
 	client, err := GetHTTPClient(ctx, providerVersion)
 	if err != nil {
 		log.Errorf("Failed to create HTTP client: %v", err)
 		return infer.UpdateResponse[SiteState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Step 6: Call Webflow API to update site
+	// parentFolderId is nullable on PATCH: send the new folder, send null when the user removed
+	// the folder (state had one, inputs do not), and omit it when it was never set.
+	var parentFolderID *string
+	switch {
+	case req.Inputs.ParentFolderID != "":
+		folder := req.Inputs.ParentFolderID
+		parentFolderID = &folder
+	case req.State.ParentFolderID != "":
+		cleared := ""
+		parentFolderID = &cleared
+		log.Debug("parentFolderId removed - moving site to the workspace root")
+	}
+
 	log.Debug("Calling Webflow API to update site")
-	// Note: We send all fields, API will handle which ones actually changed
-	// shortName is read-only - cannot be updated via API
-	// TimeZone is read-only - cannot be updated via API
-	response, err := PatchSite(
-		ctx, client, siteID, req.Inputs.DisplayName, req.Inputs.ParentFolderID)
+	response, err := PatchSite(ctx, client, siteID, req.Inputs.DisplayName, parentFolderID)
 	if err != nil {
 		log.Errorf("Failed to update site via API: %v", err)
 		return infer.UpdateResponse[SiteState]{}, fmt.Errorf("failed to update site: %w", err)
@@ -466,33 +489,22 @@ func (r *SiteResource) Update(
 
 	log.Info("Site updated successfully")
 
-	// Step 7: Update state with API response (API returns full site object)
+	// The API returns the full site object
 	state.DisplayName = response.DisplayName
-	state.ShortName = response.ShortName
 	state.ParentFolderID = response.ParentFolderID
-	state.TimeZone = response.TimeZone // Read-only output from Webflow
-	state.LastPublished = response.LastPublished
-	state.LastUpdated = response.LastUpdated
-	state.PreviewURL = response.PreviewURL
-	if response.CustomDomains != nil {
-		state.CustomDomains = response.CustomDomains
-	}
-	state.DataCollectionEnabled = response.DataCollectionEnabled
-	state.DataCollectionType = response.DataCollectionType
+	applySiteResponse(&state, response)
 
-	// Step 8: Optionally publish site after update
 	if req.Inputs.Publish {
 		log.Debug("Publishing site after update")
-		if _, err := PublishSite(ctx, client, siteID, nil); err != nil {
-			// Site was updated successfully, publishing is optional enhancement
-			// Return error message explaining what succeeded and what failed
+		publishResp, err := PublishSite(ctx, client, siteID, buildPublishRequest(log, req.Inputs))
+		if err != nil {
 			log.Errorf("Publishing failed: %v", err)
 			return infer.UpdateResponse[SiteState]{}, fmt.Errorf("site updated successfully but publishing failed: %w", err)
 		}
-		log.Info("Site published successfully")
+		state.PublishScope = publishResp.PublishScope
+		log.WithField("publishScope", publishResp.PublishScope).Info("Site publish accepted")
 	}
 
-	// Step 9: Return successful response
 	return infer.UpdateResponse[SiteState]{
 		Output: state,
 	}, nil
@@ -502,23 +514,23 @@ func (r *SiteResource) Update(
 // This is a destructive operation that permanently deletes the site and all its content.
 // The operation cannot be undone.
 func (r *SiteResource) Delete(ctx context.Context, req infer.DeleteRequest[SiteState]) (infer.DeleteResponse, error) {
-	// Resource ID is just the siteId
 	siteID := req.ID
 
-	// Log the start of site deletion
 	log := NewLogContext(ctx).
 		WithField("siteId", siteID).
 		WithField("displayName", req.State.DisplayName)
 	log.Warn("Deleting Webflow site - this is a destructive operation")
 
-	// Get HTTP client
+	if err := ValidateSiteID(siteID); err != nil {
+		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
+
 	client, err := GetHTTPClient(ctx, providerVersion)
 	if err != nil {
 		log.Errorf("Failed to create HTTP client: %v", err)
 		return infer.DeleteResponse{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call DeleteSite API (handles 404 gracefully for idempotency)
 	log.Debug("Calling Webflow API to delete site")
 	if err := DeleteSite(ctx, client, siteID); err != nil {
 		log.Errorf("Failed to delete site via API: %v", err)
@@ -526,8 +538,5 @@ func (r *SiteResource) Delete(ctx context.Context, req infer.DeleteRequest[SiteS
 	}
 
 	log.Info("Site deleted successfully")
-
-	// Success - site deleted from Webflow
-	// Pulumi will automatically remove from state
 	return infer.DeleteResponse{}, nil
 }

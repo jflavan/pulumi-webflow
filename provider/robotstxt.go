@@ -7,16 +7,12 @@
 package provider
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"strings"
-	"time"
 )
 
 // RobotsTxtRule represents a single user-agent rule in robots.txt.
@@ -33,7 +29,7 @@ type RobotsTxtResponse struct {
 	Sitemap string          `json:"sitemap"` // URL to the sitemap
 }
 
-// RobotsTxtRequest represents the request body for PUT/PATCH robots.txt.
+// RobotsTxtRequest represents the request body for PUT/PATCH/DELETE robots.txt.
 type RobotsTxtRequest struct {
 	Rules   []RobotsTxtRule `json:"rules,omitempty"`   // List of user-agent rules
 	Sitemap string          `json:"sitemap,omitempty"` // URL to the sitemap
@@ -100,56 +96,72 @@ func ExtractSiteIDFromResourceID(resourceID string) (string, error) {
 //	Disallow: /admin/
 //	Sitemap: https://example.com/sitemap.xml
 //
-// Returns the parsed rules and sitemap URL.
+// Returns the parsed rules and sitemap URL. Comments and directives the Webflow API cannot
+// store are dropped; use ParseRobotsTxtContentWithWarnings to learn what was dropped.
 func ParseRobotsTxtContent(content string) (rules []RobotsTxtRule, sitemap string) {
+	rules, sitemap, _ = ParseRobotsTxtContentWithWarnings(content)
+	return rules, sitemap
+}
+
+// ParseRobotsTxtContentWithWarnings parses robots.txt content and also reports, one message per
+// line, every comment or directive that the Webflow API cannot represent and that is therefore
+// not sent (and will not come back on refresh).
+func ParseRobotsTxtContentWithWarnings(content string) (rules []RobotsTxtRule, sitemap string, warnings []string) {
 	if content == "" {
-		return []RobotsTxtRule{}, ""
+		return []RobotsTxtRule{}, "", nil
 	}
 
 	var currentRule *RobotsTxtRule
 
 	lines := strings.Split(content, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
+	for i, rawLine := range lines {
+		lineNo := i + 1
+		line := strings.TrimSpace(rawLine)
 		if line == "" {
 			continue
 		}
 
-		// Check for sitemap directive (case-insensitive)
-		if strings.HasPrefix(strings.ToLower(line), "sitemap:") {
-			sitemap = strings.TrimSpace(line[8:])
+		if strings.HasPrefix(line, "#") {
+			warnings = append(warnings, fmt.Sprintf("line %d: comment %q is not stored by the Webflow API and will be dropped", lineNo, line))
 			continue
 		}
 
-		// Check for user-agent directive (case-insensitive)
-		if strings.HasPrefix(strings.ToLower(line), "user-agent:") {
-			// Save previous rule if exists
+		// Strip trailing inline comments ("Disallow: /admin # private")
+		if idx := strings.Index(line, "#"); idx > 0 {
+			warnings = append(warnings, fmt.Sprintf("line %d: inline comment %q will be dropped", lineNo, strings.TrimSpace(line[idx:])))
+			line = strings.TrimSpace(line[:idx])
+		}
+
+		lower := strings.ToLower(line)
+		switch {
+		case strings.HasPrefix(lower, "sitemap:"):
+			sitemap = strings.TrimSpace(line[8:])
+		case strings.HasPrefix(lower, "user-agent:"):
 			if currentRule != nil {
 				rules = append(rules, *currentRule)
 			}
-			// Start new rule
-			userAgent := strings.TrimSpace(line[11:])
 			currentRule = &RobotsTxtRule{
-				UserAgent: userAgent,
+				UserAgent: strings.TrimSpace(line[11:]),
 				Allows:    []string{},
 				Disallows: []string{},
 			}
-			continue
-		}
-
-		// Parse Allow/Disallow directives
-		if currentRule != nil {
-			if strings.HasPrefix(strings.ToLower(line), "allow:") {
-				path := strings.TrimSpace(line[6:])
-				if path != "" {
-					currentRule.Allows = append(currentRule.Allows, path)
-				}
-			} else if strings.HasPrefix(strings.ToLower(line), "disallow:") {
-				path := strings.TrimSpace(line[9:])
-				if path != "" {
-					currentRule.Disallows = append(currentRule.Disallows, path)
-				}
+		case strings.HasPrefix(lower, "allow:"):
+			path := strings.TrimSpace(line[6:])
+			if currentRule == nil {
+				warnings = append(warnings, fmt.Sprintf("line %d: %q appears before any User-agent directive and will be dropped", lineNo, line))
+			} else if path != "" {
+				currentRule.Allows = append(currentRule.Allows, path)
 			}
+		case strings.HasPrefix(lower, "disallow:"):
+			path := strings.TrimSpace(line[9:])
+			if currentRule == nil {
+				warnings = append(warnings, fmt.Sprintf("line %d: %q appears before any User-agent directive and will be dropped", lineNo, line))
+			} else if path != "" {
+				currentRule.Disallows = append(currentRule.Disallows, path)
+			}
+		default:
+			warnings = append(warnings, fmt.Sprintf("line %d: directive %q is not supported by the Webflow API "+
+				"(only User-agent, Allow, Disallow and Sitemap are stored) and will be dropped", lineNo, line))
 		}
 	}
 
@@ -158,7 +170,7 @@ func ParseRobotsTxtContent(content string) (rules []RobotsTxtRule, sitemap strin
 		rules = append(rules, *currentRule)
 	}
 
-	return rules, sitemap
+	return rules, sitemap, warnings
 }
 
 // FormatRobotsTxtContent formats structured rules and sitemap into a robots.txt content string.
@@ -192,269 +204,95 @@ func FormatRobotsTxtContent(rules []RobotsTxtRule, sitemap string) string {
 	return builder.String()
 }
 
-// maxRetries is the number of retries performed by the legacy per-function retry loops.
-// New code relies on the retry transport and doRequest instead.
+// RobotsTxtContentEqual reports whether two robots.txt documents describe the same rules and
+// sitemap once parsed, ignoring formatting, blank lines, comments and directive casing.
+func RobotsTxtContentEqual(a, b string) bool {
+	rulesA, sitemapA := ParseRobotsTxtContent(a)
+	rulesB, sitemapB := ParseRobotsTxtContent(b)
+	return sitemapA == sitemapB && robotsTxtRulesEqual(rulesA, rulesB)
+}
+
+// robotsTxtRulesEqual compares two rule lists, treating nil and empty slices as equal.
+func robotsTxtRulesEqual(a, b []RobotsTxtRule) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].UserAgent != b[i].UserAgent ||
+			!stringSlicesEqual(a[i].Allows, b[i].Allows) ||
+			!stringSlicesEqual(a[i].Disallows, b[i].Disallows) {
+			return false
+		}
+	}
+	return true
+}
+
+// stringSlicesEqual compares two string slices element-wise, treating nil and empty as equal.
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// maxRetries is the number of retries performed by the legacy per-function retry loops that
+// still exist in other resources. Site, Redirect and RobotsTxt no longer use it; the retry
+// transport and doRequest handle retries for them.
 const maxRetries = 3
 
 // GetRobotsTxt retrieves the robots.txt configuration for a Webflow site.
 // It calls GET /v2/sites/{site_id}/robots_txt endpoint.
 // Returns the parsed response or an error if the request fails.
 func GetRobotsTxt(ctx context.Context, client *http.Client, siteID string) (*RobotsTxtResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
+	var response RobotsTxtResponse
+	_, err := doRequest(ctx, client, http.MethodGet, apiURL("/v2/sites/%s/robots_txt", siteID),
+		nil, &response, http.StatusOK)
+	if err != nil {
+		return nil, err
 	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s/robots_txt", webflowAPIBaseURL, siteID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			// Check for Retry-After header from previous response, or use exponential backoff
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			// Enhanced rate limiting error message with clear delay information
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			// Check for Retry-After header for the next retry
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var response RobotsTxtResponse
-		if err := json.Unmarshal(body, &response); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &response, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &response, nil
 }
 
-// PutRobotsTxt creates or updates the robots.txt configuration for a Webflow site.
+// PutRobotsTxt replaces the robots.txt configuration for a Webflow site.
 // It calls PUT /v2/sites/{site_id}/robots_txt endpoint.
 // Returns the updated response or an error if the request fails.
 func PutRobotsTxt(
 	ctx context.Context, client *http.Client,
 	siteID string, rules []RobotsTxtRule, sitemap string,
 ) (*RobotsTxtResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
-	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s/robots_txt", webflowAPIBaseURL, siteID)
-
 	requestBody := RobotsTxtRequest{
 		Rules:   rules,
 		Sitemap: sitemap,
 	}
 
-	bodyBytes, err := json.Marshal(requestBody)
+	var response RobotsTxtResponse
+	_, err := doRequest(ctx, client, http.MethodPut, apiURL("/v2/sites/%s/robots_txt", siteID),
+		requestBody, &response, http.StatusOK)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+		return nil, err
 	}
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			// Check for Retry-After header from previous response, or use exponential backoff
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewReader(bodyBytes))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			// Enhanced rate limiting error message with clear delay information
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			// Check for Retry-After header for the next retry
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var response RobotsTxtResponse
-		if err := json.Unmarshal(body, &response); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &response, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &response, nil
 }
 
-// DeleteRobotsTxt removes the robots.txt configuration from a Webflow site.
-// It calls DELETE /v2/sites/{site_id}/robots_txt endpoint.
-// Returns nil on success (including 404 for idempotency) or an error if the request fails.
-func DeleteRobotsTxt(ctx context.Context, client *http.Client, siteID string) error {
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("context cancelled: %w", err)
+// DeleteRobotsTxt removes rules from a site's robots.txt configuration.
+// It calls DELETE /v2/sites/{site_id}/robots_txt, which requires a body listing the rules
+// (and optional sitemap) to remove and answers 200 with the remaining configuration.
+// Returns nil on success (200/204, and 404 for idempotency) or an error if the request fails.
+// See https://developers.webflow.com/data/reference/enterprise/site-configuration/robots-txt/delete
+func DeleteRobotsTxt(
+	ctx context.Context, client *http.Client, siteID string, rules []RobotsTxtRule, sitemap string,
+) error {
+	requestBody := RobotsTxtRequest{
+		Rules:   rules,
+		Sitemap: sitemap,
 	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s/robots_txt", webflowAPIBaseURL, siteID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			// Check for Retry-After header from previous response, or use exponential backoff
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "DELETE", url, http.NoBody)
-		if err != nil {
-			return fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			// Enhanced rate limiting error message with clear delay information
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			// Check for Retry-After header for the next retry
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// 204 No Content is success
-		// 404 Not Found is also success (idempotent delete)
-		if resp.StatusCode == 204 || resp.StatusCode == 404 {
-			return nil
-		}
-
-		// Handle other error responses
-		return handleWebflowError(resp.StatusCode, body)
+	if requestBody.Rules == nil {
+		requestBody.Rules = []RobotsTxtRule{}
 	}
-
-	return fmt.Errorf("max retries exceeded: %w", lastErr)
+	return doDelete(ctx, client, apiURL("/v2/sites/%s/robots_txt", siteID), requestBody)
 }
