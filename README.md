@@ -316,10 +316,10 @@ export WEBFLOW_API_TOKEN="your-token-here"
 # Don't do this in production code!
 ```
 
-**Precedence:** if both are set, the provider uses the `WEBFLOW_API_TOKEN` environment variable
-first and falls back to `webflow:apiToken` from the stack config only when the variable is unset
-or empty (see `GetHTTPClient` in `provider/config.go`). Unset the variable when you want a stack's
-own encrypted token to be used, for example when switching between stacks that use different tokens.
+**Precedence:** explicit stack configuration wins. If `webflow:apiToken` is set, the provider uses
+it and ignores `WEBFLOW_API_TOKEN`; the environment variable is only a fallback for stacks that do
+not configure a token. This keeps a token exported in your shell from silently reaching a stack that
+carries its own encrypted token.
 
 ### Security Best Practices
 

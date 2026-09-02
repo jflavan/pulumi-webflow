@@ -18,7 +18,7 @@ else:
     pulumi.log.info(f"💻 Running in local environment: {environment}")
 
 # Always log credential source (without exposing values).
-# Note: when both are set, the provider uses WEBFLOW_API_TOKEN before webflow:apiToken.
+# Note: when both are set, webflow:apiToken wins; WEBFLOW_API_TOKEN is only the fallback.
 token_source = "environment" if os.getenv("WEBFLOW_API_TOKEN") else "pulumi_config"
 pulumi.log.info(f"🔐 Using API token from: {token_source}")
 pulumi.log.debug("API credentials are redacted from all log output")
