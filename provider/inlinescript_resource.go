@@ -230,7 +230,7 @@ func (r *InlineScript) Create(
 	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.CreateResponse[InlineScriptState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -291,7 +291,7 @@ func (r *InlineScript) Read(
 	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[InlineScriptArgs, InlineScriptState]{},
 			fmt.Errorf("failed to create HTTP client: %w", err)
@@ -402,7 +402,7 @@ func (r *InlineScript) Delete(
 	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

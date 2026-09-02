@@ -62,7 +62,7 @@ func (f *GetAuthorizedUser) Invoke(
 	req infer.FunctionRequest[GetAuthorizedUserInput],
 ) (infer.FunctionResponse[GetAuthorizedUserOutput], error) {
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.FunctionResponse[GetAuthorizedUserOutput]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

@@ -117,12 +117,6 @@ func newAPIError(statusCode int, method, path string, body []byte) *APIError {
 	}
 }
 
-// handleWebflowError converts a non-success response into an APIError.
-// Kept for callers that still handle status codes themselves; new code should use doRequest.
-func handleWebflowError(statusCode int, body []byte) error {
-	return newAPIError(statusCode, "", "", body)
-}
-
 // handleNetworkError wraps transport-level failures with recovery guidance.
 func handleNetworkError(err error) error {
 	msg := err.Error()

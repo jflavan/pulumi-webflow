@@ -158,7 +158,7 @@ func (r *AssetFolder) Create(
 		}
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.CreateResponse[AssetFolderState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -199,7 +199,7 @@ func (r *AssetFolder) Read(
 		return infer.ReadResponse[AssetFolderArgs, AssetFolderState]{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[AssetFolderArgs, AssetFolderState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

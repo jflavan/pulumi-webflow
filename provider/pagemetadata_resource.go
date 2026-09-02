@@ -264,7 +264,7 @@ func validatePageMetadataArgs(args PageMetadataArgs) error {
 
 // applyPageMetadata sends the PUT and folds the response into state, warning when slug was ignored.
 func (r *PageMetadata) applyPageMetadata(ctx context.Context, args PageMetadataArgs) (PageMetadataState, error) {
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return PageMetadataState{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -374,7 +374,7 @@ func (r *PageMetadata) Read(
 		return infer.ReadResponse[PageMetadataArgs, PageMetadataState]{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[PageMetadataArgs, PageMetadataState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

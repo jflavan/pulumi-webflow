@@ -91,11 +91,26 @@ type retryTransport struct {
 	maxDelay   time.Duration     // Maximum delay between retries
 }
 
-// isRetryableStatus reports whether a response status should be retried.
-func isRetryableStatus(status int) bool {
-	switch status {
-	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+// isIdempotentMethod reports whether a request may be repeated without risking a duplicate
+// side effect. POST and PATCH are excluded: a gateway error returned after Webflow already
+// committed a create would otherwise be re-sent and create a second resource.
+func isIdempotentMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete, http.MethodOptions:
 		return true
+	}
+	return false
+}
+
+// isRetryableStatus reports whether a response status should be retried for the given method.
+// 429 is retried for every method because the request was never processed. Transient
+// server errors (502, 503, 504) are retried only for idempotent methods.
+func isRetryableStatus(method string, status int) bool {
+	switch status {
+	case http.StatusTooManyRequests:
+		return true
+	case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return isIdempotentMethod(method)
 	}
 	return false
 }
@@ -132,8 +147,9 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 		log.WithField("status", resp.StatusCode).WithField("attempt", attempt+1).Debug("HTTP request completed")
 
-		if !isRetryableStatus(resp.StatusCode) || attempt >= t.maxRetries || !canRewind {
-			if isRetryableStatus(resp.StatusCode) {
+		retryable := isRetryableStatus(req.Method, resp.StatusCode)
+		if !retryable || attempt >= t.maxRetries || !canRewind {
+			if retryable {
 				log.WithField("status", resp.StatusCode).WithField("maxRetries", t.maxRetries).
 					Warn("Retryable response, max retries exhausted")
 			}
@@ -161,11 +177,11 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 func (t *retryTransport) calculateDelay(resp *http.Response, attempt int) time.Duration {
 	if retryAfter := resp.Header.Get("Retry-After"); retryAfter != "" {
 		if seconds, err := strconv.ParseInt(retryAfter, 10, 64); err == nil && seconds >= 0 {
-			delay := time.Duration(seconds) * time.Second
-			if delay > t.maxDelay {
+			// Clamp before multiplying so a huge header value cannot overflow to a negative delay.
+			if seconds >= int64(t.maxDelay/time.Second) {
 				return t.maxDelay
 			}
-			return delay
+			return time.Duration(seconds) * time.Second
 		}
 	}
 

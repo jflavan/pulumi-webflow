@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	p "github.com/pulumi/pulumi-go-provider"
 )
@@ -124,12 +125,19 @@ func RedactSensitiveData(value string) string {
 }
 
 // TruncateForLogging truncates large strings to prevent log spam.
-// Useful for response bodies and large payloads.
+// Useful for response bodies and large payloads. The cut never splits a multi-byte rune.
 func TruncateForLogging(value string, maxLen int) string {
+	if maxLen <= 0 {
+		return fmt.Sprintf("... (truncated, %d total chars)", len(value))
+	}
 	if len(value) <= maxLen {
 		return value
 	}
-	return value[:maxLen] + fmt.Sprintf("... (truncated, %d total chars)", len(value))
+	cut := maxLen
+	for cut > 0 && !utf8.RuneStart(value[cut]) {
+		cut--
+	}
+	return value[:cut] + fmt.Sprintf("... (truncated, %d total chars)", len(value))
 }
 
 // SafeString converts any value to a string safely for logging.

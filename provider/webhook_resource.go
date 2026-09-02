@@ -192,7 +192,7 @@ func (w *Webhook) Create(
 	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		log.Errorf("Failed to create HTTP client: %v", err)
 		return infer.CreateResponse[WebhookState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
@@ -247,7 +247,7 @@ func (w *Webhook) Read(
 	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[WebhookArgs, WebhookState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -309,7 +309,7 @@ func (w *Webhook) Delete(ctx context.Context, req infer.DeleteRequest[WebhookSta
 	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

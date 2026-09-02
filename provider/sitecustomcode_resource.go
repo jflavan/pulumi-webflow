@@ -182,7 +182,7 @@ func (r *SiteCustomCode) Create(
 	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.CreateResponse[SiteCustomCodeState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -218,7 +218,7 @@ func (r *SiteCustomCode) Read(
 	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[SiteCustomCodeArgs, SiteCustomCodeState]{},
 			fmt.Errorf("failed to create HTTP client: %w", err)
@@ -284,7 +284,7 @@ func (r *SiteCustomCode) Update(
 	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.UpdateResponse[SiteCustomCodeState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -318,7 +318,7 @@ func (r *SiteCustomCode) Delete(
 	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

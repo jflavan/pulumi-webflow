@@ -814,7 +814,7 @@ func (q *analyzeQuery) setDailyTimeseries(bucketTimeZone string) error {
 
 // invokeAnalyze obtains a client and fetches one report into out.
 func invokeAnalyze(ctx context.Context, siteID, report string, q *analyzeQuery, out any) error {
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return fmt.Errorf("failed to create HTTP client: %w", err)
 	}

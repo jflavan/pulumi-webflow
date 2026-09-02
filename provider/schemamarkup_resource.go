@@ -163,7 +163,7 @@ func putPageSchemaMarkup(ctx context.Context, args PageSchemaMarkupArgs) (PageSc
 		return PageSchemaMarkupState{}, err
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return PageSchemaMarkupState{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -208,7 +208,7 @@ func (r *PageSchemaMarkup) Read(
 		return infer.ReadResponse[PageSchemaMarkupArgs, PageSchemaMarkupState]{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[PageSchemaMarkupArgs, PageSchemaMarkupState]{},
 			fmt.Errorf("failed to create HTTP client: %w", err)
@@ -275,7 +275,7 @@ func (r *PageSchemaMarkup) Delete(
 		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

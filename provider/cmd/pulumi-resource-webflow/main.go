@@ -12,6 +12,11 @@ import (
 	"fmt"
 	"os"
 
+	// Embed the IANA time zone database: the release binary is built without cgo and runs on
+	// hosts (Windows, slim containers) that ship no zoneinfo, and the Analyze functions
+	// validate bucketTimeZone with time.LoadLocation.
+	_ "time/tzdata"
+
 	"github.com/JDetmar/pulumi-webflow/provider"
 )
 

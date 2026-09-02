@@ -97,7 +97,7 @@ func (r *EcommerceSettings) Create(
 			fmt.Errorf("validation failed for EcommerceSettings resource: %w", err)
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.CreateResponse[EcommerceSettingsState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -129,7 +129,7 @@ func (r *EcommerceSettings) Read(
 			fmt.Errorf("invalid resource ID: %w", err)
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[EcommerceSettingsArgs, EcommerceSettingsState]{},
 			fmt.Errorf("failed to create HTTP client: %w", err)

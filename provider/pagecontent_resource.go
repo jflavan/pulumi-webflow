@@ -201,7 +201,7 @@ func applyPageContent(ctx context.Context, args PageContentArgs) error {
 	if err := validatePageContentArgs(args); err != nil {
 		return err
 	}
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -246,7 +246,7 @@ func (r *PageContent) Read(
 		return infer.ReadResponse[PageContentArgs, PageContentState]{}, fmt.Errorf("invalid state: %w", err)
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[PageContentArgs, PageContentState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

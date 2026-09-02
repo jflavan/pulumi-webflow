@@ -217,7 +217,7 @@ func (r *Asset) Create(
 	}
 	state.FileHash = hash
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.CreateResponse[AssetState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -283,7 +283,7 @@ func (r *Asset) Read(
 		return infer.ReadResponse[AssetArgs, AssetState]{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[AssetArgs, AssetState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -349,7 +349,7 @@ func (r *Asset) Delete(ctx context.Context, req infer.DeleteRequest[AssetState])
 		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

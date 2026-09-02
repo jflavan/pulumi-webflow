@@ -99,7 +99,7 @@ func (f *GetPageSchemaMarkup) Invoke(
 			fmt.Errorf("validation failed for GetPageSchemaMarkup: %w", err)
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.FunctionResponse[GetPageSchemaMarkupOutput]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

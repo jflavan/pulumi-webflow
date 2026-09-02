@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	p "github.com/pulumi/pulumi-go-provider"
@@ -156,7 +157,7 @@ func (r *RobotsTxt) Create(
 		return infer.CreateResponse[RobotsTxtState]{}, err
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.CreateResponse[RobotsTxtState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -188,7 +189,7 @@ func (r *RobotsTxt) Read(
 		return infer.ReadResponse[RobotsTxtArgs, RobotsTxtState]{}, err
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[RobotsTxtArgs, RobotsTxtState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -249,7 +250,7 @@ func (r *RobotsTxt) Update(
 		return infer.UpdateResponse[RobotsTxtState]{}, err
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.UpdateResponse[RobotsTxtState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -278,7 +279,7 @@ func (r *RobotsTxt) Delete(ctx context.Context, req infer.DeleteRequest[RobotsTx
 		return infer.DeleteResponse{}, err
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -293,11 +294,19 @@ func (r *RobotsTxt) Delete(ctx context.Context, req infer.DeleteRequest[RobotsTx
 	return infer.DeleteResponse{}, nil
 }
 
-// providerVersion is set during provider initialization.
-// This is a package-level variable that gets set when the provider starts.
-var providerVersion = "0.0.0"
+// providerVersionValue holds the provider version reported in the User-Agent header.
+// It is set once by Provider() and read concurrently by every resource operation.
+var providerVersionValue atomic.Value
 
 // SetProviderVersion sets the provider version for use in API calls.
 func SetProviderVersion(version string) {
-	providerVersion = version
+	providerVersionValue.Store(version)
+}
+
+// currentProviderVersion returns the version set by SetProviderVersion, or "0.0.0".
+func currentProviderVersion() string {
+	if v, ok := providerVersionValue.Load().(string); ok && v != "" {
+		return v
+	}
+	return "0.0.0"
 }

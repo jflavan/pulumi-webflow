@@ -121,7 +121,7 @@ func (f *GetTokenInfo) Invoke(
 	req infer.FunctionRequest[GetTokenInfoInput],
 ) (infer.FunctionResponse[GetTokenInfoOutput], error) {
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.FunctionResponse[GetTokenInfoOutput]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

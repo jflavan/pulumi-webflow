@@ -184,7 +184,7 @@ func (f *GetPage) Invoke(
 		return infer.FunctionResponse[GetPageOutput]{}, fmt.Errorf("validation failed for getPage: %w", err)
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.FunctionResponse[GetPageOutput]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -246,7 +246,7 @@ func (f *GetPages) Invoke(
 		return infer.FunctionResponse[GetPagesOutput]{}, fmt.Errorf("validation failed for getPages: %w", err)
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.FunctionResponse[GetPagesOutput]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

@@ -220,7 +220,7 @@ func (r *RegisteredScriptResource) Create(
 	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.CreateResponse[RegisteredScriptResourceState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -275,7 +275,7 @@ func (r *RegisteredScriptResource) Read(
 	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[RegisteredScriptResourceArgs, RegisteredScriptResourceState]{},
 			fmt.Errorf("failed to create HTTP client: %w", err)
@@ -366,7 +366,7 @@ func (r *RegisteredScriptResource) Delete(
 	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

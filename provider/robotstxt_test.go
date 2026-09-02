@@ -392,8 +392,8 @@ func TestDeleteRobotsTxt_StatusHandling(t *testing.T) {
 
 func TestSetProviderVersion(t *testing.T) {
 	SetProviderVersion("1.2.3")
-	if providerVersion != "1.2.3" {
-		t.Errorf("expected version '1.2.3', got '%s'", providerVersion)
+	if currentProviderVersion() != "1.2.3" {
+		t.Errorf("expected version '1.2.3', got '%s'", currentProviderVersion())
 	}
 	SetProviderVersion("0.0.0")
 }
@@ -912,7 +912,7 @@ func TestHandleWebflowError(t *testing.T) {
 		{418, []string{"418", "unexpected"}},
 	}
 	for _, tt := range tests {
-		err := handleWebflowError(tt.status, []byte(`{"error":"x"}`))
+		err := newAPIError(tt.status, "", "", []byte(`{"error":"x"}`))
 		if err == nil {
 			t.Fatalf("status %d: expected error", tt.status)
 		}
@@ -923,8 +923,8 @@ func TestHandleWebflowError(t *testing.T) {
 		}
 	}
 	// A 404 from handleWebflowError is typed as well
-	if !IsNotFound(handleWebflowError(404, nil)) {
-		t.Error("handleWebflowError(404) must satisfy IsNotFound")
+	if !IsNotFound(newAPIError(404, "", "", nil)) {
+		t.Error("newAPIError(404) must satisfy IsNotFound")
 	}
 }
 

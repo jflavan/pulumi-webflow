@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/pulumi/pulumi-go-provider/infer"
 )
@@ -50,7 +51,13 @@ func (c *Config) Configure(ctx context.Context) error {
 func safeGetConfigToken(ctx context.Context) (token string) {
 	defer func() {
 		if r := recover(); r != nil {
-			token = ""
+			// Only the "no config attached" panic is expected (unit tests calling resource
+			// methods directly). A config type mismatch is a programming error: re-panic.
+			if msg, ok := r.(string); ok && strings.Contains(msg, "without a config") {
+				token = ""
+				return
+			}
+			panic(r)
 		}
 	}()
 

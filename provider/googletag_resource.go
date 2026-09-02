@@ -136,7 +136,7 @@ func (r *GoogleTag) Diff(
 
 // upsertGoogleTag sends the tag to Webflow and returns the resulting state.
 func upsertGoogleTag(ctx context.Context, args GoogleTagArgs) (GoogleTagState, error) {
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return GoogleTagState{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -200,7 +200,7 @@ func (r *GoogleTag) Read(
 		return infer.ReadResponse[GoogleTagArgs, GoogleTagState]{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[GoogleTagArgs, GoogleTagState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -269,7 +269,7 @@ func (r *GoogleTag) Delete(
 		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

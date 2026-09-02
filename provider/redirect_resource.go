@@ -153,7 +153,7 @@ func (r *Redirect) Create(
 		return infer.CreateResponse[RedirectState]{}, err
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.CreateResponse[RedirectState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -225,7 +225,7 @@ func (r *Redirect) Read(
 		return infer.ReadResponse[RedirectArgs, RedirectState]{}, err
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[RedirectArgs, RedirectState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -302,7 +302,7 @@ func (r *Redirect) Update(
 			req.Inputs.SiteID, req.ID)
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.UpdateResponse[RedirectState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -330,7 +330,7 @@ func (r *Redirect) Delete(ctx context.Context, req infer.DeleteRequest[RedirectS
 		return infer.DeleteResponse{}, err
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

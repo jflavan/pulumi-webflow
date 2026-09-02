@@ -269,7 +269,7 @@ func (c *CollectionItemResource) Create(
 			"validation failed for CollectionItem resource: %w", err)
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.CreateResponse[CollectionItemState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -321,7 +321,7 @@ func (c *CollectionItemResource) Read(
 		return infer.ReadResponse[CollectionItemArgs, CollectionItemState]{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[CollectionItemArgs, CollectionItemState]{}, fmt.Errorf(
 			"failed to create HTTP client: %w", err)
@@ -416,7 +416,7 @@ func (c *CollectionItemResource) Update(
 		return infer.UpdateResponse[CollectionItemState]{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.UpdateResponse[CollectionItemState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -469,7 +469,7 @@ func (c *CollectionItemResource) Delete(
 		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
 
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
