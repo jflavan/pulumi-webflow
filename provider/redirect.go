@@ -7,42 +7,57 @@
 package provider
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"strings"
-	"time"
 )
 
 // RedirectRule represents a redirect configuration in Webflow.
 // This struct matches the Webflow API v2 response format for redirect rules.
+//
+// The documented API object carries only id, fromUrl and toUrl. statusCode and createdOn are
+// decoded when present so that a future API revision is picked up, but callers must not rely
+// on them being set.
 type RedirectRule struct {
-	ID              string `json:"id,omitempty"` // Webflow-assigned redirect ID
-	SourcePath      string `json:"fromUrl"`      // Path to redirect from (e.g., "/old-page")
-	DestinationPath string `json:"toUrl"`        // Path to redirect to (e.g., "/new-page")
-	StatusCode      int    `json:"statusCode"`   // 301 (permanent) or 302 (temporary)
+	ID              string `json:"id,omitempty"`         // Webflow-assigned redirect ID
+	SourcePath      string `json:"fromUrl"`              // Path to redirect from (e.g., "/old-page")
+	DestinationPath string `json:"toUrl"`                // Path to redirect to (e.g., "/new-page")
+	StatusCode      int    `json:"statusCode,omitempty"` // 301 or 302 when the API reports it
+	CreatedOn       string `json:"createdOn,omitempty"`  // Creation timestamp when the API reports it
+}
+
+// RedirectPagination is the pagination block of a redirect list response.
+type RedirectPagination struct {
+	Limit  int `json:"limit"`
+	Offset int `json:"offset"`
+	Total  int `json:"total"`
 }
 
 // RedirectResponse represents the Webflow API response for redirects.
 type RedirectResponse struct {
-	Redirects []RedirectRule `json:"redirects"` // List of redirect rules
+	Redirects  []RedirectRule     `json:"redirects"`            // List of redirect rules
+	Pagination RedirectPagination `json:"pagination,omitempty"` // Pagination info for the list
 }
 
 // RedirectRequest represents the request body for POST/PATCH redirects.
 type RedirectRequest struct {
 	SourcePath      string `json:"fromUrl,omitempty"`    // Path to redirect from
 	DestinationPath string `json:"toUrl,omitempty"`      // Path to redirect to
-	StatusCode      int    `json:"statusCode,omitempty"` // 301 or 302
+	StatusCode      int    `json:"statusCode,omitempty"` // 301 or 302 (not part of the documented API; sent when set)
 }
+
+// redirectPageSize is the page size requested when listing redirects.
+const redirectPageSize = 100
 
 // pathPattern is the regex pattern for validating URL paths.
 // Valid paths: start with "/" followed by alphanumeric, hyphens, underscores, slashes, dots
 var pathPattern = regexp.MustCompile(`^/[a-zA-Z0-9\-_/.]*$`)
+
+// redirectIDPattern matches Webflow redirect IDs (URL-safe identifiers, typically 24-char hex).
+var redirectIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 // ValidateSourcePath validates that a sourcePath is a valid URL path.
 // Webflow redirects expect paths to start with "/" and contain only valid URL characters.
@@ -102,6 +117,20 @@ func ValidateStatusCode(statusCode int) error {
 	return nil
 }
 
+// ValidateRedirectID validates a Webflow redirect ID parsed from a resource ID before it is
+// interpolated into an API URL.
+func ValidateRedirectID(redirectID string) error {
+	if redirectID == "" {
+		return errors.New("redirectId is required but was not provided. " +
+			"Expected a Webflow redirect ID (typically a 24-character hexadecimal string)")
+	}
+	if !redirectIDPattern.MatchString(redirectID) {
+		return fmt.Errorf("redirectId has invalid format: got '%s'. "+
+			"Expected a Webflow redirect ID containing only letters, digits, hyphens and underscores", redirectID)
+	}
+	return nil
+}
+
 // GenerateRedirectResourceID generates a Pulumi resource ID for a Redirect resource.
 // Format: {siteID}/redirects/{redirectID}
 func GenerateRedirectResourceID(siteID, redirectID string) string {
@@ -126,100 +155,84 @@ func ExtractIDsFromRedirectResourceID(resourceID string) (siteID, redirectID str
 	return siteID, redirectID, nil
 }
 
-// getRedirectsBaseURL is used internally for testing to override the API base URL.
-var getRedirectsBaseURL = ""
-
-// GetRedirects retrieves all redirects for a Webflow site.
-// It calls GET /v2/sites/{site_id}/redirects endpoint.
-// Returns the parsed response or an error if the request fails.
-func GetRedirects(ctx context.Context, client *http.Client, siteID string) (*RedirectResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
+// ListRedirectsPage retrieves one page of redirects for a Webflow site.
+// It calls GET /v2/sites/{site_id}/redirects?limit=N&offset=M.
+func ListRedirectsPage(
+	ctx context.Context, client *http.Client, siteID string, limit, offset int,
+) (*RedirectResponse, error) {
+	var response RedirectResponse
+	_, err := doRequest(ctx, client, http.MethodGet,
+		apiURL("/v2/sites/%s/redirects?limit=%d&offset=%d", siteID, limit, offset), nil, &response, http.StatusOK)
+	if err != nil {
+		return nil, err
 	}
-
-	baseURL := webflowAPIBaseURL
-	if getRedirectsBaseURL != "" {
-		baseURL = getRedirectsBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s/redirects", baseURL, siteID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			// Check for Retry-After header from previous response, or use exponential backoff
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			// Enhanced rate limiting error message with clear delay information
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			// Check for Retry-After header for the next retry
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var response RedirectResponse
-		if err := json.Unmarshal(body, &response); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &response, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &response, nil
 }
 
-// postRedirectBaseURL is used internally for testing to override the API base URL.
-var postRedirectBaseURL = ""
+// GetRedirects retrieves all redirects for a Webflow site, following pagination until the
+// list is exhausted. The returned Pagination reflects the total reported by the API.
+func GetRedirects(ctx context.Context, client *http.Client, siteID string) (*RedirectResponse, error) {
+	all := &RedirectResponse{Redirects: []RedirectRule{}}
+	err := forEachRedirectPage(ctx, client, siteID, func(page *RedirectResponse) bool {
+		all.Redirects = append(all.Redirects, page.Redirects...)
+		all.Pagination = page.Pagination
+		return true
+	})
+	if err != nil {
+		return nil, err
+	}
+	all.Pagination.Offset = 0
+	all.Pagination.Limit = len(all.Redirects)
+	if all.Pagination.Total < len(all.Redirects) {
+		all.Pagination.Total = len(all.Redirects)
+	}
+	return all, nil
+}
+
+// FindRedirect looks up a single redirect by ID, paging through the site's redirect list
+// only as far as needed. Returns nil, nil when the list is exhausted without a match.
+func FindRedirect(ctx context.Context, client *http.Client, siteID, redirectID string) (*RedirectRule, error) {
+	var found *RedirectRule
+	err := forEachRedirectPage(ctx, client, siteID, func(page *RedirectResponse) bool {
+		for i := range page.Redirects {
+			if page.Redirects[i].ID == redirectID {
+				rule := page.Redirects[i]
+				found = &rule
+				return false
+			}
+		}
+		return true
+	})
+	if err != nil {
+		return nil, err
+	}
+	return found, nil
+}
+
+// forEachRedirectPage calls visit for every page of redirects until visit returns false or the
+// pagination reports no more results. It stops on an empty page so an API that ignores the
+// offset parameter cannot cause an infinite loop.
+func forEachRedirectPage(
+	ctx context.Context, client *http.Client, siteID string, visit func(*RedirectResponse) bool,
+) error {
+	offset := 0
+	for {
+		page, err := ListRedirectsPage(ctx, client, siteID, redirectPageSize, offset)
+		if err != nil {
+			return err
+		}
+		if !visit(page) {
+			return nil
+		}
+		if len(page.Redirects) == 0 {
+			return nil
+		}
+		offset += len(page.Redirects)
+		if offset >= page.Pagination.Total {
+			return nil
+		}
+	}
+}
 
 // PostRedirect creates a new redirect for a Webflow site.
 // It calls POST /v2/sites/{site_id}/redirects endpoint.
@@ -228,296 +241,46 @@ func PostRedirect(
 	ctx context.Context, client *http.Client,
 	siteID, sourcePath, destinationPath string, statusCode int,
 ) (*RedirectRule, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
-	}
-
-	baseURL := webflowAPIBaseURL
-	if postRedirectBaseURL != "" {
-		baseURL = postRedirectBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s/redirects", baseURL, siteID)
-
 	requestBody := RedirectRequest{
 		SourcePath:      sourcePath,
 		DestinationPath: destinationPath,
 		StatusCode:      statusCode,
 	}
 
-	bodyBytes, err := json.Marshal(requestBody)
+	var redirect RedirectRule
+	_, err := doRequest(ctx, client, http.MethodPost, apiURL("/v2/sites/%s/redirects", siteID),
+		requestBody, &redirect, http.StatusOK, http.StatusCreated)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+		return nil, err
 	}
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			// Check for Retry-After header from previous response, or use exponential backoff
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyBytes))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			// Enhanced rate limiting error message with clear delay information
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			// Check for Retry-After header for the next retry
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses (accept both 200 and 201 as success)
-		if resp.StatusCode != 200 && resp.StatusCode != 201 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var redirect RedirectRule
-		if err := json.Unmarshal(body, &redirect); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &redirect, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &redirect, nil
 }
 
-// patchRedirectBaseURL is used internally for testing to override the API base URL.
-var patchRedirectBaseURL = ""
-
 // PatchRedirect updates an existing redirect for a Webflow site.
-// It calls PATCH /v2/sites/{site_id}/redirects/{redirect_id} endpoint.
+// It calls PATCH /v2/sites/{site_id}/redirects/{redirect_id}, which accepts toUrl (and fromUrl).
+// The source path is treated as the redirect's identity by this provider and is not sent.
 // Returns the updated redirect or an error if the request fails.
 func PatchRedirect(
 	ctx context.Context, client *http.Client,
-	siteID, redirectID, sourcePath, destinationPath string, statusCode int,
+	siteID, redirectID, destinationPath string, statusCode int,
 ) (*RedirectRule, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
-	}
-
-	baseURL := webflowAPIBaseURL
-	if patchRedirectBaseURL != "" {
-		baseURL = patchRedirectBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s/redirects/%s", baseURL, siteID, redirectID)
-
-	// Note: According to Webflow API, PATCH does NOT accept sourcePath (fromUrl)
-	// The source path is immutable - if you need to change it, delete and recreate
 	requestBody := RedirectRequest{
 		DestinationPath: destinationPath,
 		StatusCode:      statusCode,
 	}
 
-	bodyBytes, err := json.Marshal(requestBody)
+	var redirect RedirectRule
+	_, err := doRequest(ctx, client, http.MethodPatch, apiURL("/v2/sites/%s/redirects/%s", siteID, redirectID),
+		requestBody, &redirect, http.StatusOK)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+		return nil, err
 	}
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			// Check for Retry-After header from previous response, or use exponential backoff
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "PATCH", url, bytes.NewReader(bodyBytes))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			// Enhanced rate limiting error message with clear delay information
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			// Check for Retry-After header for the next retry
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var redirect RedirectRule
-		if err := json.Unmarshal(body, &redirect); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &redirect, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &redirect, nil
 }
-
-// deleteRedirectBaseURL is used internally for testing to override the API base URL.
-var deleteRedirectBaseURL = ""
 
 // DeleteRedirect removes a redirect from a Webflow site.
 // It calls DELETE /v2/sites/{site_id}/redirects/{redirect_id} endpoint.
 // Returns nil on success (including 404 for idempotency) or an error if the request fails.
 func DeleteRedirect(ctx context.Context, client *http.Client, siteID, redirectID string) error {
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("context cancelled: %w", err)
-	}
-
-	baseURL := webflowAPIBaseURL
-	if deleteRedirectBaseURL != "" {
-		baseURL = deleteRedirectBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s/redirects/%s", baseURL, siteID, redirectID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			// Check for Retry-After header from previous response, or use exponential backoff
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "DELETE", url, http.NoBody)
-		if err != nil {
-			return fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			// Enhanced rate limiting error message with clear delay information
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			// Check for Retry-After header for the next retry
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// 204 No Content is success
-		// 404 Not Found is also success (idempotent delete)
-		if resp.StatusCode == 204 || resp.StatusCode == 404 {
-			return nil
-		}
-
-		// Handle other error responses
-		return handleWebflowError(resp.StatusCode, body)
-	}
-
-	return fmt.Errorf("max retries exceeded: %w", lastErr)
+	return doDelete(ctx, client, apiURL("/v2/sites/%s/redirects/%s", siteID, redirectID), nil)
 }
