@@ -8,12 +8,12 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
-	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
+	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
 )
 
@@ -24,26 +24,10 @@ func TestValidateFieldData(t *testing.T) {
 		fieldData map[string]interface{}
 		wantErr   bool
 	}{
-		{
-			name:      "valid field data",
-			fieldData: map[string]interface{}{"name": "Test Item", "slug": "test-item"},
-			wantErr:   false,
-		},
-		{
-			name:      "nil field data",
-			fieldData: nil,
-			wantErr:   true,
-		},
-		{
-			name:      "empty field data",
-			fieldData: map[string]interface{}{},
-			wantErr:   true,
-		},
-		{
-			name:      "field data with multiple fields",
-			fieldData: map[string]interface{}{"name": "Test", "slug": "test", "content": "Content"},
-			wantErr:   false,
-		},
+		{"valid field data", map[string]interface{}{"name": "Test Item", "slug": "test-item"}, false},
+		{"nil field data", nil, true},
+		{"empty field data", map[string]interface{}{}, true},
+		{"multiple fields", map[string]interface{}{"name": "Test", "slug": "test", "content": "Content"}, false},
 	}
 
 	for _, tt := range tests {
@@ -56,35 +40,23 @@ func TestValidateFieldData(t *testing.T) {
 	}
 }
 
+// TestValidateItemID tests the path-segment guard for item IDs.
+func TestValidateItemID(t *testing.T) {
+	if err := ValidateItemID(testItemID); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	for _, bad := range []string{"", "a/b", "..", "x?y=1"} {
+		if err := ValidateItemID(bad); err == nil {
+			t.Errorf("ValidateItemID(%q) expected error", bad)
+		}
+	}
+}
+
 // TestGenerateCollectionItemResourceID tests the GenerateCollectionItemResourceID function.
 func TestGenerateCollectionItemResourceID(t *testing.T) {
-	tests := []struct {
-		name         string
-		collectionID string
-		itemID       string
-		want         string
-	}{
-		{
-			name:         "valid IDs",
-			collectionID: "5f0c8c9e1c9d440000e8d8c3",
-			itemID:       "6f1d9d0f2d0e550111f9e9d4",
-			want:         "5f0c8c9e1c9d440000e8d8c3/items/6f1d9d0f2d0e550111f9e9d4",
-		},
-		{
-			name:         "itemID with slashes",
-			collectionID: "5f0c8c9e1c9d440000e8d8c3",
-			itemID:       "6f1d9d0f/special/item",
-			want:         "5f0c8c9e1c9d440000e8d8c3/items/6f1d9d0f/special/item",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := GenerateCollectionItemResourceID(tt.collectionID, tt.itemID)
-			if got != tt.want {
-				t.Errorf("GenerateCollectionItemResourceID() = %v, want %v", got, tt.want)
-			}
-		})
+	got := GenerateCollectionItemResourceID(testCollectionID, testItemID)
+	if want := testCollectionID + "/items/" + testItemID; got != want {
+		t.Errorf("GenerateCollectionItemResourceID() = %v, want %v", got, want)
 	}
 }
 
@@ -97,674 +69,743 @@ func TestExtractIDsFromCollectionItemResourceID(t *testing.T) {
 		wantItemID       string
 		wantErr          bool
 	}{
-		{
-			name:             "valid resource ID",
-			resourceID:       "5f0c8c9e1c9d440000e8d8c3/items/6f1d9d0f2d0e550111f9e9d4",
-			wantCollectionID: "5f0c8c9e1c9d440000e8d8c3",
-			wantItemID:       "6f1d9d0f2d0e550111f9e9d4",
-			wantErr:          false,
-		},
-		{
-			name:             "itemID with slashes",
-			resourceID:       "5f0c8c9e1c9d440000e8d8c3/items/6f1d9d0f/special/item",
-			wantCollectionID: "5f0c8c9e1c9d440000e8d8c3",
-			wantItemID:       "6f1d9d0f/special/item",
-			wantErr:          false,
-		},
-		{
-			name:       "empty resource ID",
-			resourceID: "",
-			wantErr:    true,
-		},
-		{
-			name:       "invalid format - no items segment",
-			resourceID: "5f0c8c9e1c9d440000e8d8c3/redirects/6f1d9d0f2d0e550111f9e9d4",
-			wantErr:    true,
-		},
-		{
-			name:       "invalid format - too few parts",
-			resourceID: "5f0c8c9e1c9d440000e8d8c3/items",
-			wantErr:    true,
-		},
+		{"valid resource ID", testCollectionID + "/items/" + testItemID, testCollectionID, testItemID, false},
+		{"itemID with slashes", testCollectionID + "/items/6f1d9d0f/special/item", testCollectionID, "6f1d9d0f/special/item", false},
+		{"empty resource ID", "", "", "", true},
+		{"invalid format - no items segment", testCollectionID + "/redirects/" + testItemID, "", "", true},
+		{"invalid format - too few parts", testCollectionID + "/items", "", "", true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotCollectionID, gotItemID, err := ExtractIDsFromCollectionItemResourceID(tt.resourceID)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("ExtractIDsFromCollectionItemResourceID() error = %v, wantErr %v", err, tt.wantErr)
-				return
+				t.Fatalf("error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if !tt.wantErr {
-				if gotCollectionID != tt.wantCollectionID {
-					t.Errorf("ExtractIDsFromCollectionItemResourceID() collectionID = %v, want %v",
-						gotCollectionID, tt.wantCollectionID)
-				}
-				if gotItemID != tt.wantItemID {
-					t.Errorf("ExtractIDsFromCollectionItemResourceID() itemID = %v, want %v",
-						gotItemID, tt.wantItemID)
-				}
+			if !tt.wantErr && (gotCollectionID != tt.wantCollectionID || gotItemID != tt.wantItemID) {
+				t.Errorf("got (%q, %q), want (%q, %q)", gotCollectionID, gotItemID, tt.wantCollectionID, tt.wantItemID)
 			}
 		})
 	}
 }
 
-// TestGetCollectionItems tests the GetCollectionItems function.
-func TestGetCollectionItems(t *testing.T) {
-	tests := []struct {
-		name       string
-		statusCode int
-		response   CollectionItemListResponse
-		wantErr    bool
-	}{
-		{
-			name:       "successful request",
-			statusCode: 200,
-			response: CollectionItemListResponse{
-				Items: []CollectionItem{
-					{
-						ID:        "6f1d9d0f2d0e550111f9e9d4",
-						FieldData: map[string]interface{}{"name": "Test Item", "slug": "test-item"},
-						IsDraft:   true,
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name:       "empty list",
-			statusCode: 200,
-			response: CollectionItemListResponse{
-				Items: []CollectionItem{},
-			},
-			wantErr: false,
-		},
-		{
-			name:       "404 not found",
-			statusCode: 404,
-			response:   CollectionItemListResponse{},
-			wantErr:    true,
-		},
-		{
-			name:       "500 server error",
-			statusCode: 500,
-			response:   CollectionItemListResponse{},
-			wantErr:    true,
-		},
-	}
+var (
+	itemResourceID = testCollectionID + "/items/" + testItemID
+	itemsPath      = "/v2/collections/" + testCollectionID + "/items"
+	itemPath       = itemsPath + "/" + testItemID
+	itemLivePath   = itemPath + "/live"
+	publishPath    = itemsPath + "/publish"
+)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create mock server
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Verify request method
-				if r.Method != "GET" {
-					t.Errorf("Expected GET, got %s", r.Method)
-				}
-
-				// Verify URL path
-				if !strings.Contains(r.URL.Path, "/v2/collections/") || !strings.Contains(r.URL.Path, "/items") {
-					t.Errorf("Unexpected URL path: %s", r.URL.Path)
-				}
-
-				// Return mock response
-				w.WriteHeader(tt.statusCode)
-				w.Header().Set("Content-Type", "application/json")
-				if tt.statusCode == 200 {
-					_ = json.NewEncoder(w).Encode(tt.response)
-				}
-			}))
-			defer server.Close()
-
-			// Override base URL for testing
-			getCollectionItemsBaseURL = server.URL
-			defer func() { getCollectionItemsBaseURL = "" }()
-
-			// Test
-			client := &http.Client{}
-			resp, err := GetCollectionItems(context.Background(), client, "5f0c8c9e1c9d440000e8d8c3")
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetCollectionItems() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if !tt.wantErr && resp != nil {
-				if len(resp.Items) != len(tt.response.Items) {
-					t.Errorf("GetCollectionItems() returned %d items, want %d",
-						len(resp.Items), len(tt.response.Items))
-				}
-			}
-		})
-	}
-}
-
-// TestGetCollectionItem tests the GetCollectionItem function.
-func TestGetCollectionItem(t *testing.T) {
-	tests := []struct {
-		name       string
-		statusCode int
-		response   CollectionItem
-		wantErr    bool
-	}{
-		{
-			name:       "successful request",
-			statusCode: 200,
-			response: CollectionItem{
-				ID:        "6f1d9d0f2d0e550111f9e9d4",
-				FieldData: map[string]interface{}{"name": "Test Item", "slug": "test-item"},
-				IsDraft:   true,
-				CreatedOn: "2024-01-01T00:00:00Z",
-			},
-			wantErr: false,
-		},
-		{
-			name:       "404 not found",
-			statusCode: 404,
-			response:   CollectionItem{},
-			wantErr:    true,
-		},
-		{
-			name:       "500 server error",
-			statusCode: 500,
-			response:   CollectionItem{},
-			wantErr:    true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create mock server
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Verify request method
-				if r.Method != "GET" {
-					t.Errorf("Expected GET, got %s", r.Method)
-				}
-
-				// Return mock response
-				w.WriteHeader(tt.statusCode)
-				w.Header().Set("Content-Type", "application/json")
-				if tt.statusCode == 200 {
-					_ = json.NewEncoder(w).Encode(tt.response)
-				}
-			}))
-			defer server.Close()
-
-			// Override base URL for testing
-			getCollectionItemBaseURL = server.URL
-			defer func() { getCollectionItemBaseURL = "" }()
-
-			// Test
-			client := &http.Client{}
-			resp, err := GetCollectionItem(context.Background(), client,
-				"5f0c8c9e1c9d440000e8d8c3", "6f1d9d0f2d0e550111f9e9d4")
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetCollectionItem() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if !tt.wantErr && resp != nil {
-				if resp.ID != tt.response.ID {
-					t.Errorf("GetCollectionItem() ID = %v, want %v", resp.ID, tt.response.ID)
-				}
-			}
-		})
-	}
-}
-
-// TestPostCollectionItem tests the PostCollectionItem function.
-func TestPostCollectionItem(t *testing.T) {
-	tests := []struct {
-		name       string
-		statusCode int
-		response   CollectionItem
-		wantErr    bool
-	}{
-		{
-			name:       "successful creation - 201",
-			statusCode: 201,
-			response: CollectionItem{
-				ID:        "6f1d9d0f2d0e550111f9e9d4",
-				FieldData: map[string]interface{}{"name": "New Item", "slug": "new-item"},
-				IsDraft:   true,
-				CreatedOn: "2024-01-01T00:00:00Z",
-			},
-			wantErr: false,
-		},
-		{
-			name:       "successful creation - 200",
-			statusCode: 200,
-			response: CollectionItem{
-				ID:        "6f1d9d0f2d0e550111f9e9d4",
-				FieldData: map[string]interface{}{"name": "New Item", "slug": "new-item"},
-				IsDraft:   true,
-				CreatedOn: "2024-01-01T00:00:00Z",
-			},
-			wantErr: false,
-		},
-		{
-			name:       "400 bad request",
-			statusCode: 400,
-			response:   CollectionItem{},
-			wantErr:    true,
-		},
-		{
-			name:       "401 unauthorized",
-			statusCode: 401,
-			response:   CollectionItem{},
-			wantErr:    true,
-		},
-		{
-			name:       "500 server error",
-			statusCode: 500,
-			response:   CollectionItem{},
-			wantErr:    true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create mock server
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Verify request method
-				if r.Method != "POST" {
-					t.Errorf("Expected POST, got %s", r.Method)
-				}
-
-				// Verify content type
-				if r.Header.Get("Content-Type") != "application/json" {
-					t.Errorf("Expected Content-Type: application/json, got %s", r.Header.Get("Content-Type"))
-				}
-
-				// Return mock response
-				w.WriteHeader(tt.statusCode)
-				w.Header().Set("Content-Type", "application/json")
-				if tt.statusCode == 200 || tt.statusCode == 201 {
-					_ = json.NewEncoder(w).Encode(tt.response)
-				}
-			}))
-			defer server.Close()
-
-			// Override base URL for testing
-			postCollectionItemBaseURL = server.URL
-			defer func() { postCollectionItemBaseURL = "" }()
-
-			// Test
-			client := &http.Client{}
-			fieldData := map[string]interface{}{"name": "New Item", "slug": "new-item"}
-			isDraft := true
-			resp, err := PostCollectionItem(context.Background(), client,
-				"5f0c8c9e1c9d440000e8d8c3", fieldData, nil, &isDraft, "")
-			if (err != nil) != tt.wantErr {
-				t.Errorf("PostCollectionItem() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if !tt.wantErr && resp != nil {
-				if resp.ID != tt.response.ID {
-					t.Errorf("PostCollectionItem() ID = %v, want %v", resp.ID, tt.response.ID)
-				}
-			}
-		})
-	}
-}
-
-// TestPatchCollectionItem tests the PatchCollectionItem function.
-func TestPatchCollectionItem(t *testing.T) {
-	tests := []struct {
-		name       string
-		statusCode int
-		response   CollectionItem
-		wantErr    bool
-	}{
-		{
-			name:       "successful update",
-			statusCode: 200,
-			response: CollectionItem{
-				ID:          "6f1d9d0f2d0e550111f9e9d4",
-				FieldData:   map[string]interface{}{"name": "Updated Item", "slug": "updated-item"},
-				IsDraft:     false,
-				LastUpdated: "2024-01-02T00:00:00Z",
-			},
-			wantErr: false,
-		},
-		{
-			name:       "404 not found",
-			statusCode: 404,
-			response:   CollectionItem{},
-			wantErr:    true,
-		},
-		{
-			name:       "500 server error",
-			statusCode: 500,
-			response:   CollectionItem{},
-			wantErr:    true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create mock server
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Verify request method
-				if r.Method != "PATCH" {
-					t.Errorf("Expected PATCH, got %s", r.Method)
-				}
-
-				// Verify content type
-				if r.Header.Get("Content-Type") != "application/json" {
-					t.Errorf("Expected Content-Type: application/json, got %s", r.Header.Get("Content-Type"))
-				}
-
-				// Return mock response
-				w.WriteHeader(tt.statusCode)
-				w.Header().Set("Content-Type", "application/json")
-				if tt.statusCode == 200 {
-					_ = json.NewEncoder(w).Encode(tt.response)
-				}
-			}))
-			defer server.Close()
-
-			// Override base URL for testing
-			patchCollectionItemBaseURL = server.URL
-			defer func() { patchCollectionItemBaseURL = "" }()
-
-			// Test
-			client := &http.Client{}
-			fieldData := map[string]interface{}{"name": "Updated Item", "slug": "updated-item"}
-			isDraft := false
-			resp, err := PatchCollectionItem(context.Background(), client,
-				"5f0c8c9e1c9d440000e8d8c3", "6f1d9d0f2d0e550111f9e9d4",
-				fieldData, nil, &isDraft, "")
-			if (err != nil) != tt.wantErr {
-				t.Errorf("PatchCollectionItem() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			if !tt.wantErr && resp != nil {
-				if resp.ID != tt.response.ID {
-					t.Errorf("PatchCollectionItem() ID = %v, want %v", resp.ID, tt.response.ID)
-				}
-			}
-		})
-	}
-}
-
-// TestDeleteCollectionItem tests the DeleteCollectionItem function.
-func TestDeleteCollectionItem(t *testing.T) {
-	tests := []struct {
-		name       string
-		statusCode int
-		wantErr    bool
-	}{
-		{
-			name:       "successful deletion - 204",
-			statusCode: 204,
-			wantErr:    false,
-		},
-		{
-			name:       "idempotent deletion - 404",
-			statusCode: 404,
-			wantErr:    false,
-		},
-		{
-			name:       "401 unauthorized",
-			statusCode: 401,
-			wantErr:    true,
-		},
-		{
-			name:       "500 server error",
-			statusCode: 500,
-			wantErr:    true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create mock server
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Verify request method
-				if r.Method != "DELETE" {
-					t.Errorf("Expected DELETE, got %s", r.Method)
-				}
-
-				// Return mock response
-				w.WriteHeader(tt.statusCode)
-			}))
-			defer server.Close()
-
-			// Override base URL for testing
-			deleteCollectionItemBaseURL = server.URL
-			defer func() { deleteCollectionItemBaseURL = "" }()
-
-			// Test
-			client := &http.Client{}
-			err := DeleteCollectionItem(context.Background(), client,
-				"5f0c8c9e1c9d440000e8d8c3", "6f1d9d0f2d0e550111f9e9d4")
-			if (err != nil) != tt.wantErr {
-				t.Errorf("DeleteCollectionItem() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
+// apiItem returns a typical item payload as the Webflow API reports it.
+func apiItem(lastPublished string) map[string]interface{} {
+	return map[string]interface{}{
+		"id": testItemID, "cmsLocaleId": "", "isArchived": false, "isDraft": true,
+		"createdOn": "2024-01-01T00:00:00Z", "lastUpdated": "2024-01-02T00:00:00Z", "lastPublished": lastPublished,
+		"fieldData": map[string]interface{}{"name": "Test Item", "slug": "test-item", "body": "Hello", "featured": false},
 	}
 }
 
 // =============================================================================
-// CollectionItem Drift Detection Tests
+// CollectionItem resource: Create
 // =============================================================================
 
-// PrepareFieldDataForPatch applies the slug-stripping logic used in the Update method.
-// This helper function is extracted for testing purposes and mirrors the exact logic
-// in CollectionItemResource.Update.
-func PrepareFieldDataForPatch(oldFieldData, newFieldData map[string]interface{}) map[string]interface{} {
-	fieldDataForPatch := make(map[string]interface{})
-	for k, v := range newFieldData {
-		fieldDataForPatch[k] = v
+func TestCollectionItemResource_Create(t *testing.T) {
+	mock := newCMSMock(t)
+	mock.handle(http.MethodPost, itemsPath, func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusAccepted, apiItem(""))
+	})
+
+	inputs := CollectionItemArgs{
+		CollectionID: testCollectionID,
+		FieldData:    map[string]interface{}{"name": "Test Item", "slug": "test-item"},
+		IsDraft:      ptrBool(true),
+	}
+	resp, err := (&CollectionItemResource{}).Create(context.Background(), infer.CreateRequest[CollectionItemArgs]{Inputs: inputs})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if resp.ID != itemResourceID {
+		t.Errorf("ID = %q, want %q", resp.ID, itemResourceID)
+	}
+	out := resp.Output
+	if out.ItemID != testItemID || out.CreatedOn != "2024-01-01T00:00:00Z" || out.LastUpdated != "2024-01-02T00:00:00Z" {
+		t.Errorf("unexpected output: %+v", out)
+	}
+	if !reflect.DeepEqual(out.FieldData, inputs.FieldData) {
+		t.Errorf("state fieldData must keep the user's view, got %v", out.FieldData)
+	}
+	if out.IsDraft == nil || !*out.IsDraft || out.IsArchived == nil || *out.IsArchived {
+		t.Errorf("flags should come from the API: %+v", out)
+	}
+	if !out.Live {
+		// live defaults to false
 	}
 
-	// Check if slug is unchanged and remove it from the patch payload if so.
-	// Use type-safe comparisons to handle interface{} values properly.
-	if oldSlug, oldOk := oldFieldData["slug"]; oldOk {
-		if newSlug, newOk := fieldDataForPatch["slug"]; newOk {
-			if oldSlugStr, okOld := oldSlug.(string); okOld {
-				if newSlugStr, okNew := newSlug.(string); okNew {
-					if oldSlugStr == newSlugStr {
-						delete(fieldDataForPatch, "slug")
-					}
-				}
+	calls := mock.requests()
+	if len(calls) != 1 || calls[0].Method != http.MethodPost {
+		t.Fatalf("expected exactly one POST (no publish), got %+v", calls)
+	}
+	body := calls[0].Body
+	fd, _ := body["fieldData"].(map[string]interface{})
+	if fd["name"] != "Test Item" || fd["slug"] != "test-item" || body["isDraft"] != true {
+		t.Errorf("unexpected POST body: %v", body)
+	}
+	if _, ok := body["isArchived"]; ok {
+		t.Errorf("omitted isArchived must not be sent: %v", body)
+	}
+}
+
+func TestCollectionItemResource_Create_LivePublishesAndReadsLiveCopy(t *testing.T) {
+	mock := newCMSMock(t)
+	mock.handle(http.MethodPost, itemsPath, func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusAccepted, apiItem(""))
+	})
+	mock.handle(http.MethodPost, publishPath, func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusAccepted, CollectionItemPublishResponse{PublishedItemIDs: []string{testItemID}})
+	})
+	mock.handle(http.MethodGet, itemLivePath, func(w http.ResponseWriter, r *http.Request) {
+		live := apiItem("2024-01-03T00:00:00Z")
+		live["isDraft"] = false
+		writeCMSJSON(w, http.StatusOK, live)
+	})
+
+	resp, err := (&CollectionItemResource{}).Create(context.Background(), infer.CreateRequest[CollectionItemArgs]{
+		Inputs: CollectionItemArgs{
+			CollectionID: testCollectionID,
+			FieldData:    map[string]interface{}{"name": "Test Item", "slug": "test-item"},
+			Live:         true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if resp.Output.LastPublished != "2024-01-03T00:00:00Z" {
+		t.Errorf("lastPublished should come from the live copy, got %q", resp.Output.LastPublished)
+	}
+	if resp.Output.IsDraft == nil || *resp.Output.IsDraft {
+		t.Errorf("isDraft should reflect the published copy: %+v", resp.Output)
+	}
+
+	calls := mock.requests()
+	if len(calls) != 3 {
+		t.Fatalf("expected POST item, POST publish, GET live; got %+v", calls)
+	}
+	if calls[1].Method != http.MethodPost || calls[1].Path != publishPath {
+		t.Errorf("second call should be the publish, got %+v", calls[1])
+	}
+	ids, _ := calls[1].Body["itemIds"].([]interface{})
+	if len(ids) != 1 || ids[0] != testItemID {
+		t.Errorf("publish body should carry itemIds [%s], got %v", testItemID, calls[1].Body)
+	}
+	if calls[2].Method != http.MethodGet || calls[2].Path != itemLivePath {
+		t.Errorf("third call should read the live item, got %+v", calls[2])
+	}
+}
+
+func TestCollectionItemResource_Create_LiveWithLocale(t *testing.T) {
+	mock := newCMSMock(t)
+	mock.handle(http.MethodPost, itemsPath, func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusAccepted, apiItem(""))
+	})
+	mock.handle(http.MethodPost, publishPath, func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusAccepted, CollectionItemPublishResponse{PublishedItemIDs: []string{testItemID}})
+	})
+	mock.handle(http.MethodGet, itemLivePath, func(w http.ResponseWriter, r *http.Request) {
+		// Live copy not yet available: provider must keep the staged response.
+		writeCMSJSON(w, http.StatusNotFound, map[string]string{"message": "not found"})
+	})
+
+	resp, err := (&CollectionItemResource{}).Create(context.Background(), infer.CreateRequest[CollectionItemArgs]{
+		Inputs: CollectionItemArgs{
+			CollectionID: testCollectionID, CmsLocaleID: "locale-1", Live: true,
+			FieldData: map[string]interface{}{"name": "Test Item", "slug": "test-item"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if resp.Output.ItemID != testItemID {
+		t.Errorf("staged response should be kept when the live copy is not available yet: %+v", resp.Output)
+	}
+
+	publish := mock.callsTo(http.MethodPost, publishPath)
+	if len(publish) != 1 {
+		t.Fatalf("expected one publish call")
+	}
+	items, _ := publish[0].Body["items"].([]interface{})
+	if len(items) != 1 {
+		t.Fatalf("publish with a locale must use items[{id, cmsLocaleIds}], got %v", publish[0].Body)
+	}
+	target, _ := items[0].(map[string]interface{})
+	locales, _ := target["cmsLocaleIds"].([]interface{})
+	if target["id"] != testItemID || len(locales) != 1 || locales[0] != "locale-1" {
+		t.Errorf("unexpected publish target: %v", target)
+	}
+	live := mock.callsTo(http.MethodGet, itemLivePath)
+	if len(live) != 1 || live[0].Query.Get("cmsLocaleId") != "locale-1" {
+		t.Errorf("live read must pass cmsLocaleId as a query parameter, got %+v", live)
+	}
+}
+
+func TestCollectionItemResource_Create_LivePublishFailure(t *testing.T) {
+	mock := newCMSMock(t)
+	mock.handle(http.MethodPost, itemsPath, func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusAccepted, apiItem(""))
+	})
+	mock.handle(http.MethodPost, publishPath, func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusAccepted, CollectionItemPublishResponse{Errors: []string{"Staging item ID not found"}})
+	})
+
+	_, err := (&CollectionItemResource{}).Create(context.Background(), infer.CreateRequest[CollectionItemArgs]{
+		Inputs: CollectionItemArgs{
+			CollectionID: testCollectionID, Live: true,
+			FieldData: map[string]interface{}{"name": "Test Item", "slug": "test-item"},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "Staging item ID not found") || !strings.Contains(err.Error(), itemResourceID) {
+		t.Fatalf("expected publish error mentioning the staged item ID, got %v", err)
+	}
+}
+
+func TestCollectionItemResource_Create_DryRunSkipsValidationAndAPI(t *testing.T) {
+	mock := newCMSMock(t)
+	resp, err := (&CollectionItemResource{}).Create(context.Background(), infer.CreateRequest[CollectionItemArgs]{
+		Inputs: CollectionItemArgs{CollectionID: "", FieldData: nil},
+		DryRun: true,
+	})
+	if err != nil {
+		t.Fatalf("Create(DryRun) error = %v", err)
+	}
+	if len(mock.requests()) != 0 {
+		t.Errorf("dry run must not call the API")
+	}
+	if resp.Output.ItemID != "" || resp.Output.CreatedOn != "" || resp.Output.LastUpdated != "" {
+		t.Errorf("dry run must not fabricate server-assigned outputs: %+v", resp.Output)
+	}
+}
+
+func TestCollectionItemResource_Create_ValidationErrors(t *testing.T) {
+	mock := newCMSMock(t)
+	for _, tt := range []struct {
+		name   string
+		inputs CollectionItemArgs
+		want   string
+	}{
+		{"invalid collectionId", CollectionItemArgs{CollectionID: "bad", FieldData: map[string]interface{}{"name": "x"}}, "collectionId"},
+		{"empty fieldData", CollectionItemArgs{CollectionID: testCollectionID}, "fieldData is required"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := (&CollectionItemResource{}).Create(context.Background(), infer.CreateRequest[CollectionItemArgs]{Inputs: tt.inputs})
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("expected error containing %q, got %v", tt.want, err)
+			}
+		})
+	}
+	if len(mock.requests()) != 0 {
+		t.Errorf("validation failures must not call the API")
+	}
+}
+
+// =============================================================================
+// CollectionItem resource: Update
+// =============================================================================
+
+func updateRequest(stateFieldData, inputFieldData map[string]interface{}) infer.UpdateRequest[CollectionItemArgs, CollectionItemState] {
+	return infer.UpdateRequest[CollectionItemArgs, CollectionItemState]{
+		ID: itemResourceID,
+		State: CollectionItemState{
+			CollectionItemArgs: CollectionItemArgs{CollectionID: testCollectionID, FieldData: stateFieldData},
+			ItemID:             testItemID, CreatedOn: "2024-01-01T00:00:00Z", LastPublished: "2024-01-01T12:00:00Z",
+		},
+		Inputs: CollectionItemArgs{CollectionID: testCollectionID, FieldData: inputFieldData, IsDraft: ptrBool(false)},
+	}
+}
+
+func TestCollectionItemResource_Update_StripsUnchangedSlug(t *testing.T) {
+	mock := newCMSMock(t)
+	mock.handle(http.MethodPatch, itemPath, func(w http.ResponseWriter, r *http.Request) {
+		item := apiItem("")
+		item["lastUpdated"] = "2024-02-01T00:00:00Z"
+		writeCMSJSON(w, http.StatusOK, item)
+	})
+
+	req := updateRequest(
+		map[string]interface{}{"name": "Old Name", "slug": "test-item"},
+		map[string]interface{}{"name": "Updated Name", "slug": "test-item"},
+	)
+	resp, err := (&CollectionItemResource{}).Update(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+
+	calls := mock.requests()
+	if len(calls) != 1 || calls[0].Method != http.MethodPatch || calls[0].Path != itemPath {
+		t.Fatalf("expected exactly one PATCH %s, got %+v", itemPath, calls)
+	}
+	body := calls[0].Body
+	fd, _ := body["fieldData"].(map[string]interface{})
+	if _, hasSlug := fd["slug"]; hasSlug {
+		t.Errorf("unchanged slug must be stripped from the PATCH payload, got %v", fd)
+	}
+	if fd["name"] != "Updated Name" {
+		t.Errorf("name must be sent, got %v", fd)
+	}
+	if v, ok := body["isDraft"]; !ok || v != false {
+		t.Errorf("isDraft:false must be present in the PATCH body, got %v", body)
+	}
+
+	out := resp.Output
+	if out.ItemID != testItemID || out.CreatedOn != "2024-01-01T00:00:00Z" || out.LastUpdated != "2024-02-01T00:00:00Z" {
+		t.Errorf("unexpected output: %+v", out)
+	}
+	if out.LastPublished != "2024-01-01T12:00:00Z" {
+		t.Errorf("lastPublished should be preserved when the API reports none, got %q", out.LastPublished)
+	}
+	if !reflect.DeepEqual(out.FieldData, req.Inputs.FieldData) {
+		t.Errorf("state fieldData must keep the user's view (including the slug), got %v", out.FieldData)
+	}
+}
+
+func TestCollectionItemResource_Update_SlugHandling(t *testing.T) {
+	tests := []struct {
+		name         string
+		stateData    map[string]interface{}
+		inputData    map[string]interface{}
+		wantSlugSent bool
+		wantSlug     interface{}
+	}{
+		{"changed slug is sent",
+			map[string]interface{}{"name": "n", "slug": "old-slug"}, map[string]interface{}{"name": "n", "slug": "new-slug"}, true, "new-slug"},
+		{"newly added slug is sent",
+			map[string]interface{}{"name": "n"}, map[string]interface{}{"name": "n", "slug": "new-slug"}, true, "new-slug"},
+		{"removed slug is not sent",
+			map[string]interface{}{"name": "n", "slug": "old-slug"}, map[string]interface{}{"name": "n"}, false, nil},
+		{"non-string slug is passed through",
+			map[string]interface{}{"name": "n", "slug": float64(123)}, map[string]interface{}{"name": "n", "slug": float64(123)}, true, float64(123)},
+		{"mismatched slug types are passed through",
+			map[string]interface{}{"name": "n", "slug": "old"}, map[string]interface{}{"name": "n", "slug": float64(456)}, true, float64(456)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := newCMSMock(t)
+			mock.handle(http.MethodPatch, itemPath, func(w http.ResponseWriter, r *http.Request) {
+				writeCMSJSON(w, http.StatusOK, apiItem(""))
+			})
+			if _, err := (&CollectionItemResource{}).Update(context.Background(), updateRequest(tt.stateData, tt.inputData)); err != nil {
+				t.Fatalf("Update() error = %v", err)
+			}
+			fd, _ := mock.callsTo(http.MethodPatch, itemPath)[0].Body["fieldData"].(map[string]interface{})
+			slug, sent := fd["slug"]
+			if sent != tt.wantSlugSent {
+				t.Errorf("slug sent = %v, want %v (fieldData %v)", sent, tt.wantSlugSent, fd)
+			}
+			if sent && slug != tt.wantSlug {
+				t.Errorf("slug = %v, want %v", slug, tt.wantSlug)
+			}
+			if _, hasName := fd["name"]; !hasName {
+				t.Errorf("name must always be sent")
+			}
+		})
+	}
+}
+
+func TestCollectionItemResource_Update_LivePublishes(t *testing.T) {
+	mock := newCMSMock(t)
+	mock.handle(http.MethodPatch, itemPath, func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusOK, apiItem(""))
+	})
+	mock.handle(http.MethodPost, publishPath, func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusAccepted, CollectionItemPublishResponse{PublishedItemIDs: []string{testItemID}})
+	})
+	mock.handle(http.MethodGet, itemLivePath, func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusOK, apiItem("2024-03-01T00:00:00Z"))
+	})
+
+	req := updateRequest(map[string]interface{}{"name": "n", "slug": "s"}, map[string]interface{}{"name": "n2", "slug": "s"})
+	req.Inputs.Live = true
+	resp, err := (&CollectionItemResource{}).Update(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	if resp.Output.LastPublished != "2024-03-01T00:00:00Z" {
+		t.Errorf("lastPublished should come from the live copy, got %q", resp.Output.LastPublished)
+	}
+	calls := mock.requests()
+	if len(calls) != 3 || calls[0].Method != http.MethodPatch || calls[1].Path != publishPath || calls[2].Path != itemLivePath {
+		t.Errorf("expected PATCH, publish, GET live; got %+v", calls)
+	}
+}
+
+func TestCollectionItemResource_Update_DryRunPreservesTimestamps(t *testing.T) {
+	mock := newCMSMock(t)
+	req := updateRequest(map[string]interface{}{"name": "n"}, map[string]interface{}{"name": "n2"})
+	req.State.LastUpdated = "2024-01-02T00:00:00Z"
+	req.DryRun = true
+	resp, err := (&CollectionItemResource{}).Update(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Update(DryRun) error = %v", err)
+	}
+	if len(mock.requests()) != 0 {
+		t.Errorf("dry run must not call the API")
+	}
+	if resp.Output.LastUpdated != "2024-01-02T00:00:00Z" || resp.Output.ItemID != testItemID {
+		t.Errorf("dry run must carry over server-managed fields, got %+v", resp.Output)
+	}
+}
+
+func TestCollectionItemResource_Update_APIError(t *testing.T) {
+	mock := newCMSMock(t)
+	mock.handle(http.MethodPatch, itemPath, func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusBadRequest, map[string]string{"message": "Unique value is already in database"})
+	})
+	_, err := (&CollectionItemResource{}).Update(context.Background(),
+		updateRequest(map[string]interface{}{"name": "n"}, map[string]interface{}{"name": "n2"}))
+	if err == nil || !strings.Contains(err.Error(), "failed to update collection item") {
+		t.Fatalf("expected update error, got %v", err)
+	}
+}
+
+// =============================================================================
+// CollectionItem resource: Read
+// =============================================================================
+
+func TestCollectionItemResource_Read(t *testing.T) {
+	mock := newCMSMock(t)
+	mock.handle(http.MethodGet, itemPath, func(w http.ResponseWriter, r *http.Request) {
+		item := apiItem("2024-01-05T00:00:00Z")
+		item["cmsLocaleId"] = "locale-1"
+		item["isArchived"] = true
+		writeCMSJSON(w, http.StatusOK, item)
+	})
+
+	resp, err := (&CollectionItemResource{}).Read(context.Background(), infer.ReadRequest[CollectionItemArgs, CollectionItemState]{
+		ID: itemResourceID,
+		Inputs: CollectionItemArgs{
+			CollectionID: testCollectionID,
+			FieldData:    map[string]interface{}{"name": "Stale", "slug": "test-item"},
+			IsArchived:   ptrBool(false), // explicit: refreshed from API
+			// IsDraft omitted: must stay omitted
+			CmsLocaleID: "locale-1",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+	if resp.ID != itemResourceID {
+		t.Errorf("ID = %q", resp.ID)
+	}
+
+	calls := mock.callsTo(http.MethodGet, itemPath)
+	if len(calls) != 1 || calls[0].Query.Get("cmsLocaleId") != "locale-1" {
+		t.Errorf("GET must pass cmsLocaleId as a query parameter, got %+v", calls)
+	}
+
+	if resp.Inputs.IsDraft != nil {
+		t.Errorf("Read must not populate an omitted isDraft input, got %v", *resp.Inputs.IsDraft)
+	}
+	if resp.Inputs.IsArchived == nil || !*resp.Inputs.IsArchived {
+		t.Errorf("explicit isArchived should be refreshed from the API, got %v", resp.Inputs.IsArchived)
+	}
+	wantFieldData := map[string]interface{}{"name": "Test Item", "slug": "test-item"}
+	if !reflect.DeepEqual(resp.Inputs.FieldData, wantFieldData) {
+		t.Errorf("fieldData should be projected onto the managed keys, got %v", resp.Inputs.FieldData)
+	}
+	if !reflect.DeepEqual(resp.State.FieldData, wantFieldData) {
+		t.Errorf("state fieldData should match the inputs view, got %v", resp.State.FieldData)
+	}
+	if resp.State.IsDraft == nil || !*resp.State.IsDraft {
+		t.Errorf("state should carry the API draft flag: %+v", resp.State)
+	}
+	if resp.State.LastPublished != "2024-01-05T00:00:00Z" || resp.State.ItemID != testItemID || resp.State.CmsLocaleID != "locale-1" {
+		t.Errorf("unexpected state: %+v", resp.State)
+	}
+}
+
+func TestCollectionItemResource_Read_ImportReturnsFullFieldData(t *testing.T) {
+	mock := newCMSMock(t)
+	mock.handle(http.MethodGet, itemPath, func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusOK, apiItem(""))
+	})
+	resp, err := (&CollectionItemResource{}).Read(context.Background(), infer.ReadRequest[CollectionItemArgs, CollectionItemState]{ID: itemResourceID})
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+	if len(resp.Inputs.FieldData) != 4 || resp.Inputs.CollectionID != testCollectionID {
+		t.Errorf("import should return the full fieldData, got %+v", resp.Inputs)
+	}
+	if got := mock.callsTo(http.MethodGet, itemPath); len(got) != 1 || got[0].Query.Has("cmsLocaleId") {
+		t.Errorf("no cmsLocaleId query expected, got %+v", got)
+	}
+}
+
+func TestCollectionItemResource_Read_Live(t *testing.T) {
+	t.Run("reads the live endpoint", func(t *testing.T) {
+		mock := newCMSMock(t)
+		mock.handle(http.MethodGet, itemLivePath, func(w http.ResponseWriter, r *http.Request) {
+			writeCMSJSON(w, http.StatusOK, apiItem("2024-01-05T00:00:00Z"))
+		})
+		resp, err := (&CollectionItemResource{}).Read(context.Background(), infer.ReadRequest[CollectionItemArgs, CollectionItemState]{
+			ID: itemResourceID, Inputs: CollectionItemArgs{CollectionID: testCollectionID, Live: true},
+		})
+		if err != nil {
+			t.Fatalf("Read() error = %v", err)
+		}
+		if resp.State.LastPublished != "2024-01-05T00:00:00Z" || !resp.Inputs.Live {
+			t.Errorf("unexpected result: %+v", resp)
+		}
+		if calls := mock.requests(); len(calls) != 1 || calls[0].Path != itemLivePath {
+			t.Errorf("expected a single GET %s, got %+v", itemLivePath, calls)
+		}
+	})
+
+	t.Run("falls back to the staged item when not published", func(t *testing.T) {
+		mock := newCMSMock(t)
+		mock.handle(http.MethodGet, itemLivePath, func(w http.ResponseWriter, r *http.Request) {
+			writeCMSJSON(w, http.StatusNotFound, map[string]string{"message": "not found"})
+		})
+		mock.handle(http.MethodGet, itemPath, func(w http.ResponseWriter, r *http.Request) {
+			writeCMSJSON(w, http.StatusOK, apiItem(""))
+		})
+		resp, err := (&CollectionItemResource{}).Read(context.Background(), infer.ReadRequest[CollectionItemArgs, CollectionItemState]{
+			ID: itemResourceID, Inputs: CollectionItemArgs{CollectionID: testCollectionID, Live: true},
+		})
+		if err != nil {
+			t.Fatalf("Read() error = %v", err)
+		}
+		if resp.ID != itemResourceID || resp.State.ItemID != testItemID {
+			t.Errorf("expected the staged item, got %+v", resp)
+		}
+	})
+}
+
+func TestCollectionItemResource_Read_NotFoundAndErrors(t *testing.T) {
+	t.Run("404 returns empty ID", func(t *testing.T) {
+		mock := newCMSMock(t)
+		mock.handle(http.MethodGet, itemPath, func(w http.ResponseWriter, r *http.Request) {
+			writeCMSJSON(w, http.StatusNotFound, map[string]string{"message": "not found"})
+		})
+		resp, err := (&CollectionItemResource{}).Read(context.Background(), infer.ReadRequest[CollectionItemArgs, CollectionItemState]{ID: itemResourceID})
+		if err != nil || resp.ID != "" {
+			t.Errorf("expected empty ID and nil error, got ID=%q err=%v", resp.ID, err)
+		}
+	})
+
+	t.Run("500 is an error", func(t *testing.T) {
+		mock := newCMSMock(t)
+		mock.handle(http.MethodGet, itemPath, func(w http.ResponseWriter, r *http.Request) {
+			writeCMSJSON(w, http.StatusInternalServerError, map[string]string{"message": "item not found in index"})
+		})
+		if _, err := (&CollectionItemResource{}).Read(context.Background(), infer.ReadRequest[CollectionItemArgs, CollectionItemState]{ID: itemResourceID}); err == nil {
+			t.Error("expected error")
+		}
+	})
+
+	t.Run("invalid resource ID", func(t *testing.T) {
+		mock := newCMSMock(t)
+		for _, id := range []string{"", "bad/items/" + testItemID, testCollectionID + "/items/a/b"} {
+			if _, err := (&CollectionItemResource{}).Read(context.Background(), infer.ReadRequest[CollectionItemArgs, CollectionItemState]{ID: id}); err == nil {
+				t.Errorf("Read(%q) expected error", id)
 			}
 		}
-	}
-
-	return fieldDataForPatch
+		if len(mock.requests()) != 0 {
+			t.Errorf("invalid IDs must be rejected before any API call")
+		}
+	})
 }
 
-// TestPrepareFieldDataForPatch_UnchangedSlugExcluded tests the slug-stripping logic
-// that prevents "duplicate slug" validation errors when updating collection items.
-//
-// Bug scenario (issue #2 in ISSUES-TO-FIX.md):
-// 1. User has a CollectionItem with slug "test-blog-post"
-// 2. User updates another field (e.g., name) but keeps the same slug
-// 3. Without the fix, PATCH includes the unchanged slug
-// 4. Webflow API rejects it: "Unique value is already in database: 'test-blog-post'"
-func TestPrepareFieldDataForPatch_UnchangedSlugExcluded(t *testing.T) {
+// =============================================================================
+// CollectionItem resource: Delete
+// =============================================================================
+
+func TestCollectionItemResource_Delete(t *testing.T) {
+	t.Run("staged item", func(t *testing.T) {
+		for _, tt := range []struct {
+			name    string
+			status  int
+			wantErr bool
+		}{
+			{"204", http.StatusNoContent, false},
+			{"404 idempotent", http.StatusNotFound, false},
+			{"401", http.StatusUnauthorized, true},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				mock := newCMSMock(t)
+				mock.handle(http.MethodDelete, itemPath, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(tt.status) })
+				_, err := (&CollectionItemResource{}).Delete(context.Background(), infer.DeleteRequest[CollectionItemState]{ID: itemResourceID})
+				if (err != nil) != tt.wantErr {
+					t.Fatalf("Delete() error = %v, wantErr %v", err, tt.wantErr)
+				}
+				if calls := mock.requests(); len(calls) != 1 || calls[0].Path != itemPath {
+					t.Errorf("expected a single DELETE %s, got %+v", itemPath, calls)
+				}
+			})
+		}
+	})
+
+	t.Run("live item is unpublished first", func(t *testing.T) {
+		mock := newCMSMock(t)
+		mock.handle(http.MethodDelete, itemLivePath, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+		mock.handle(http.MethodDelete, itemPath, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+		_, err := (&CollectionItemResource{}).Delete(context.Background(), infer.DeleteRequest[CollectionItemState]{
+			ID: itemResourceID, State: CollectionItemState{CollectionItemArgs: CollectionItemArgs{Live: true}},
+		})
+		if err != nil {
+			t.Fatalf("Delete() error = %v", err)
+		}
+		calls := mock.requests()
+		if len(calls) != 2 || calls[0].Path != itemLivePath || calls[1].Path != itemPath ||
+			calls[0].Method != http.MethodDelete || calls[1].Method != http.MethodDelete {
+			t.Errorf("expected DELETE live then DELETE staged, got %+v", calls)
+		}
+	})
+
+	t.Run("invalid resource ID", func(t *testing.T) {
+		mock := newCMSMock(t)
+		if _, err := (&CollectionItemResource{}).Delete(context.Background(), infer.DeleteRequest[CollectionItemState]{
+			ID: testCollectionID + "/items/../evil",
+		}); err == nil {
+			t.Error("expected error")
+		}
+		if len(mock.requests()) != 0 {
+			t.Errorf("invalid IDs must be rejected before any API call")
+		}
+	})
+}
+
+// =============================================================================
+// CollectionItem resource: Diff
+// =============================================================================
+
+func TestCollectionItemDiff(t *testing.T) {
+	fieldData := func() map[string]interface{} {
+		return map[string]interface{}{"name": "Test Item", "slug": "test-item", "views": float64(3)}
+	}
+	state := func(mutate func(s *CollectionItemState)) CollectionItemState {
+		s := CollectionItemState{
+			CollectionItemArgs: CollectionItemArgs{
+				CollectionID: testCollectionID, FieldData: fieldData(),
+				IsDraft: ptrBool(true), IsArchived: ptrBool(false), CmsLocaleID: "locale-1",
+			},
+			ItemID: testItemID,
+		}
+		mutate(&s)
+		return s
+	}
+	inputs := func(mutate func(a *CollectionItemArgs)) CollectionItemArgs {
+		a := CollectionItemArgs{CollectionID: testCollectionID, FieldData: fieldData()}
+		mutate(&a)
+		return a
+	}
+
 	tests := []struct {
-		name              string
-		oldFieldData      map[string]interface{}
-		newFieldData      map[string]interface{}
-		expectSlugInPatch bool
-		expectedSlug      string
+		name      string
+		state     CollectionItemState
+		inputs    CollectionItemArgs
+		wantKinds map[string]p.DiffKind
 	}{
-		{
-			name: "unchanged slug should be excluded",
-			oldFieldData: map[string]interface{}{
-				"name": "Old Name",
-				"slug": "test-blog-post",
-			},
-			newFieldData: map[string]interface{}{
-				"name": "Updated Name",
-				"slug": "test-blog-post", // Same slug
-			},
-			expectSlugInPatch: false,
-		},
-		{
-			name: "changed slug should be included",
-			oldFieldData: map[string]interface{}{
-				"name": "Same Name",
-				"slug": "old-slug",
-			},
-			newFieldData: map[string]interface{}{
-				"name": "Same Name",
-				"slug": "new-slug", // Different slug
-			},
-			expectSlugInPatch: true,
-			expectedSlug:      "new-slug",
-		},
-		{
-			name: "new slug added should be included",
-			oldFieldData: map[string]interface{}{
-				"name": "Same Name",
-				// No slug in old data
-			},
-			newFieldData: map[string]interface{}{
-				"name": "Same Name",
-				"slug": "new-slug",
-			},
-			expectSlugInPatch: true,
-			expectedSlug:      "new-slug",
-		},
-		{
-			name: "slug removed should not be in patch",
-			oldFieldData: map[string]interface{}{
-				"name": "Same Name",
-				"slug": "old-slug",
-			},
-			newFieldData: map[string]interface{}{
-				"name": "Same Name",
-				// No slug in new data
-			},
-			expectSlugInPatch: false,
-		},
-		{
-			name: "non-string slug types should be preserved (type safety)",
-			oldFieldData: map[string]interface{}{
-				"name": "Same Name",
-				"slug": 123, // Non-string type
-			},
-			newFieldData: map[string]interface{}{
-				"name": "Same Name",
-				"slug": 123, // Same non-string value
-			},
-			expectSlugInPatch: true, // Should be preserved since type assertion fails
-		},
-		{
-			name: "mismatched slug types should preserve new slug",
-			oldFieldData: map[string]interface{}{
-				"name": "Same Name",
-				"slug": "old-slug",
-			},
-			newFieldData: map[string]interface{}{
-				"name": "Same Name",
-				"slug": 456, // Different type
-			},
-			expectSlugInPatch: true, // Should be preserved since type assertion fails
-		},
+		{"omitted flags and locale after refresh do not diff",
+			state(func(s *CollectionItemState) {}), inputs(func(a *CollectionItemArgs) {}), nil},
+		{"fieldData value change updates",
+			state(func(s *CollectionItemState) {}),
+			inputs(func(a *CollectionItemArgs) { a.FieldData["name"] = "Renamed" }),
+			map[string]p.DiffKind{"fieldData": p.Update}},
+		{"fieldData added key updates",
+			state(func(s *CollectionItemState) {}),
+			inputs(func(a *CollectionItemArgs) { a.FieldData["body"] = "text" }),
+			map[string]p.DiffKind{"fieldData": p.Update}},
+		{"fieldData removed key updates",
+			state(func(s *CollectionItemState) {}),
+			inputs(func(a *CollectionItemArgs) { delete(a.FieldData, "views") }),
+			map[string]p.DiffKind{"fieldData": p.Update}},
+		{"nil and empty fieldData are equal",
+			state(func(s *CollectionItemState) { s.FieldData = nil }),
+			inputs(func(a *CollectionItemArgs) { a.FieldData = map[string]interface{}{} }), nil},
+		{"omitted isDraft after refresh does not diff",
+			state(func(s *CollectionItemState) { s.IsDraft = ptrBool(false) }),
+			inputs(func(a *CollectionItemArgs) { a.IsDraft = nil }), nil},
+		{"explicit isDraft change updates",
+			state(func(s *CollectionItemState) {}),
+			inputs(func(a *CollectionItemArgs) { a.IsDraft = ptrBool(false) }),
+			map[string]p.DiffKind{"isDraft": p.Update}},
+		{"explicit isDraft against nil state updates",
+			state(func(s *CollectionItemState) { s.IsDraft = nil }),
+			inputs(func(a *CollectionItemArgs) { a.IsDraft = ptrBool(false) }),
+			map[string]p.DiffKind{"isDraft": p.Update}},
+		{"explicit isArchived change updates",
+			state(func(s *CollectionItemState) {}),
+			inputs(func(a *CollectionItemArgs) { a.IsArchived = ptrBool(true) }),
+			map[string]p.DiffKind{"isArchived": p.Update}},
+		{"explicit cmsLocaleId change updates",
+			state(func(s *CollectionItemState) {}),
+			inputs(func(a *CollectionItemArgs) { a.CmsLocaleID = "locale-2" }),
+			map[string]p.DiffKind{"cmsLocaleId": p.Update}},
+		{"live change updates",
+			state(func(s *CollectionItemState) {}),
+			inputs(func(a *CollectionItemArgs) { a.Live = true }),
+			map[string]p.DiffKind{"live": p.Update}},
+		{"collectionId change replaces",
+			state(func(s *CollectionItemState) {}),
+			inputs(func(a *CollectionItemArgs) { a.CollectionID = testSiteID }),
+			map[string]p.DiffKind{"collectionId": p.UpdateReplace}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Use the helper function that mirrors the Update method logic
-			fieldDataForPatch := PrepareFieldDataForPatch(tt.oldFieldData, tt.newFieldData)
-
-			// Verify expectations
-			_, hasSlug := fieldDataForPatch["slug"]
-			if hasSlug != tt.expectSlugInPatch {
-				if tt.expectSlugInPatch {
-					t.Errorf("Expected slug to be in patch payload, but it was not")
-				} else {
-					t.Errorf("Expected slug to be excluded from patch payload, but it was included")
-				}
+			resp, err := (&CollectionItemResource{}).Diff(context.Background(), infer.DiffRequest[CollectionItemArgs, CollectionItemState]{
+				State: tt.state, Inputs: tt.inputs,
+			})
+			if err != nil {
+				t.Fatalf("Diff() error = %v", err)
 			}
-
-			if tt.expectSlugInPatch && tt.expectedSlug != "" {
-				if slug, ok := fieldDataForPatch["slug"].(string); ok {
-					if slug != tt.expectedSlug {
-						t.Errorf("Expected slug %q, got %q", tt.expectedSlug, slug)
-					}
+			if len(tt.wantKinds) == 0 {
+				if resp.HasChanges || len(resp.DetailedDiff) != 0 {
+					t.Errorf("expected no changes, got %+v", resp)
 				}
+				return
 			}
-
-			// Verify name is always preserved
-			if _, hasName := fieldDataForPatch["name"]; !hasName {
-				t.Errorf("Expected 'name' field to be preserved in patch payload")
+			if !resp.HasChanges || len(resp.DetailedDiff) != len(tt.wantKinds) {
+				t.Errorf("DetailedDiff = %v, want %v", resp.DetailedDiff, tt.wantKinds)
+			}
+			for key, kind := range tt.wantKinds {
+				if d, ok := resp.DetailedDiff[key]; !ok || d.Kind != kind {
+					t.Errorf("DetailedDiff[%q] = %+v, want kind %v", key, d, kind)
+				}
+				if (kind == p.UpdateReplace) != resp.DeleteBeforeReplace {
+					t.Errorf("DeleteBeforeReplace = %v for %q", resp.DeleteBeforeReplace, key)
+				}
 			}
 		})
 	}
 }
 
-// TestCollectionItemDrift_OptionalCmsLocaleId_ShouldNotTriggerChange tests that when
-// API returns cmsLocaleId that user didn't specify, it should NOT trigger a phantom change.
-//
-// Bug scenario:
-// 1. User's Pulumi config: { collectionId, fieldData } (no cmsLocaleId)
-// 2. API returns: { collectionId, fieldData, cmsLocaleId: "auto-assigned-locale" }
-// 3. Read() currently sets State.CmsLocaleID = "auto-assigned-locale"
-// 4. Diff() compares user input (empty cmsLocaleId) vs state (has cmsLocaleId)
-// 5. BUG: Diff() reports cmsLocaleId needs to be removed → phantom update
+// TestCollectionItemDrift_OptionalCmsLocaleId_ShouldNotTriggerChange verifies that a
+// cmsLocaleId the API reports but the program never set does not cause a phantom update.
 func TestCollectionItemDrift_OptionalCmsLocaleId_ShouldNotTriggerChange(t *testing.T) {
-	resource := &CollectionItemResource{}
-
-	// Helper to create bool pointers
-	boolPtr := func(b bool) *bool { return &b }
-
-	// User's Pulumi config - they did NOT specify cmsLocaleId
 	userInputs := CollectionItemArgs{
-		CollectionID: "collection123",
-		FieldData: map[string]interface{}{
-			"name": "Test Item",
-			"slug": "test-item",
-		},
-		IsDraft:    boolPtr(true),
-		IsArchived: boolPtr(false),
-		// CmsLocaleID intentionally empty - user didn't specify it
+		CollectionID: testCollectionID,
+		FieldData:    map[string]interface{}{"name": "Test Item", "slug": "test-item"},
+		IsDraft:      ptrBool(true),
+		IsArchived:   ptrBool(false),
 	}
-
-	// Simulate what Read() currently returns after fetching from API
-	// API returns cmsLocaleId, so Read() populates it in State
 	stateFromRead := CollectionItemState{
 		CollectionItemArgs: CollectionItemArgs{
-			CollectionID: "collection123",
-			FieldData: map[string]interface{}{
-				"name": "Test Item",
-				"slug": "test-item",
-			},
-			IsDraft:     boolPtr(true),
-			IsArchived:  boolPtr(false),
-			CmsLocaleID: "6961ec56c0ac873557148af4", // API returned this
+			CollectionID: testCollectionID,
+			FieldData:    map[string]interface{}{"name": "Test Item", "slug": "test-item"},
+			IsDraft:      ptrBool(true),
+			IsArchived:   ptrBool(false),
+			CmsLocaleID:  "6961ec56c0ac873557148af4", // API returned this
 		},
-		ItemID: "item123",
+		ItemID: testItemID,
 	}
 
-	// Diff compares user inputs vs state from Read
-	diffReq := infer.DiffRequest[CollectionItemArgs, CollectionItemState]{
-		Inputs: userInputs,
-		State:  stateFromRead,
-	}
-
-	diffResp, err := resource.Diff(context.Background(), diffReq)
+	diffResp, err := (&CollectionItemResource{}).Diff(context.Background(), infer.DiffRequest[CollectionItemArgs, CollectionItemState]{
+		Inputs: userInputs, State: stateFromRead,
+	})
 	if err != nil {
 		t.Fatalf("Diff() error = %v", err)
 	}
-
-	// THE KEY ASSERTION: There should be NO changes detected
-	// The user didn't specify cmsLocaleId, and we shouldn't force them to
 	if diffResp.HasChanges {
-		t.Errorf("Diff() detected phantom changes - this is the bug we're fixing")
-		t.Errorf("DetailedDiff: %+v", diffResp.DetailedDiff)
-	}
-
-	// Specifically check that cmsLocaleId is NOT flagged
-	if diffResp.DetailedDiff != nil {
-		if _, hasCmsLocaleID := diffResp.DetailedDiff["cmsLocaleId"]; hasCmsLocaleID {
-			t.Errorf("Diff() incorrectly flagged cmsLocaleId - user didn't specify it, shouldn't be a change")
-		}
+		t.Errorf("Diff() detected phantom changes: %+v", diffResp.DetailedDiff)
 	}
 }
