@@ -57,7 +57,35 @@ func (args *RobotsTxtArgs) Annotate(a infer.Annotator) {
 
 // Annotate adds descriptions to the RobotsTxtState fields.
 func (state *RobotsTxtState) Annotate(a infer.Annotator) {
-	a.Describe(&state.LastModified, "RFC3339 timestamp of the last modification.")
+	a.Describe(&state.LastModified, "RFC3339 timestamp of the last modification made through this provider. "+
+		"The Webflow API does not report one, so the provider records the time of its last successful write.")
+}
+
+// errRobotsTxtContentRequiredShort is the Check-time reason for an empty content value.
+var errRobotsTxtContentRequiredShort = errors.New("content is required: provide robots.txt content with at " +
+	"least one directive (e.g., 'User-agent: *\\nAllow: /')")
+
+// validateRobotsTxtContent reports an error for empty content.
+func validateRobotsTxtContent(content string) error {
+	if content == "" {
+		return errRobotsTxtContentRequiredShort
+	}
+	return nil
+}
+
+// robotsTxtCheckValidators lists the known-value validators applied by Check.
+var robotsTxtCheckValidators = []stringValidator{
+	{property: "siteId", validate: ValidateSiteID},
+	{property: "content", validate: validateRobotsTxtContent},
+}
+
+// Check validates the inputs that are already known at preview time. Values that still depend
+// on other resources' outputs are skipped here and validated again in Create or Update.
+func (r *RobotsTxt) Check(
+	ctx context.Context, req infer.CheckRequest,
+) (infer.CheckResponse[RobotsTxtArgs], error) {
+	inputs, failures, err := checkStrings[RobotsTxtArgs](ctx, req.NewInputs, robotsTxtCheckValidators...)
+	return infer.CheckResponse[RobotsTxtArgs]{Inputs: inputs, Failures: failures}, err
 }
 
 // Diff determines what changes need to be made to the resource.
@@ -140,22 +168,19 @@ func (r *RobotsTxt) Create(
 ) (infer.CreateResponse[RobotsTxtState], error) {
 	state := RobotsTxtState{
 		RobotsTxtArgs: req.Inputs,
-		LastModified:  time.Now().UTC().Format(time.RFC3339),
 	}
-	resourceID := GenerateRobotsTxtResourceID(req.Inputs.SiteID)
 
-	// Preview: return the expected state without validating or calling the API.
-	// siteId may still be unknown (zeroed) during preview, e.g. when it comes from a Site output.
+	// Preview: return the inputs without an ID, without a fabricated lastModified and without
+	// calling the API. An empty ID tells the framework to present the ID and every output as
+	// unknown to dependent resources. siteId may still be unknown (zeroed) during preview.
 	if req.DryRun {
-		return infer.CreateResponse[RobotsTxtState]{
-			ID:     resourceID,
-			Output: state,
-		}, nil
+		return infer.CreateResponse[RobotsTxtState]{Output: state}, nil
 	}
 
 	if err := validateRobotsTxtArgs(req.Inputs); err != nil {
 		return infer.CreateResponse[RobotsTxtState]{}, err
 	}
+	resourceID := GenerateRobotsTxtResourceID(req.Inputs.SiteID)
 
 	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
@@ -236,10 +261,10 @@ func (r *RobotsTxt) Update(
 ) (infer.UpdateResponse[RobotsTxtState], error) {
 	state := RobotsTxtState{
 		RobotsTxtArgs: req.Inputs,
-		LastModified:  time.Now().UTC().Format(time.RFC3339),
 	}
 
-	// Preview: return the expected state without validating (inputs may be unknown) or calling the API.
+	// Preview: return the expected state without validating (inputs may be unknown), without
+	// fabricating lastModified, and without calling the API.
 	if req.DryRun {
 		return infer.UpdateResponse[RobotsTxtState]{
 			Output: state,

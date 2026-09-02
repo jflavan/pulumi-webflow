@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
@@ -33,26 +32,29 @@ type RedirectArgs struct {
 	// Must start with "/" and contain only valid URL characters.
 	// Examples: "/new-page", "/home", "/products/item-1"
 	DestinationPath string `pulumi:"destinationPath"`
-	// StatusCode is the HTTP status code for the redirect (301 or 302).
-	// 301 = permanent redirect (for pages moved permanently)
-	// 302 = temporary redirect (for temporary page moves or maintenance)
-	StatusCode int `pulumi:"statusCode"`
+	// StatusCode is DEPRECATED and ignored. Webflow redirects are always 301 (permanent); the
+	// API object is {id, fromUrl, toUrl} and carries no status code. The property is kept only
+	// so existing programs keep compiling; it is never sent, diffed or validated.
+	StatusCode int `pulumi:"statusCode,optional"`
 }
 
 // RedirectState defines the output properties for the Redirect resource.
 // It embeds RedirectArgs to include input properties in the output.
 type RedirectState struct {
 	RedirectArgs
-	// CreatedOn is the timestamp when the redirect was created (read-only).
+	// CreatedOn is the timestamp when the redirect was created (read-only). The Webflow API
+	// does not document this field; it is only set if the API happens to return it.
 	CreatedOn string `pulumi:"createdOn,optional"`
 }
 
 // Annotate adds descriptions and constraints to the Redirect resource.
 func (r *Redirect) Annotate(a infer.Annotator) {
 	a.SetToken("index", "Redirect")
-	a.Describe(r, "Manages HTTP redirects for a Webflow site. "+
-		"This resource allows you to define redirect rules for old URLs to new locations, "+
-		"supporting both permanent (301) and temporary (302) redirects.")
+	a.Describe(r, "Manages HTTP redirects for a Webflow site "+
+		"(POST/PATCH/DELETE /v2/sites/{site_id}/redirects, scope sites:write; GET requires sites:read). "+
+		"Webflow redirects are always permanent (301) redirects from one site path to another; "+
+		"the API does not support other status codes. "+
+		"Changing `sourcePath` replaces the redirect; changing `destinationPath` updates it in place.")
 }
 
 // Annotate adds descriptions to the RedirectArgs fields.
@@ -77,23 +79,42 @@ func (args *RedirectArgs) Annotate(a infer.Annotator) {
 			"Changing this value updates the redirect in place.")
 
 	a.Describe(&args.StatusCode,
-		"The HTTP status code for the redirect. Must be either 301 or 302. "+
-			"301 = permanent redirect (use when a page has moved permanently; search engines update their index). "+
-			"302 = temporary redirect (use for maintenance or temporary page moves). "+
-			"Note: the Webflow redirects API does not currently report a status code, so this value is "+
-			"kept in Pulumi state and is not verified against Webflow.")
+		"Deprecated and ignored. Webflow redirects are always 301 (permanent) redirects: the "+
+			"redirect API object is {id, fromUrl, toUrl} and has no status code, so this value is "+
+			"never sent to Webflow, never validated and never produces a diff. "+
+			"Remove it from your program; it only remains for backwards compatibility.")
+	a.Deprecate(&args.StatusCode,
+		"Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version.")
 }
 
 // Annotate adds descriptions to the RedirectState fields.
 func (state *RedirectState) Annotate(a infer.Annotator) {
 	a.Describe(&state.CreatedOn,
-		"The timestamp when the redirect was created (RFC3339 format), when reported by the Webflow API. "+
-			"Read-only; empty when the API does not return it.")
+		"The timestamp when the redirect was created (RFC3339 format), if the Webflow API reports it. "+
+			"The redirects API does not document this field, so it is normally empty. Read-only.")
+}
+
+// redirectCheckValidators lists the known-value validators applied by Check.
+var redirectCheckValidators = []stringValidator{
+	{property: "siteId", validate: ValidateSiteID},
+	{property: "sourcePath", validate: ValidateSourcePath},
+	{property: "destinationPath", validate: ValidateDestinationPath},
+}
+
+// Check validates the inputs that are already known at preview time. Values that still depend
+// on other resources' outputs are skipped here and validated again in Create or Update.
+// statusCode is deprecated and deliberately not validated.
+func (r *Redirect) Check(
+	ctx context.Context, req infer.CheckRequest,
+) (infer.CheckResponse[RedirectArgs], error) {
+	inputs, failures, err := checkStrings[RedirectArgs](ctx, req.NewInputs, redirectCheckValidators...)
+	return infer.CheckResponse[RedirectArgs]{Inputs: inputs, Failures: failures}, err
 }
 
 // Diff determines what changes need to be made to the redirect resource.
 // siteId and sourcePath changes trigger replacement (they identify the redirect).
-// destinationPath and statusCode changes trigger an in-place update via PATCH.
+// destinationPath changes trigger an in-place update via PATCH.
+// statusCode is deprecated and ignored by the API, so it is never diffed.
 func (r *Redirect) Diff(
 	ctx context.Context, req infer.DiffRequest[RedirectArgs, RedirectState],
 ) (infer.DiffResponse, error) {
@@ -121,13 +142,6 @@ func (r *Redirect) Diff(
 		diff.DetailedDiff["destinationPath"] = p.PropertyDiff{Kind: p.Update}
 	}
 
-	// statusCode: only report a change when the state holds a known value. Read preserves the
-	// previously stored code, but an imported redirect may carry 0 because the API omits it.
-	if req.State.StatusCode != 0 && req.State.StatusCode != req.Inputs.StatusCode {
-		diff.HasChanges = true
-		diff.DetailedDiff["statusCode"] = p.PropertyDiff{Kind: p.Update}
-	}
-
 	return diff, nil
 }
 
@@ -139,14 +153,11 @@ func (r *Redirect) Create(
 		RedirectArgs: req.Inputs,
 	}
 
-	// Preview: return the expected state without validating or calling the API.
+	// Preview: return the inputs without an ID and without calling the API. An empty ID tells
+	// the framework to present the ID and every output as unknown to dependent resources.
 	// Inputs such as siteId may still be unknown (zeroed) during preview.
 	if req.DryRun {
-		previewID := fmt.Sprintf("preview-%d", time.Now().Unix())
-		return infer.CreateResponse[RedirectState]{
-			ID:     GenerateRedirectResourceID(req.Inputs.SiteID, previewID),
-			Output: state,
-		}, nil
+		return infer.CreateResponse[RedirectState]{Output: state}, nil
 	}
 
 	if err := validateRedirectArgs(req.Inputs); err != nil {
@@ -158,10 +169,7 @@ func (r *Redirect) Create(
 		return infer.CreateResponse[RedirectState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	response, err := PostRedirect(
-		ctx, client, req.Inputs.SiteID,
-		req.Inputs.SourcePath, req.Inputs.DestinationPath, req.Inputs.StatusCode,
-	)
+	response, err := PostRedirect(ctx, client, req.Inputs.SiteID, req.Inputs.SourcePath, req.Inputs.DestinationPath)
 	if err != nil {
 		return infer.CreateResponse[RedirectState]{}, fmt.Errorf("failed to create redirect: %w", err)
 	}
@@ -182,6 +190,7 @@ func (r *Redirect) Create(
 }
 
 // validateRedirectArgs validates every input of the Redirect resource.
+// statusCode is deprecated and ignored, so it is not validated.
 func validateRedirectArgs(args RedirectArgs) error {
 	if err := ValidateSiteID(args.SiteID); err != nil {
 		return fmt.Errorf("validation failed for Redirect resource: %w", err)
@@ -190,9 +199,6 @@ func validateRedirectArgs(args RedirectArgs) error {
 		return fmt.Errorf("validation failed for Redirect resource: %w", err)
 	}
 	if err := ValidateDestinationPath(args.DestinationPath); err != nil {
-		return fmt.Errorf("validation failed for Redirect resource: %w", err)
-	}
-	if err := ValidateStatusCode(args.StatusCode); err != nil {
 		return fmt.Errorf("validation failed for Redirect resource: %w", err)
 	}
 	return nil
@@ -217,6 +223,7 @@ func parseRedirectResourceID(resourceID string) (siteID, redirectID string, err 
 // The API has no single-redirect GET, so the site's redirect list is paged through until the
 // redirect is found. A missing redirect (or a 404 for the site) yields an empty ID; any other
 // error is returned so transient failures are never mistaken for a deleted resource.
+// With empty inputs and state (pulumi import) the inputs are built from the API object alone.
 func (r *Redirect) Read(
 	ctx context.Context, req infer.ReadRequest[RedirectArgs, RedirectState],
 ) (infer.ReadResponse[RedirectArgs, RedirectState], error) {
@@ -241,13 +248,11 @@ func (r *Redirect) Read(
 		return infer.ReadResponse[RedirectArgs, RedirectState]{ID: ""}, nil
 	}
 
-	// The list endpoint does not report statusCode; keep the value we already know.
-	statusCode := found.StatusCode
+	// statusCode is deprecated and not part of the API object: keep whatever the user wrote
+	// (program inputs first, then state) rather than writing 0 into the inputs.
+	statusCode := req.Inputs.StatusCode
 	if statusCode == 0 {
 		statusCode = req.State.StatusCode
-	}
-	if statusCode == 0 {
-		statusCode = req.Inputs.StatusCode
 	}
 	createdOn := found.CreatedOn
 	if createdOn == "" {
@@ -307,7 +312,7 @@ func (r *Redirect) Update(
 		return infer.UpdateResponse[RedirectState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	response, err := PatchRedirect(ctx, client, siteID, redirectID, req.Inputs.DestinationPath, req.Inputs.StatusCode)
+	response, err := PatchRedirect(ctx, client, siteID, redirectID, req.Inputs.DestinationPath)
 	if err != nil {
 		return infer.UpdateResponse[RedirectState]{}, fmt.Errorf("failed to update redirect: %w", err)
 	}

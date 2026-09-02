@@ -38,7 +38,7 @@ type WebhooksListResponse struct {
 type WebhookRequest struct {
 	TriggerType string                 `json:"triggerType"`      // Event that triggers the webhook
 	URL         string                 `json:"url"`              // HTTPS endpoint to receive webhook
-	Filter      map[string]interface{} `json:"filter,omitempty"` // Optional event filter
+	Filter      map[string]interface{} `json:"filter,omitempty"` // { name: string }, form_submission only
 }
 
 // webhookIDPattern is the regex pattern for validating Webflow webhook IDs.
@@ -118,6 +118,34 @@ func ValidateWebhookURL(url string) error {
 	return nil
 }
 
+// formSubmissionTrigger is the only trigger type for which the API documents a filter.
+const formSubmissionTrigger = "form_submission"
+
+// ValidateWebhookFilter validates the optional filter against the documented contract: the
+// filter is only supported for the form_submission trigger and has the shape { name: string }.
+// nil and empty filters are always valid (they mean "no filter").
+func ValidateWebhookFilter(triggerType string, filter map[string]interface{}) error {
+	if len(filter) == 0 {
+		return nil
+	}
+	if triggerType != formSubmissionTrigger {
+		return fmt.Errorf("filter is only supported for the '%s' trigger type, got triggerType '%s'. "+
+			"Remove the filter, or use triggerType '%s' with a filter of the form { name: '<form name>' }",
+			formSubmissionTrigger, triggerType, formSubmissionTrigger)
+	}
+	for key, value := range filter {
+		if key != "name" {
+			return fmt.Errorf("filter contains unsupported key '%s'. "+
+				"The Webflow API only documents { name: string } (the name of the form to receive "+
+				"submissions for) as a filter for the '%s' trigger", key, formSubmissionTrigger)
+		}
+		if _, ok := value.(string); !ok {
+			return fmt.Errorf("filter.name must be a string (the name of the form), got %T", value)
+		}
+	}
+	return nil
+}
+
 // ValidateTriggerType validates that a triggerType is a recognized Webflow event.
 // Returns actionable error messages listing all valid trigger types.
 func ValidateTriggerType(triggerType string) error {
@@ -159,7 +187,7 @@ func ExtractIDsFromWebhookResourceID(resourceID string) (siteID, webhookID strin
 }
 
 // GetWebhooks retrieves all App-created webhooks for a Webflow site.
-// It calls GET /v2/sites/{site_id}/webhooks.
+// It calls GET /v2/sites/{site_id}/webhooks (scope sites:read).
 func GetWebhooks(ctx context.Context, client *http.Client, siteID string) (*WebhooksListResponse, error) {
 	var out WebhooksListResponse
 	if _, err := doRequest(ctx, client, http.MethodGet, apiURL("/v2/sites/%s/webhooks", siteID), nil, &out); err != nil {
@@ -168,24 +196,21 @@ func GetWebhooks(ctx context.Context, client *http.Client, siteID string) (*Webh
 	return &out, nil
 }
 
-// FindWebhook lists the site's webhooks and returns the one with webhookID.
-// When it does not exist the returned error satisfies IsNotFound.
-func FindWebhook(ctx context.Context, client *http.Client, siteID, webhookID string) (*WebhookResponse, error) {
-	response, err := GetWebhooks(ctx, client, siteID)
-	if err != nil {
+// GetWebhook retrieves a single webhook by ID.
+// It calls GET /v2/webhooks/{webhook_id} (scope sites:read), which returns the same object
+// shape as the list endpoint. A missing webhook yields an error satisfying IsNotFound.
+func GetWebhook(ctx context.Context, client *http.Client, webhookID string) (*WebhookResponse, error) {
+	var out WebhookResponse
+	if _, err := doRequest(ctx, client, http.MethodGet,
+		apiURL("/v2/webhooks/%s", webhookID), nil, &out, http.StatusOK); err != nil {
 		return nil, err
 	}
-	for i := range response.Webhooks {
-		if response.Webhooks[i].ID == webhookID {
-			webhook := response.Webhooks[i]
-			return &webhook, nil
-		}
-	}
-	return nil, fmt.Errorf("webhook '%s' on site '%s': %w", webhookID, siteID, ErrNotFound)
+	return &out, nil
 }
 
 // PostWebhook creates a new webhook for a Webflow site.
-// It calls POST /v2/sites/{site_id}/webhooks.
+// It calls POST /v2/sites/{site_id}/webhooks (scope sites:write plus the read scope of the
+// event family, with a Data Client / OAuth token).
 func PostWebhook(
 	ctx context.Context, client *http.Client, siteID string, request WebhookRequest,
 ) (*WebhookResponse, error) {

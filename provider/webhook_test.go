@@ -14,6 +14,7 @@ import (
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
 )
 
 const webhookTestID = "507f1f77bcf86cd799439011"
@@ -144,6 +145,53 @@ func TestValidateTriggerType_Invalid(t *testing.T) {
 	}
 }
 
+// TestValidateWebhookFilter tests the documented filter contract ({ name } for form_submission only)
+func TestValidateWebhookFilter(t *testing.T) {
+	tests := []struct {
+		name        string
+		triggerType string
+		filter      map[string]interface{}
+		wantErr     string
+	}{
+		{"nil filter", "site_publish", nil, ""},
+		{"empty filter", "collection_item_created", map[string]interface{}{}, ""},
+		{"form name filter", "form_submission", map[string]interface{}{"name": "Contact Form"}, ""},
+		{
+			"filter on another trigger",
+			"collection_item_created",
+			map[string]interface{}{"name": "x"},
+			"only supported for the 'form_submission' trigger",
+		},
+		{
+			"unsupported key",
+			"form_submission",
+			map[string]interface{}{"collectionId": "abc"},
+			"unsupported key 'collectionId'",
+		},
+		{
+			"name plus extra key",
+			"form_submission",
+			map[string]interface{}{"name": "x", "extra": true},
+			"unsupported key 'extra'",
+		},
+		{"name not a string", "form_submission", map[string]interface{}{"name": 42.0}, "must be a string"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateWebhookFilter(tt.triggerType, tt.filter)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("ValidateWebhookFilter() = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("ValidateWebhookFilter() = %v, want error containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 // TestGenerateWebhookResourceID tests resource ID generation
 func TestGenerateWebhookResourceID(t *testing.T) {
 	if got := GenerateWebhookResourceID(testSiteID, webhookTestID); got != testSiteID+"/webhooks/"+webhookTestID {
@@ -223,17 +271,42 @@ func TestGetWebhooks_NotFound(t *testing.T) {
 	}
 }
 
-func TestFindWebhook(t *testing.T) {
-	client := mockAPI(t, func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(t, w, http.StatusOK, WebhooksListResponse{Webhooks: sampleWebhooks()})
+// TestGetWebhook tests the documented single-webhook endpoint GET /v2/webhooks/{webhook_id}
+func TestGetWebhook(t *testing.T) {
+	t.Run("found", func(t *testing.T) {
+		client := mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet || r.URL.Path != "/v2/webhooks/"+webhookTestID {
+				t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			}
+			writeJSON(t, w, http.StatusOK, sampleWebhooks()[1])
+		})
+		found, err := GetWebhook(context.Background(), client, webhookTestID)
+		if err != nil || found.ID != webhookTestID || found.TriggerType != "collection_item_created" ||
+			found.SiteID != testSiteID || found.Filter["collectionId"] != "abc" {
+			t.Errorf("GetWebhook() = %+v, %v", found, err)
+		}
 	})
-	found, err := FindWebhook(context.Background(), client, testSiteID, webhookTestID)
-	if err != nil || found.TriggerType != "collection_item_created" || found.Filter["collectionId"] != "abc" {
-		t.Errorf("FindWebhook() = %+v, %v", found, err)
-	}
-	if _, err := FindWebhook(context.Background(), client, testSiteID, "missing"); !IsNotFound(err) {
-		t.Errorf("FindWebhook(missing) error = %v, want IsNotFound", err)
-	}
+
+	t.Run("404 satisfies IsNotFound", func(t *testing.T) {
+		client := mockAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"Requested resource not found"}`))
+		})
+		if _, err := GetWebhook(context.Background(), client, "missing"); !IsNotFound(err) {
+			t.Errorf("GetWebhook(missing) error = %v, want IsNotFound", err)
+		}
+	})
+
+	t.Run("other errors are not IsNotFound", func(t *testing.T) {
+		client := mockAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"message":"not found in body must not matter"}`))
+		})
+		_, err := GetWebhook(context.Background(), client, webhookTestID)
+		if err == nil || IsNotFound(err) {
+			t.Errorf("GetWebhook() error = %v, want a non-404 error", err)
+		}
+	})
 }
 
 // TestPostWebhook tests creating webhooks, asserting the request body
@@ -386,7 +459,7 @@ func TestWebhookAPI_RateLimited(t *testing.T) {
 		}
 	}
 
-	t.Run("get", func(t *testing.T) {
+	t.Run("list", func(t *testing.T) {
 		attempts := 0
 		client := mockAPI(t, newHandler(&attempts, func(w http.ResponseWriter) {
 			writeJSON(t, w, http.StatusOK, WebhooksListResponse{Webhooks: sampleWebhooks()[:1]})
@@ -394,6 +467,16 @@ func TestWebhookAPI_RateLimited(t *testing.T) {
 		result, err := GetWebhooks(context.Background(), client, testSiteID)
 		if err != nil || len(result.Webhooks) != 1 || attempts != 2 {
 			t.Fatalf("GetWebhooks() = %+v, %v after %d attempts", result, err, attempts)
+		}
+	})
+	t.Run("get", func(t *testing.T) {
+		attempts := 0
+		client := mockAPI(t, newHandler(&attempts, func(w http.ResponseWriter) {
+			writeJSON(t, w, http.StatusOK, sampleWebhooks()[1])
+		}))
+		result, err := GetWebhook(context.Background(), client, webhookTestID)
+		if err != nil || result.ID != webhookTestID || attempts != 2 {
+			t.Fatalf("GetWebhook() = %+v, %v after %d attempts", result, err, attempts)
 		}
 	})
 	t.Run("post", func(t *testing.T) {
@@ -518,8 +601,12 @@ func TestWebhookDiff(t *testing.T) {
 				}
 				return
 			}
-			if !resp.HasChanges || !resp.DeleteBeforeReplace {
+			if !resp.HasChanges {
 				t.Errorf("Diff() should require replacement for %s: %+v", tt.wantKey, resp)
+			}
+			// Create-then-delete: the new webhook exists before the old one is removed.
+			if resp.DeleteBeforeReplace {
+				t.Errorf("Diff() must not set DeleteBeforeReplace: %+v", resp)
 			}
 			if d, ok := resp.DetailedDiff[tt.wantKey]; !ok || d.Kind != p.UpdateReplace {
 				t.Errorf("Diff() DetailedDiff[%s] = %+v (present=%v), want UpdateReplace", tt.wantKey, d, ok)
@@ -550,7 +637,7 @@ func TestWebhookCreate(t *testing.T) {
 
 	resource := &Webhook{}
 	resp, err := resource.Create(context.Background(), infer.CreateRequest[WebhookArgs]{Inputs: WebhookArgs{
-		SiteID: testSiteID, TriggerType: "comment_created", URL: "https://example.com/hook?token=secret",
+		SiteID: testSiteID, TriggerType: "form_submission", URL: "https://example.com/hook?token=secret",
 		Filter: map[string]interface{}{"name": "Email Form"},
 	}})
 	if err != nil {
@@ -559,7 +646,7 @@ func TestWebhookCreate(t *testing.T) {
 	if resp.ID != testSiteID+"/webhooks/"+webhookTestID || resp.Output.CreatedOn != "2024-01-01T00:00:00Z" {
 		t.Errorf("Create() = %+v", resp)
 	}
-	if got.TriggerType != "comment_created" || got.URL != "https://example.com/hook?token=secret" ||
+	if got.TriggerType != "form_submission" || got.URL != "https://example.com/hook?token=secret" ||
 		got.Filter["name"] != "Email Form" {
 		t.Errorf("request body = %+v", got)
 	}
@@ -578,6 +665,11 @@ func TestWebhookCreate_ValidationErrors(t *testing.T) {
 			"validation failed",
 		},
 		{
+			"preview placeholder siteId",
+			WebhookArgs{SiteID: "preview-123", TriggerType: "form_submission", URL: "https://example.com/h"},
+			"validation failed",
+		},
+		{
 			"invalid triggerType",
 			WebhookArgs{SiteID: testSiteID, TriggerType: "nope", URL: "https://example.com/h"},
 			"not a valid",
@@ -586,6 +678,22 @@ func TestWebhookCreate_ValidationErrors(t *testing.T) {
 			"http url",
 			WebhookArgs{SiteID: testSiteID, TriggerType: "form_submission", URL: "http://example.com/h"},
 			"HTTPS",
+		},
+		{
+			"filter on non-form trigger",
+			WebhookArgs{
+				SiteID: testSiteID, TriggerType: "comment_created", URL: "https://example.com/h",
+				Filter: map[string]interface{}{"name": "Email Form"},
+			},
+			"only supported for the 'form_submission' trigger",
+		},
+		{
+			"filter with unsupported key",
+			WebhookArgs{
+				SiteID: testSiteID, TriggerType: "form_submission", URL: "https://example.com/h",
+				Filter: map[string]interface{}{"collectionId": "abc"},
+			},
+			"unsupported key",
 		},
 	}
 	for _, tt := range tests {
@@ -611,41 +719,199 @@ func TestWebhookCreate_DryRun(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Create() dry-run should succeed (validation is deferred): %v", err)
 			}
-			if resp.ID == "" || resp.Output.CreatedOn == "" {
-				t.Errorf("Create() dry-run should return ID and timestamp: %+v", resp)
+			// An empty ID makes the framework present the ID and all outputs as unknown.
+			if resp.ID != "" {
+				t.Errorf("Create() dry-run must not fabricate an ID: %+v", resp)
+			}
+			if resp.Output.CreatedOn != "" || resp.Output.LastTriggered != "" {
+				t.Errorf("Create() dry-run must not fabricate timestamps: %+v", resp.Output)
+			}
+			if resp.Output.SiteID != inputs.SiteID || resp.Output.URL != inputs.URL {
+				t.Errorf("Create() dry-run must echo the inputs: %+v", resp.Output)
 			}
 		})
 	}
+}
+
+func TestWebhookCheck(t *testing.T) {
+	resource := &Webhook{}
+	failuresByProperty := func(resp infer.CheckResponse[WebhookArgs]) map[string]string {
+		got := map[string]string{}
+		for _, f := range resp.Failures {
+			got[f.Property] = f.Reason
+		}
+		return got
+	}
+
+	t.Run("known invalid values fail", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"siteId":      property.New("preview-123"),
+				"triggerType": property.New("memberships_user_account_added"),
+				"url":         property.New("http://example.com/h"),
+			}),
+		})
+		if err != nil {
+			t.Fatalf("Check: %v", err)
+		}
+		got := failuresByProperty(resp)
+		if len(got) != 3 || !containsStr(got["siteId"], "24-character") ||
+			!containsStr(got["triggerType"], "not a valid") || !containsStr(got["url"], "HTTPS") {
+			t.Errorf("unexpected failures: %+v", resp.Failures)
+		}
+	})
+
+	t.Run("filter on a non-form trigger fails", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"siteId":      property.New(testSiteID),
+				"triggerType": property.New("collection_item_created"),
+				"url":         property.New("https://example.com/h"),
+				"filter":      property.New(property.NewMap(map[string]property.Value{"name": property.New("x")})),
+			}),
+		})
+		if err != nil {
+			t.Fatalf("Check: %v", err)
+		}
+		got := failuresByProperty(resp)
+		if len(got) != 1 || !containsStr(got["filter"], "only supported for the 'form_submission' trigger") {
+			t.Errorf("unexpected failures: %+v", resp.Failures)
+		}
+	})
+
+	t.Run("filter with unsupported key fails", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"siteId":      property.New(testSiteID),
+				"triggerType": property.New("form_submission"),
+				"url":         property.New("https://example.com/h"),
+				"filter": property.New(property.NewMap(map[string]property.Value{
+					"name":         property.New("Contact"),
+					"collectionId": property.New("abc"),
+				})),
+			}),
+		})
+		if err != nil {
+			t.Fatalf("Check: %v", err)
+		}
+		got := failuresByProperty(resp)
+		if len(got) != 1 || !containsStr(got["filter"], "unsupported key 'collectionId'") {
+			t.Errorf("unexpected failures: %+v", resp.Failures)
+		}
+	})
+
+	t.Run("unknown values are skipped", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"siteId":      property.New(property.Computed),
+				"triggerType": property.New(property.Computed),
+				"url":         property.New(property.Computed),
+				// A filter whose trigger type is still unknown cannot be checked yet.
+				"filter": property.New(property.NewMap(map[string]property.Value{"name": property.New("x")})),
+			}),
+		})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Errorf("unknown inputs must not fail Check: failures=%+v err=%v", resp.Failures, err)
+		}
+		resp, err = resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"siteId":      property.New(testSiteID),
+				"triggerType": property.New("site_publish"),
+				"url":         property.New("https://example.com/h"),
+				// A filter with an unknown value is skipped as well.
+				"filter": property.New(property.NewMap(map[string]property.Value{"name": property.New(property.Computed)})),
+			}),
+		})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Errorf("filter with unknown values must not fail Check: failures=%+v err=%v", resp.Failures, err)
+		}
+	})
+
+	t.Run("valid values pass", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"siteId":      property.New(testSiteID),
+				"triggerType": property.New("form_submission"),
+				"url":         property.New("https://example.com/h"),
+				"filter":      property.New(property.NewMap(map[string]property.Value{"name": property.New("Contact")})),
+			}),
+		})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Errorf("valid inputs must pass Check: failures=%+v err=%v", resp.Failures, err)
+		}
+		if resp.Inputs.TriggerType != "form_submission" || resp.Inputs.Filter["name"] != "Contact" {
+			t.Errorf("inputs not decoded: %+v", resp.Inputs)
+		}
+	})
 }
 
 func TestWebhookRead(t *testing.T) {
 	resource := &Webhook{}
 	readReq := infer.ReadRequest[WebhookArgs, WebhookState]{ID: GenerateWebhookResourceID(testSiteID, webhookTestID)}
 
-	t.Run("found", func(t *testing.T) {
+	// serveWebhook answers the documented single-webhook endpoint with the second sample webhook.
+	serveWebhook := func(t *testing.T) {
+		t.Helper()
 		mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet || r.URL.Path != "/v2/sites/"+testSiteID+"/webhooks" {
-				t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			if r.Method != http.MethodGet || r.URL.Path != "/v2/webhooks/"+webhookTestID {
+				t.Errorf("unexpected request %s %s (Read must use GET /v2/webhooks/{webhook_id})", r.Method, r.URL.Path)
 			}
-			writeJSON(t, w, http.StatusOK, WebhooksListResponse{Webhooks: sampleWebhooks()})
+			writeJSON(t, w, http.StatusOK, sampleWebhooks()[1])
 		})
+	}
+
+	t.Run("found via GET by id, import ignores the API filter", func(t *testing.T) {
+		serveWebhook(t)
 		resp, err := resource.Read(context.Background(), readReq)
 		if err != nil {
 			t.Fatalf("Read() error = %v", err)
 		}
 		if resp.ID != readReq.ID || resp.Inputs.SiteID != testSiteID ||
-			resp.Inputs.TriggerType != "collection_item_created" ||
-			resp.Inputs.URL != "https://example.com/items" || resp.Inputs.Filter["collectionId"] != "abc" {
+			resp.Inputs.TriggerType != "collection_item_created" || resp.Inputs.URL != "https://example.com/items" {
 			t.Errorf("Read() inputs = %+v", resp.Inputs)
+		}
+		// Neither the program nor the state set a filter: the one Webflow reports is don't-care.
+		if len(resp.Inputs.Filter) != 0 || len(resp.State.Filter) != 0 {
+			t.Errorf("Read() must not copy an unrequested filter into inputs: %+v", resp.Inputs.Filter)
 		}
 		if resp.State.CreatedOn != "2024-01-02T00:00:00Z" || resp.State.LastTriggered != "2024-02-01T00:00:00Z" {
 			t.Errorf("Read() state = %+v", resp.State)
 		}
 	})
 
-	t.Run("webhook missing signals deletion", func(t *testing.T) {
+	t.Run("filter is tracked when the program set one", func(t *testing.T) {
+		serveWebhook(t)
+		req := readReq
+		req.Inputs = WebhookArgs{
+			SiteID: testSiteID, TriggerType: "collection_item_created", URL: "https://example.com/items",
+			Filter: map[string]interface{}{"collectionId": "old"},
+		}
+		resp, err := resource.Read(context.Background(), req)
+		if err != nil {
+			t.Fatalf("Read() error = %v", err)
+		}
+		if resp.Inputs.Filter["collectionId"] != "abc" {
+			t.Errorf("Read() must report the API filter when the program set one: %+v", resp.Inputs.Filter)
+		}
+	})
+
+	t.Run("filter is tracked when the state has one", func(t *testing.T) {
+		serveWebhook(t)
+		req := readReq
+		req.State = WebhookState{WebhookArgs: WebhookArgs{Filter: map[string]interface{}{"collectionId": "old"}}}
+		resp, err := resource.Read(context.Background(), req)
+		if err != nil {
+			t.Fatalf("Read() error = %v", err)
+		}
+		if resp.Inputs.Filter["collectionId"] != "abc" {
+			t.Errorf("Read() must report the API filter when the state had one: %+v", resp.Inputs.Filter)
+		}
+	})
+
+	t.Run("webhook 404 signals deletion", func(t *testing.T) {
 		mockAPI(t, func(w http.ResponseWriter, _ *http.Request) {
-			writeJSON(t, w, http.StatusOK, WebhooksListResponse{Webhooks: sampleWebhooks()[:1]})
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"Requested resource not found"}`))
 		})
 		resp, err := resource.Read(context.Background(), readReq)
 		if err != nil || resp.ID != "" {
@@ -653,11 +919,15 @@ func TestWebhookRead(t *testing.T) {
 		}
 	})
 
-	t.Run("site 404 signals deletion", func(t *testing.T) {
-		mockAPI(t, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNotFound) })
-		resp, err := resource.Read(context.Background(), readReq)
-		if err != nil || resp.ID != "" {
-			t.Fatalf("Read() = (%q, %v), want empty ID and nil error", resp.ID, err)
+	t.Run("webhook of another site is an error", func(t *testing.T) {
+		mockAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+			other := sampleWebhooks()[1]
+			other.SiteID = testOtherSiteID
+			writeJSON(t, w, http.StatusOK, other)
+		})
+		if _, err := resource.Read(context.Background(), readReq); err == nil ||
+			!strings.Contains(err.Error(), "belongs to site") {
+			t.Fatalf("Read() error = %v, want site mismatch error", err)
 		}
 	})
 

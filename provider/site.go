@@ -51,6 +51,8 @@ type Site struct {
 type SiteCustomDomains []string
 
 // UnmarshalJSON accepts either ["example.com"] or [{"id": "...", "url": "example.com"}].
+// Elements that carry no usable value (JSON null, "", or an object without id and url) are
+// skipped rather than decoded as an empty string.
 func (d *SiteCustomDomains) UnmarshalJSON(data []byte) error {
 	var raw []json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -60,7 +62,9 @@ func (d *SiteCustomDomains) UnmarshalJSON(data []byte) error {
 	for _, item := range raw {
 		var s string
 		if err := json.Unmarshal(item, &s); err == nil {
-			out = append(out, s)
+			if s != "" {
+				out = append(out, s)
+			}
 			continue
 		}
 		var obj struct {
@@ -70,9 +74,10 @@ func (d *SiteCustomDomains) UnmarshalJSON(data []byte) error {
 		if err := json.Unmarshal(item, &obj); err != nil {
 			return fmt.Errorf("customDomains: unexpected element %s", string(item))
 		}
-		if obj.URL != "" {
+		switch {
+		case obj.URL != "":
 			out = append(out, obj.URL)
-		} else {
+		case obj.ID != "":
 			out = append(out, obj.ID)
 		}
 	}
@@ -195,7 +200,14 @@ func ValidateShortName(shortName string) error {
 	return nil
 }
 
-// ValidateWorkspaceID validates that workspaceID is a non-empty string.
+// webflowObjectIDPattern matches the 24-character lowercase hexadecimal IDs Webflow assigns
+// to workspaces, folders, sites and other objects.
+var webflowObjectIDPattern = regexp.MustCompile(`^[a-f0-9]{24}$`)
+
+// templateNamePattern matches Webflow template identifiers such as "blank" or "mast-framework".
+var templateNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+// ValidateWorkspaceID validates that workspaceID is a Webflow workspace ID.
 // Workspace IDs are required for site creation via the Webflow API.
 // Actionable error messages explain: what's wrong, expected format, and how to fix it.
 func ValidateWorkspaceID(workspaceID string) error {
@@ -205,13 +217,57 @@ func ValidateWorkspaceID(workspaceID string) error {
 			"Fix: Provide your workspace ID. You can find it in your Webflow dashboard under Account Settings > Workspace. " +
 			"Note: Creating sites via API requires an Enterprise workspace")
 	}
+	if !webflowObjectIDPattern.MatchString(workspaceID) {
+		return fmt.Errorf("workspaceId has invalid format: got '%s'. "+
+			"Expected a 24-character lowercase hexadecimal string (e.g., '7a2b3c4d5e6f708192a3b4c5'). "+
+			"Fix: Copy the workspace ID from the Webflow dashboard under Account Settings > Workspace", workspaceID)
+	}
+	return nil
+}
 
+// ValidateParentFolderID validates an optional site folder ID. An empty value is allowed and
+// means the workspace root.
+func ValidateParentFolderID(parentFolderID string) error {
+	if parentFolderID == "" {
+		return nil
+	}
+	if !webflowObjectIDPattern.MatchString(parentFolderID) {
+		return fmt.Errorf("parentFolderId has invalid format: got '%s'. "+
+			"Expected a 24-character lowercase hexadecimal string (e.g., '5f0c8c9e1c9d440000e8d8c3'). "+
+			"Fix: Copy the folder ID from the Webflow dashboard, or omit parentFolderId to keep the site "+
+			"at the workspace root", parentFolderID)
+	}
+	return nil
+}
+
+// ValidateTemplateName validates an optional site template identifier.
+func ValidateTemplateName(templateName string) error {
+	if templateName == "" {
+		return nil
+	}
+	if len(templateName) > 255 || !templateNamePattern.MatchString(templateName) {
+		return fmt.Errorf("templateName has invalid format: got '%s'. "+
+			"Expected a Webflow template identifier made of letters, digits, dots, underscores and hyphens "+
+			"(e.g., 'blank', 'mast-framework')", templateName)
+	}
+	return nil
+}
+
+// ValidatePublishPageID validates the optional page ID used to publish a single page.
+func ValidatePublishPageID(pageID string) error {
+	if pageID == "" {
+		return nil
+	}
+	if err := ValidatePageID(pageID); err != nil {
+		return fmt.Errorf("publishPageId: %w", err)
+	}
 	return nil
 }
 
 // PostSite creates a new site in the specified Webflow workspace.
-// Enterprise workspace is required for site creation via API.
+// Enterprise workspace is required for site creation via API (scope workspace:write).
 // Note: API request uses "name" but response returns "displayName".
+// The documented success status is 201 Created; 200 is tolerated for older API behaviour.
 // Returns the created Site or an error if the request fails.
 func PostSite(
 	ctx context.Context, client *http.Client,
@@ -225,14 +281,15 @@ func PostSite(
 
 	var site Site
 	_, err := doRequest(ctx, client, http.MethodPost, apiURL("/v2/workspaces/%s/sites", workspaceID),
-		requestBody, &site, http.StatusOK, http.StatusCreated, http.StatusAccepted)
+		requestBody, &site, http.StatusCreated, http.StatusOK)
 	if err != nil {
 		return nil, err
 	}
 	return &site, nil
 }
 
-// PatchSite updates an existing site's configuration via PATCH /v2/sites/{site_id}.
+// PatchSite updates an existing site's configuration via PATCH /v2/sites/{site_id}
+// (scope sites:write).
 //
 // parentFolderID is nullable: nil leaves the folder untouched, a pointer to "" sends JSON null
 // to move the site back to the workspace root, and a pointer to a value moves it to that folder.
@@ -257,21 +314,22 @@ func PatchSite(
 }
 
 // PublishSite publishes a site (or a single page) via POST /v2/sites/{site_id}/publish.
-// The operation is asynchronous: the API answers 202 Accepted and completes the publish later.
-// Progress can be observed through the lastPublished timestamp on subsequent reads.
+// The operation is asynchronous: the API answers 202 Accepted (200 is also accepted) and
+// completes the publish later. Progress can be observed through the lastPublished timestamp
+// on subsequent reads. Requires scope sites:write.
 func PublishSite(
 	ctx context.Context, client *http.Client, siteID string, request SitePublishRequest,
 ) (*SitePublishResponse, error) {
 	var publishResp SitePublishResponse
 	_, err := doRequest(ctx, client, http.MethodPost, apiURL("/v2/sites/%s/publish", siteID),
-		request, &publishResp, http.StatusOK, http.StatusAccepted)
+		request, &publishResp, http.StatusAccepted, http.StatusOK)
 	if err != nil {
 		return nil, err
 	}
 	return &publishResp, nil
 }
 
-// DeleteSite permanently deletes a site from Webflow.
+// DeleteSite permanently deletes a site from Webflow (scope sites:write).
 // This operation cannot be undone - the site and all its content will be permanently removed.
 // Returns nil on success (204 No Content), or an error if the request fails.
 // Note: 404 responses are treated as success (idempotent - site already deleted).
@@ -279,7 +337,7 @@ func DeleteSite(ctx context.Context, client *http.Client, siteID string) error {
 	return doDelete(ctx, client, apiURL("/v2/sites/%s", siteID), nil)
 }
 
-// GetSite retrieves the current state of a site from Webflow.
+// GetSite retrieves the current state of a site from Webflow (scope sites:read).
 // Returns the site data if successful, or an error if the request fails.
 // Note: Returns nil, nil (not an error) when the site is not found (404) - the caller handles that.
 func GetSite(ctx context.Context, client *http.Client, siteID string) (*Site, error) {

@@ -15,6 +15,13 @@ import (
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
+)
+
+// Well-known 24-character hex IDs for folder and page inputs.
+const (
+	testParentFolderID = "6a1b2c3d4e5f60718293a4b5"
+	testPublishPageID  = "5f0c8c9e1c9d440000e8d8c4"
 )
 
 // ============================================================================
@@ -90,6 +97,49 @@ func TestValidateWorkspaceID(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "required") {
 		t.Errorf("expected 'required' error, got: %v", err)
 	}
+	for _, bad := range []string{"new-workspace", "7A2B3C4D5E6F708192A3B4C5", "7a2b3c4d5e6f", "../evil"} {
+		err := ValidateWorkspaceID(bad)
+		if err == nil || !strings.Contains(err.Error(), "invalid format") {
+			t.Errorf("ValidateWorkspaceID(%q) = %v, want invalid format error", bad, err)
+		}
+	}
+}
+
+func TestValidateParentFolderID(t *testing.T) {
+	for _, ok := range []string{"", testParentFolderID} {
+		if err := ValidateParentFolderID(ok); err != nil {
+			t.Errorf("ValidateParentFolderID(%q) = %v, want nil", ok, err)
+		}
+	}
+	for _, bad := range []string{"folder123", "FOLDER", "6a1b2c3d4e5f60718293a4b5x"} {
+		if err := ValidateParentFolderID(bad); err == nil || !strings.Contains(err.Error(), "parentFolderId") {
+			t.Errorf("ValidateParentFolderID(%q) = %v, want parentFolderId error", bad, err)
+		}
+	}
+}
+
+func TestValidateTemplateName(t *testing.T) {
+	for _, ok := range []string{"", "blank", "mast-framework", "Template_v2.1"} {
+		if err := ValidateTemplateName(ok); err != nil {
+			t.Errorf("ValidateTemplateName(%q) = %v, want nil", ok, err)
+		}
+	}
+	for _, bad := range []string{"my template", "-leading", "tpl/../x", strings.Repeat("a", 256)} {
+		if err := ValidateTemplateName(bad); err == nil || !strings.Contains(err.Error(), "templateName") {
+			t.Errorf("ValidateTemplateName(%q) = %v, want templateName error", bad, err)
+		}
+	}
+}
+
+func TestValidatePublishPageID(t *testing.T) {
+	for _, ok := range []string{"", testPublishPageID} {
+		if err := ValidatePublishPageID(ok); err != nil {
+			t.Errorf("ValidatePublishPageID(%q) = %v, want nil", ok, err)
+		}
+	}
+	if err := ValidatePublishPageID("page1"); err == nil || !strings.Contains(err.Error(), "publishPageId") {
+		t.Errorf("ValidatePublishPageID(page1) = %v, want publishPageId error", err)
+	}
 }
 
 // ============================================================================
@@ -142,6 +192,26 @@ func TestSiteCustomDomains_UnmarshalObjectsAndStrings(t *testing.T) {
 	}
 }
 
+func TestSiteCustomDomains_SkipsEmptyElements(t *testing.T) {
+	var site Site
+	raw := `{"id":"x","customDomains":[null, "", {}, {"id":"d1"}, {"id":"d2","url":"example.com"}, "www.example.com"]}`
+	if err := json.Unmarshal([]byte(raw), &site); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"d1", "example.com", "www.example.com"}
+	if len(site.CustomDomains) != len(want) {
+		t.Fatalf("null/empty elements must be skipped, got %v", site.CustomDomains)
+	}
+	for i := range want {
+		if site.CustomDomains[i] != want[i] {
+			t.Errorf("customDomains[%d] = %q, want %q", i, site.CustomDomains[i], want[i])
+		}
+	}
+	if err := json.Unmarshal([]byte(`{"customDomains":[42]}`), &site); err == nil {
+		t.Error("unexpected element types must be rejected")
+	}
+}
+
 // ============================================================================
 // PostSite
 // ============================================================================
@@ -158,14 +228,14 @@ func TestPostSite_Success(t *testing.T) {
 	})
 	client := useMockAPI(t, server)
 
-	site, err := PostSite(context.Background(), client, testWorkspaceID, "My Test Site", "folder123", "")
+	site, err := PostSite(context.Background(), client, testWorkspaceID, "My Test Site", testParentFolderID, "")
 	if err != nil {
 		t.Fatalf("PostSite failed: %v", err)
 	}
 	if gotMethod != http.MethodPost || gotPath != "/v2/workspaces/"+testWorkspaceID+"/sites" {
 		t.Errorf("unexpected request %s %s", gotMethod, gotPath)
 	}
-	if gotBody["name"] != "My Test Site" || gotBody["parentFolderId"] != "folder123" {
+	if gotBody["name"] != "My Test Site" || gotBody["parentFolderId"] != testParentFolderID {
 		t.Errorf("unexpected body: %v", gotBody)
 	}
 	if _, ok := gotBody["templateName"]; ok {
@@ -198,6 +268,44 @@ func TestPostSite_RateLimiting(t *testing.T) {
 	}
 	if site.ID != testSiteID {
 		t.Errorf("unexpected site ID %q", site.ID)
+	}
+}
+
+func TestPostSite_AcceptsOnlyDocumentedStatuses(t *testing.T) {
+	tests := []struct {
+		status  int
+		wantErr bool
+	}{
+		{http.StatusCreated, false},
+		{http.StatusOK, false}, // tolerated for older API behaviour
+		{http.StatusAccepted, true},
+		{http.StatusConflict, true},
+	}
+	for _, tt := range tests {
+		t.Run(http.StatusText(tt.status), func(t *testing.T) {
+			server := mockWebflowAPI(t, func(w http.ResponseWriter, r *http.Request) {
+				writeJSON(t, w, tt.status, Site{ID: testSiteID, DisplayName: "Site"})
+			})
+			client := useMockAPI(t, server)
+			_, err := PostSite(context.Background(), client, testWorkspaceID, "Site", "", "")
+			if (err != nil) != tt.wantErr {
+				t.Errorf("status %d: err = %v, wantErr %v", tt.status, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestPublishSite_AcceptsOnlyDocumentedStatuses(t *testing.T) {
+	for _, status := range []int{http.StatusAccepted, http.StatusOK, http.StatusCreated, http.StatusNoContent} {
+		server := mockWebflowAPI(t, func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(t, w, status, `{"publishScope":"site"}`)
+		})
+		client := useMockAPI(t, server)
+		_, err := PublishSite(context.Background(), client, testSiteID, SitePublishRequest{PublishToWebflowSubdomain: true})
+		wantErr := status != http.StatusAccepted && status != http.StatusOK
+		if (err != nil) != wantErr {
+			t.Errorf("status %d: err = %v, wantErr %v", status, err, wantErr)
+		}
 	}
 }
 
@@ -270,7 +378,7 @@ func TestPatchSite_SendsNameAndFolder(t *testing.T) {
 	})
 	client := useMockAPI(t, server)
 
-	folder := "folder-new"
+	folder := testParentFolderID
 	site, err := PatchSite(context.Background(), client, testSiteID, "Updated Site Name", &folder)
 	if err != nil {
 		t.Fatalf("PatchSite failed: %v", err)
@@ -278,7 +386,7 @@ func TestPatchSite_SendsNameAndFolder(t *testing.T) {
 	if gotMethod != http.MethodPatch || gotPath != "/v2/sites/"+testSiteID {
 		t.Errorf("unexpected request %s %s", gotMethod, gotPath)
 	}
-	if gotBody["name"] != "Updated Site Name" || gotBody["parentFolderId"] != "folder-new" {
+	if gotBody["name"] != "Updated Site Name" || gotBody["parentFolderId"] != testParentFolderID {
 		t.Errorf("unexpected body: %v", gotBody)
 	}
 	if site.DisplayName != "Updated Site Name" {
@@ -592,13 +700,31 @@ func TestGetSite_RateLimiting(t *testing.T) {
 // ============================================================================
 
 func TestSiteCreate_ValidationErrors(t *testing.T) {
+	called := false
+	mockWebflowAPI(t, func(w http.ResponseWriter, r *http.Request) { called = true })
 	tests := []struct {
 		name      string
 		args      SiteArgs
 		errSubstr string
 	}{
 		{"empty workspaceId", SiteArgs{WorkspaceID: "", DisplayName: "Site"}, "workspaceId is required"},
+		{"malformed workspaceId", SiteArgs{WorkspaceID: "not-hex", DisplayName: "Site"}, "workspaceId has invalid format"},
 		{"empty displayName", SiteArgs{WorkspaceID: testWorkspaceID, DisplayName: ""}, "displayName is required"},
+		{
+			"malformed parentFolderId",
+			SiteArgs{WorkspaceID: testWorkspaceID, DisplayName: "Site", ParentFolderID: "folder123"},
+			"parentFolderId has invalid format",
+		},
+		{
+			"malformed publishPageId",
+			SiteArgs{WorkspaceID: testWorkspaceID, DisplayName: "Site", PublishPageID: "page1"},
+			"publishPageId",
+		},
+		{
+			"malformed templateName",
+			SiteArgs{WorkspaceID: testWorkspaceID, DisplayName: "Site", TemplateName: "my template"},
+			"templateName has invalid format",
+		},
 	}
 	resource := &SiteResource{}
 	for _, tt := range tests {
@@ -608,6 +734,9 @@ func TestSiteCreate_ValidationErrors(t *testing.T) {
 				t.Errorf("expected error containing %q, got: %v", tt.errSubstr, err)
 			}
 		})
+	}
+	if called {
+		t.Error("API must not be called when validation fails")
 	}
 }
 
@@ -630,12 +759,83 @@ func TestSiteCreate_DryRun_SkipsValidationAndAPI(t *testing.T) {
 	if apiCalled {
 		t.Error("API must not be called in DryRun mode")
 	}
-	if !strings.HasPrefix(resp.ID, "preview-") {
-		t.Errorf("expected preview ID, got %q", resp.ID)
+	// An empty ID makes the framework present the ID and all outputs as unknown to dependents.
+	if resp.ID != "" {
+		t.Errorf("preview must not fabricate an ID, got %q", resp.ID)
 	}
 	if resp.Output.DisplayName != "Preview Site" || !resp.Output.Publish {
 		t.Errorf("inputs not preserved in preview output: %+v", resp.Output)
 	}
+	if resp.Output.LastPublished != "" || resp.Output.LastUpdated != "" || resp.Output.ShortName != "" {
+		t.Errorf("preview must not fabricate read-only outputs: %+v", resp.Output)
+	}
+}
+
+func TestSiteCheck(t *testing.T) {
+	resource := &SiteResource{}
+
+	t.Run("known invalid values fail", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"workspaceId":    property.New("not-a-workspace"),
+				"displayName":    property.New(""),
+				"parentFolderId": property.New("folder123"),
+				"publishPageId":  property.New("page1"),
+				"templateName":   property.New("my template"),
+			}),
+		})
+		if err != nil {
+			t.Fatalf("Check: %v", err)
+		}
+		got := map[string]string{}
+		for _, f := range resp.Failures {
+			got[f.Property] = f.Reason
+		}
+		for _, want := range []string{"workspaceId", "displayName", "parentFolderId", "publishPageId", "templateName"} {
+			if got[want] == "" {
+				t.Errorf("expected a failure for %s, got %+v", want, resp.Failures)
+			}
+		}
+		if len(got) != 5 {
+			t.Errorf("expected exactly 5 failures, got %+v", resp.Failures)
+		}
+	})
+
+	t.Run("unknown values are skipped", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"workspaceId":    property.New(property.Computed),
+				"displayName":    property.New(property.Computed),
+				"parentFolderId": property.New(property.Computed),
+				"publishPageId":  property.New(property.Computed),
+				"templateName":   property.New("blank"),
+			}),
+		})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Errorf("unknown inputs must not fail Check: failures=%+v err=%v", resp.Failures, err)
+		}
+	})
+
+	t.Run("valid values pass", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"workspaceId":          property.New(testWorkspaceID),
+				"displayName":          property.New("My Site"),
+				"parentFolderId":       property.New(testParentFolderID),
+				"publish":              property.New(true),
+				"publishCustomDomains": property.New([]property.Value{property.New("660c6449dd97ebc7346ac629")}),
+				"publishPageId":        property.New(testPublishPageID),
+				"templateName":         property.New("mast-framework"),
+			}),
+		})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Errorf("valid inputs must pass Check: failures=%+v err=%v", resp.Failures, err)
+		}
+		if resp.Inputs.WorkspaceID != testWorkspaceID || !resp.Inputs.Publish ||
+			len(resp.Inputs.PublishCustomDomains) != 1 || resp.Inputs.TemplateName != "mast-framework" {
+			t.Errorf("inputs not decoded: %+v", resp.Inputs)
+		}
+	})
 }
 
 func TestSiteCreate_PublishesWithDocumentedBody(t *testing.T) {
@@ -866,10 +1066,12 @@ func TestSiteUpdate_ClearsParentFolderAndPublishes(t *testing.T) {
 		ID: testSiteID,
 		Inputs: SiteArgs{
 			WorkspaceID: testWorkspaceID, DisplayName: "New Name",
-			Publish: true, PublishToWebflowSubdomain: true, PublishPageID: "page1",
+			Publish: true, PublishToWebflowSubdomain: true, PublishPageID: testPublishPageID,
 		},
 		State: SiteState{
-			SiteArgs:      SiteArgs{WorkspaceID: testWorkspaceID, DisplayName: "Old Name", ParentFolderID: "folder-old"},
+			SiteArgs: SiteArgs{
+				WorkspaceID: testWorkspaceID, DisplayName: "Old Name", ParentFolderID: testParentFolderID,
+			},
 			CustomDomains: []string{"example.com"},
 		},
 	})
@@ -879,7 +1081,8 @@ func TestSiteUpdate_ClearsParentFolderAndPublishes(t *testing.T) {
 	if !strings.Contains(patchRaw, `"name":"New Name"`) || !strings.Contains(patchRaw, `"parentFolderId":null`) {
 		t.Errorf("PATCH body must rename and clear the folder with null, got %s", patchRaw)
 	}
-	if publishBody == nil || publishBody["publishToWebflowSubdomain"] != true || publishBody["pageId"] != "page1" {
+	if publishBody == nil || publishBody["publishToWebflowSubdomain"] != true ||
+		publishBody["pageId"] != testPublishPageID {
 		t.Errorf("unexpected publish body: %v", publishBody)
 	}
 	if resp.Output.DisplayName != "New Name" || resp.Output.ShortName != "new-name" || resp.Output.ParentFolderID != "" {
@@ -917,12 +1120,33 @@ func TestSiteUpdate_ValidationError(t *testing.T) {
 	called := false
 	mockWebflowAPI(t, func(w http.ResponseWriter, r *http.Request) { called = true })
 	resource := &SiteResource{}
-	_, err := resource.Update(context.Background(), infer.UpdateRequest[SiteArgs, SiteState]{
-		ID:     testSiteID,
-		Inputs: SiteArgs{WorkspaceID: testWorkspaceID, DisplayName: ""},
-	})
-	if err == nil || !strings.Contains(err.Error(), "displayName is required") {
-		t.Errorf("expected validation error, got: %v", err)
+	tests := []struct {
+		name string
+		args SiteArgs
+		want string
+	}{
+		{"empty displayName", SiteArgs{WorkspaceID: testWorkspaceID, DisplayName: ""}, "displayName is required"},
+		{
+			"malformed parentFolderId",
+			SiteArgs{WorkspaceID: testWorkspaceID, DisplayName: "Site", ParentFolderID: "folder-new"},
+			"parentFolderId has invalid format",
+		},
+		{
+			"malformed publishPageId",
+			SiteArgs{WorkspaceID: testWorkspaceID, DisplayName: "Site", Publish: true, PublishPageID: "page1"},
+			"publishPageId",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := resource.Update(context.Background(), infer.UpdateRequest[SiteArgs, SiteState]{
+				ID:     testSiteID,
+				Inputs: tt.args,
+			})
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("expected error containing %q, got: %v", tt.want, err)
+			}
+		})
 	}
 	if called {
 		t.Error("API must not be called when validation fails")
@@ -1068,6 +1292,63 @@ func TestSiteDiff_ImmutableFieldsReplace(t *testing.T) {
 		SiteArgs{WorkspaceID: testWorkspaceID, DisplayName: "Site", TemplateName: "old"})
 	if pd := diff.DetailedDiff["templateName"]; pd.Kind != p.UpdateReplace {
 		t.Errorf("templateName change should replace, got %+v", diff)
+	}
+}
+
+func TestSiteDiff_TemplateNameOnlyComparedWhenBothKnown(t *testing.T) {
+	// templateName cannot be read back from the API, so an imported site has none in state.
+	// Adding (or removing) it in the program must not replace the site.
+	cases := []struct {
+		name          string
+		inputs, state string
+	}{
+		{"program sets template, state empty (import)", "blank", ""},
+		{"program removed template, state has one", "", "blank"},
+		{"both empty", "", ""},
+		{"both equal", "blank", "blank"},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			diff := siteDiff(t,
+				SiteArgs{WorkspaceID: testWorkspaceID, DisplayName: "Site", TemplateName: tt.inputs},
+				SiteArgs{WorkspaceID: testWorkspaceID, DisplayName: "Site", TemplateName: tt.state})
+			if diff.HasChanges || len(diff.DetailedDiff) != 0 {
+				t.Errorf("templateName must not diff when either side is empty, got %+v", diff)
+			}
+		})
+	}
+}
+
+func TestSiteImportThenDiff_DoesNotReplace(t *testing.T) {
+	// pulumi import: Read runs with empty inputs and state; the API does not report templateName.
+	mockWebflowAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, http.StatusOK, `{
+			"id": "`+testSiteID+`", "workspaceId": "`+testWorkspaceID+`", "displayName": "Imported",
+			"shortName": "imported", "timeZone": "UTC"
+		}`)
+	})
+	resource := &SiteResource{}
+	readResp, err := resource.Read(context.Background(), infer.ReadRequest[SiteArgs, SiteState]{ID: testSiteID})
+	if err != nil {
+		t.Fatalf("Read failed: %v", err)
+	}
+	if readResp.Inputs.TemplateName != "" || readResp.Inputs.WorkspaceID != testWorkspaceID {
+		t.Errorf("unexpected imported inputs: %+v", readResp.Inputs)
+	}
+
+	// The program that created the site elsewhere still names the template it was built from.
+	diff, err := resource.Diff(context.Background(), infer.DiffRequest[SiteArgs, SiteState]{
+		ID: testSiteID,
+		Inputs: SiteArgs{
+			WorkspaceID: testWorkspaceID, DisplayName: "Imported", TemplateName: "mast-framework",
+		},
+		State: readResp.State,
+	})
+	if err != nil {
+		t.Fatalf("Diff failed: %v", err)
+	}
+	if diff.HasChanges {
+		t.Errorf("import followed by up must not replace the site, got %+v", diff.DetailedDiff)
 	}
 }
 

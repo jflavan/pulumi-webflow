@@ -11,7 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"time"
+	"strings"
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
@@ -32,8 +32,8 @@ type WebhookArgs struct {
 	// URL is the HTTPS endpoint where Webflow will send webhook events.
 	// Must be a valid HTTPS URL (e.g., "https://example.com/webhooks/webflow")
 	URL string `pulumi:"url"`
-	// Filter is an optional map for filtering webhook events.
-	// The structure depends on the triggerType and allows you to receive only specific events.
+	// Filter is an optional event filter. The Webflow API only documents it for the
+	// form_submission trigger, with the shape { name: string } (the form name).
 	Filter map[string]interface{} `pulumi:"filter,optional"`
 }
 
@@ -53,7 +53,13 @@ func (w *Webhook) Annotate(a infer.Annotator) {
 	a.Describe(w, "Manages webhooks for a Webflow site. "+
 		"Webhooks allow you to receive real-time notifications when events occur in your Webflow site, "+
 		"such as form submissions, page updates, e-commerce orders, and more. "+
-		"Note: Webhooks cannot be updated in-place; any change to triggerType, url, or filter requires replacement.")
+		"\n\n**Authentication:** the webhook endpoints require a Data Client (OAuth) token with the "+
+		"`sites:write` scope plus the read scope of the event family being subscribed to "+
+		"(`forms:read`, `cms:read`, `pages:read`, `ecommerce:read` or `comments:read`); reading a webhook "+
+		"requires `sites:read`. "+
+		"\n\nWebhooks cannot be updated in place: any change to `triggerType`, `url` or `filter` replaces the "+
+		"webhook (the replacement is created before the old one is deleted, so there is no window without "+
+		"a webhook; Webflow allows several webhooks per trigger).")
 }
 
 // Annotate adds descriptions to the WebhookArgs fields.
@@ -66,23 +72,29 @@ func (args *WebhookArgs) Annotate(a infer.Annotator) {
 
 	a.Describe(&args.TriggerType,
 		"The Webflow event that triggers this webhook. "+
-			"Valid values: form_submission, site_publish, page_created, page_metadata_updated, "+
-			"page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, "+
-			"memberships_user_account_added, memberships_user_account_updated, memberships_user_account_deleted, "+
-			"collection_item_created, collection_item_changed, collection_item_deleted, collection_item_unpublished. "+
-			"Example: 'form_submission' to receive notifications when forms are submitted.")
+			"Valid values: "+strings.Join(validTriggerTypeList, ", ")+". "+
+			"Webhooks require a Data Client (OAuth) token with `sites:write` plus the read scope of the "+
+			"event family: `forms:read` (form_submission), `cms:read` (collection_item_*), "+
+			"`pages:read` (page_*), `ecommerce:read` (ecomm_*), `comments:read` (comment_created); "+
+			"site_publish needs `sites:read`. "+
+			"Example: 'form_submission' to receive notifications when forms are submitted. "+
+			"Changing this value replaces the webhook.")
 
 	a.Describe(&args.URL,
 		"The HTTPS endpoint where Webflow will send webhook events "+
 			"(e.g., 'https://example.com/webhooks/webflow', 'https://api.example.com/events'). "+
 			"Must be a valid HTTPS URL. Webflow requires HTTPS for security. "+
-			"Your endpoint should accept POST requests with JSON payloads containing event data.")
+			"Your endpoint should accept POST requests with JSON payloads containing event data. "+
+			"Changing this value replaces the webhook.")
 
 	a.Describe(&args.Filter,
 		"Optional filter for webhook events. "+
-			"The structure depends on the triggerType and allows you to receive only specific events. "+
-			"For example, for collection_item_created, you can filter by collection ID. "+
-			"Refer to Webflow API documentation for filter options for each trigger type.")
+			"Only supported for the `form_submission` trigger type: it selects the form whose submissions "+
+			"should be sent, with the shape `{ name: string }` where `name` is the form name "+
+			"(e.g., `{ name: 'Contact Form' }`). "+
+			"Setting a filter for any other trigger type, or any key other than `name`, is rejected. "+
+			"When omitted the provider does not track the filter Webflow reports, so a filter set outside "+
+			"Pulumi does not cause a diff. Changing this value replaces the webhook.")
 }
 
 // Annotate adds descriptions to the WebhookState fields.
@@ -97,8 +109,37 @@ func (state *WebhookState) Annotate(a infer.Annotator) {
 			"Will be empty if the webhook has never been triggered.")
 }
 
+// webhookCheckValidators lists the known-value validators applied by Check.
+var webhookCheckValidators = []stringValidator{
+	{property: "siteId", validate: ValidateSiteID},
+	{property: "triggerType", validate: ValidateTriggerType},
+	{property: "url", validate: ValidateWebhookURL},
+}
+
+// Check validates the inputs that are already known at preview time. Values that still depend
+// on other resources' outputs are skipped here and validated again in Create.
+func (w *Webhook) Check(
+	ctx context.Context, req infer.CheckRequest,
+) (infer.CheckResponse[WebhookArgs], error) {
+	inputs, failures, err := checkStrings[WebhookArgs](ctx, req.NewInputs, webhookCheckValidators...)
+	if err != nil {
+		return infer.CheckResponse[WebhookArgs]{Inputs: inputs, Failures: failures}, err
+	}
+	// The filter contract depends on the trigger type, so both must be known.
+	if isKnown(req.NewInputs, "filter") {
+		if triggerType, known := knownString(req.NewInputs, "triggerType"); known {
+			if verr := ValidateWebhookFilter(triggerType, inputs.Filter); verr != nil {
+				failures = append(failures, checkFailure("filter", verr))
+			}
+		}
+	}
+	return infer.CheckResponse[WebhookArgs]{Inputs: inputs, Failures: failures}, nil
+}
+
 // Diff determines what changes need to be made to the webhook resource.
-// Webflow webhooks do not support updates - all changes require replacement.
+// Webflow webhooks do not support updates - all changes require replacement. The replacement
+// is created before the old webhook is deleted (no DeleteBeforeReplace) so that there is never
+// a window without a webhook; the API allows several webhooks per trigger.
 func (w *Webhook) Diff(
 	ctx context.Context, req infer.DiffRequest[WebhookArgs, WebhookState],
 ) (infer.DiffResponse, error) {
@@ -129,7 +170,6 @@ func (w *Webhook) Diff(
 	// If any changes were detected, populate the diff response
 	if len(detailedDiff) > 0 {
 		diff.HasChanges = true
-		diff.DeleteBeforeReplace = true // All webhook changes require replacement
 		diff.DetailedDiff = detailedDiff
 	}
 
@@ -145,6 +185,23 @@ func mapsEqual(a, b map[string]interface{}) bool {
 	return reflect.DeepEqual(a, b)
 }
 
+// validateWebhookArgs validates the fully-resolved inputs at apply time.
+func validateWebhookArgs(args WebhookArgs) error {
+	if err := ValidateSiteID(args.SiteID); err != nil {
+		return fmt.Errorf("validation failed for Webhook resource: %w", err)
+	}
+	if err := ValidateTriggerType(args.TriggerType); err != nil {
+		return fmt.Errorf("validation failed for Webhook resource: %w", err)
+	}
+	if err := ValidateWebhookURL(args.URL); err != nil {
+		return fmt.Errorf("validation failed for Webhook resource: %w", err)
+	}
+	if err := ValidateWebhookFilter(args.TriggerType, args.Filter); err != nil {
+		return fmt.Errorf("validation failed for Webhook resource: %w", err)
+	}
+	return nil
+}
+
 // Create creates a new webhook on the Webflow site.
 func (w *Webhook) Create(
 	ctx context.Context, req infer.CreateRequest[WebhookArgs],
@@ -157,38 +214,22 @@ func (w *Webhook) Create(
 	log.Info("Creating Webflow webhook")
 
 	state := WebhookState{
-		WebhookArgs:   req.Inputs,
-		CreatedOn:     "", // Will be populated from API response
-		LastTriggered: "", // Will be populated from API response if available
+		WebhookArgs: req.Inputs,
 	}
 
-	// During preview, return expected state without making API calls.
-	// Validation is deferred to apply-time because inputs may contain Pulumi unknowns
-	// (e.g., siteId from a Site output) which the infer framework deserializes as zero values.
+	// Preview: return the inputs without an ID, without fabricated timestamps and without
+	// calling the API. An empty ID tells the framework to present the ID and every output as
+	// unknown to dependent resources. Inputs may still be unknown (zeroed) at this point, so
+	// validation of the resolved values happens at apply time (Check validated the known ones).
 	if req.DryRun {
 		log.Debug("Dry run mode - skipping API call")
-		// Set a preview timestamp
-		state.CreatedOn = time.Now().Format(time.RFC3339)
-		// Generate a predictable ID for dry-run
-		previewID := fmt.Sprintf("preview-%d", time.Now().Unix())
-		return infer.CreateResponse[WebhookState]{
-			ID:     GenerateWebhookResourceID(req.Inputs.SiteID, previewID),
-			Output: state,
-		}, nil
+		return infer.CreateResponse[WebhookState]{Output: state}, nil
 	}
 
 	// Validate inputs BEFORE making API calls (all values are resolved at apply-time)
-	if err := ValidateSiteID(req.Inputs.SiteID); err != nil {
+	if err := validateWebhookArgs(req.Inputs); err != nil {
 		log.Errorf("Validation failed: %v", err)
-		return infer.CreateResponse[WebhookState]{}, fmt.Errorf("validation failed for Webhook resource: %w", err)
-	}
-	if err := ValidateTriggerType(req.Inputs.TriggerType); err != nil {
-		log.Errorf("Validation failed: %v", err)
-		return infer.CreateResponse[WebhookState]{}, fmt.Errorf("validation failed for Webhook resource: %w", err)
-	}
-	if err := ValidateWebhookURL(req.Inputs.URL); err != nil {
-		log.Errorf("Validation failed: %v", err)
-		return infer.CreateResponse[WebhookState]{}, fmt.Errorf("validation failed for Webhook resource: %w", err)
+		return infer.CreateResponse[WebhookState]{}, err
 	}
 
 	// Get HTTP client
@@ -232,8 +273,9 @@ func (w *Webhook) Create(
 	}, nil
 }
 
-// Read retrieves the current state of a webhook from Webflow.
-// Used for drift detection and import operations.
+// Read retrieves the current state of a webhook from Webflow via GET /v2/webhooks/{webhook_id}.
+// Used for drift detection and import operations (empty inputs and state). A 404 yields an
+// empty ID; any other error is returned so transient failures never look like a deleted webhook.
 func (w *Webhook) Read(
 	ctx context.Context, req infer.ReadRequest[WebhookArgs, WebhookState],
 ) (infer.ReadResponse[WebhookArgs, WebhookState], error) {
@@ -252,28 +294,44 @@ func (w *Webhook) Read(
 		return infer.ReadResponse[WebhookArgs, WebhookState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Locate the webhook in the site's webhook list
-	foundWebhook, err := FindWebhook(ctx, client, siteID, webhookID)
+	webhook, err := GetWebhook(ctx, client, webhookID)
 	if err != nil {
-		// Only "not found" (site or webhook gone) signals deletion; every other failure
-		// (network, auth, rate limiting, 5xx) is propagated.
+		// Only "not found" signals deletion; every other failure (network, auth, rate
+		// limiting, 5xx) is propagated.
 		if IsNotFound(err) {
 			return infer.ReadResponse[WebhookArgs, WebhookState]{ID: ""}, nil
 		}
 		return infer.ReadResponse[WebhookArgs, WebhookState]{}, fmt.Errorf("failed to read webhook: %w", err)
 	}
 
+	// The webhook object carries its own siteId; a mismatch with the resource ID means the
+	// resource ID (e.g. an import argument) names the wrong site.
+	if webhook.SiteID != "" && webhook.SiteID != siteID {
+		return infer.ReadResponse[WebhookArgs, WebhookState]{}, fmt.Errorf(
+			"webhook %s belongs to site %s, not site %s named in resource ID %q; "+
+				"use the resource ID {siteId}/webhooks/{webhookId} with the webhook's own site",
+			webhookID, webhook.SiteID, siteID, req.ID)
+	}
+
+	// filter has don't-care semantics: only track what Webflow reports when the program (or
+	// the previous state) set a filter. Otherwise a filter set outside Pulumi is left alone,
+	// which also keeps imported webhooks free of an unrequested filter input.
+	var filter map[string]interface{}
+	if len(req.Inputs.Filter) > 0 || len(req.State.Filter) > 0 {
+		filter = webhook.Filter
+	}
+
 	// Build current state from API response
 	currentInputs := WebhookArgs{
 		SiteID:      siteID,
-		TriggerType: foundWebhook.TriggerType,
-		URL:         foundWebhook.URL,
-		Filter:      foundWebhook.Filter,
+		TriggerType: webhook.TriggerType,
+		URL:         webhook.URL,
+		Filter:      filter,
 	}
 	currentState := WebhookState{
 		WebhookArgs:   currentInputs,
-		CreatedOn:     foundWebhook.CreatedOn,
-		LastTriggered: foundWebhook.LastTriggered,
+		CreatedOn:     webhook.CreatedOn,
+		LastTriggered: webhook.LastTriggered,
 	}
 
 	return infer.ReadResponse[WebhookArgs, WebhookState]{

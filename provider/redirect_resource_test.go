@@ -14,12 +14,77 @@ import (
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
 )
 
 const testRedirectID = "42e1a2b7aa1a13f768a0042a"
 
 func testRedirectResourceID() string {
 	return GenerateRedirectResourceID(testSiteID, testRedirectID)
+}
+
+// ============================================================================
+// Check
+// ============================================================================
+
+func TestRedirectCheck(t *testing.T) {
+	resource := &Redirect{}
+
+	t.Run("known invalid values fail", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"siteId":          property.New("invalid"),
+				"sourcePath":      property.New("old-page"),
+				"destinationPath": property.New("/new page"),
+				// statusCode is deprecated: any value is accepted without a failure.
+				"statusCode": property.New(307.0),
+			}),
+		})
+		if err != nil {
+			t.Fatalf("Check: %v", err)
+		}
+		got := map[string]string{}
+		for _, f := range resp.Failures {
+			got[f.Property] = f.Reason
+		}
+		if len(got) != 3 || !containsStr(got["siteId"], "24-character") ||
+			!containsStr(got["sourcePath"], "must start with '/'") ||
+			!containsStr(got["destinationPath"], "invalid characters") {
+			t.Errorf("unexpected failures: %+v", resp.Failures)
+		}
+		if resp.Inputs.StatusCode != 307 {
+			t.Errorf("statusCode must be decoded untouched, got %d", resp.Inputs.StatusCode)
+		}
+	})
+
+	t.Run("unknown values are skipped", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"siteId":          property.New(property.Computed),
+				"sourcePath":      property.New(property.Computed),
+				"destinationPath": property.New("/new"),
+			}),
+		})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Errorf("unknown inputs must not fail Check: failures=%+v err=%v", resp.Failures, err)
+		}
+	})
+
+	t.Run("valid values pass without statusCode", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"siteId":          property.New(testSiteID),
+				"sourcePath":      property.New("/old"),
+				"destinationPath": property.New("/new"),
+			}),
+		})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Errorf("valid inputs must pass Check: failures=%+v err=%v", resp.Failures, err)
+		}
+		if resp.Inputs.SiteID != testSiteID || resp.Inputs.SourcePath != "/old" || resp.Inputs.StatusCode != 0 {
+			t.Errorf("inputs not decoded: %+v", resp.Inputs)
+		}
+	})
 }
 
 // ============================================================================
@@ -38,42 +103,37 @@ func TestRedirectCreate_ValidationErrors(t *testing.T) {
 	}{
 		{
 			"invalid siteId",
-			RedirectArgs{SiteID: "invalid", SourcePath: "/old", DestinationPath: "/new", StatusCode: 301},
+			RedirectArgs{SiteID: "invalid", SourcePath: "/old", DestinationPath: "/new"},
 			"validation failed",
 		},
 		{
 			"missing sourcePath",
-			RedirectArgs{SiteID: testSiteID, SourcePath: "", DestinationPath: "/new", StatusCode: 301},
+			RedirectArgs{SiteID: testSiteID, SourcePath: "", DestinationPath: "/new"},
 			"sourcePath is required",
 		},
 		{
 			"sourcePath without slash",
-			RedirectArgs{SiteID: testSiteID, SourcePath: "old-page", DestinationPath: "/new", StatusCode: 301},
+			RedirectArgs{SiteID: testSiteID, SourcePath: "old-page", DestinationPath: "/new"},
 			"must start with '/'",
 		},
 		{
 			"missing destinationPath",
-			RedirectArgs{SiteID: testSiteID, SourcePath: "/old", DestinationPath: "", StatusCode: 301},
+			RedirectArgs{SiteID: testSiteID, SourcePath: "/old", DestinationPath: ""},
 			"destinationPath is required",
 		},
 		{
 			"destinationPath without slash",
-			RedirectArgs{SiteID: testSiteID, SourcePath: "/old", DestinationPath: "new", StatusCode: 301},
+			RedirectArgs{SiteID: testSiteID, SourcePath: "/old", DestinationPath: "new"},
 			"must start with '/'",
 		},
 		{
-			"invalid statusCode",
-			RedirectArgs{SiteID: testSiteID, SourcePath: "/old", DestinationPath: "/new", StatusCode: 400},
-			"must be either 301 or 302",
-		},
-		{
 			"sourcePath with query string",
-			RedirectArgs{SiteID: testSiteID, SourcePath: "/page?query=value", DestinationPath: "/new", StatusCode: 301},
+			RedirectArgs{SiteID: testSiteID, SourcePath: "/page?query=value", DestinationPath: "/new"},
 			"invalid characters",
 		},
 		{
 			"destinationPath with hash",
-			RedirectArgs{SiteID: testSiteID, SourcePath: "/old", DestinationPath: "/page#anchor", StatusCode: 301},
+			RedirectArgs{SiteID: testSiteID, SourcePath: "/old", DestinationPath: "/page#anchor"},
 			"invalid characters",
 		},
 	}
@@ -109,8 +169,12 @@ func TestRedirectCreate_DryRun_SkipsValidationAndAPI(t *testing.T) {
 	if called {
 		t.Error("API must not be called in DryRun mode")
 	}
-	if !containsStr(resp.ID, "/redirects/preview-") {
-		t.Errorf("expected preview ID, got %q", resp.ID)
+	// An empty ID makes the framework present the ID and all outputs as unknown to dependents.
+	if resp.ID != "" {
+		t.Errorf("preview must not fabricate an ID, got %q", resp.ID)
+	}
+	if resp.Output.SourcePath != "/old-page" || resp.Output.DestinationPath != "/new-page" {
+		t.Errorf("inputs not preserved in preview output: %+v", resp.Output)
 	}
 	if resp.Output.CreatedOn != "" {
 		t.Errorf("createdOn must not be fabricated during preview, got %q", resp.Output.CreatedOn)
@@ -129,7 +193,8 @@ func TestRedirectCreate_Success(t *testing.T) {
 	redirect := &Redirect{}
 
 	resp, err := redirect.Create(context.Background(), infer.CreateRequest[RedirectArgs]{
-		Inputs: RedirectArgs{SiteID: testSiteID, SourcePath: "/old-page", DestinationPath: "/new-page", StatusCode: 301},
+		// A deprecated statusCode (even a non-301 one) is accepted and ignored.
+		Inputs: RedirectArgs{SiteID: testSiteID, SourcePath: "/old-page", DestinationPath: "/new-page", StatusCode: 302},
 	})
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
@@ -137,10 +202,13 @@ func TestRedirectCreate_Success(t *testing.T) {
 	if gotBody["fromUrl"] != "/old-page" || gotBody["toUrl"] != "/new-page" {
 		t.Errorf("unexpected body: %v", gotBody)
 	}
+	if _, ok := gotBody["statusCode"]; ok {
+		t.Errorf("statusCode must never be sent to the API: %v", gotBody)
+	}
 	if resp.ID != testRedirectResourceID() {
 		t.Errorf("expected resource ID %q, got %q", testRedirectResourceID(), resp.ID)
 	}
-	if resp.Output.StatusCode != 301 || resp.Output.SourcePath != "/old-page" {
+	if resp.Output.StatusCode != 302 || resp.Output.SourcePath != "/old-page" {
 		t.Errorf("inputs not preserved in state: %+v", resp.Output)
 	}
 	if resp.Output.CreatedOn != "" {
@@ -158,7 +226,7 @@ func TestRedirectCreate_UsesCreatedOnFromAPI(t *testing.T) {
 		)
 	})
 	resp, err := (&Redirect{}).Create(context.Background(), infer.CreateRequest[RedirectArgs]{
-		Inputs: RedirectArgs{SiteID: testSiteID, SourcePath: "/a", DestinationPath: "/b", StatusCode: 301},
+		Inputs: RedirectArgs{SiteID: testSiteID, SourcePath: "/a", DestinationPath: "/b"},
 	})
 	if err != nil {
 		t.Fatalf("Create failed: %v", err)
@@ -173,7 +241,7 @@ func TestRedirectCreate_EmptyIDFromAPI(t *testing.T) {
 		writeJSON(t, w, http.StatusOK, `{"fromUrl":"/a","toUrl":"/b"}`)
 	})
 	_, err := (&Redirect{}).Create(context.Background(), infer.CreateRequest[RedirectArgs]{
-		Inputs: RedirectArgs{SiteID: testSiteID, SourcePath: "/a", DestinationPath: "/b", StatusCode: 301},
+		Inputs: RedirectArgs{SiteID: testSiteID, SourcePath: "/a", DestinationPath: "/b"},
 	})
 	if err == nil || !strings.Contains(err.Error(), "empty redirect ID") {
 		t.Errorf("expected empty redirect ID error, got: %v", err)
@@ -243,13 +311,55 @@ func TestRedirectRead_FindsRedirectOnLaterPage(t *testing.T) {
 		resp.Inputs.SiteID != testSiteID {
 		t.Errorf("inputs not taken from API: %+v", resp.Inputs)
 	}
-	if resp.Inputs.StatusCode != 302 || resp.State.StatusCode != 302 {
-		t.Errorf("statusCode must be preserved from prior state when the API omits it, got inputs=%d state=%d",
+	// statusCode is not part of the API object: the program's value wins over the stored one.
+	if resp.Inputs.StatusCode != 301 || resp.State.StatusCode != 301 {
+		t.Errorf("statusCode must be preserved from the program inputs, got inputs=%d state=%d",
 			resp.Inputs.StatusCode, resp.State.StatusCode)
 	}
 	if resp.State.CreatedOn != "2024-01-15T10:30:00Z" {
 		t.Errorf("createdOn must be preserved from prior state, got %q", resp.State.CreatedOn)
 	}
+}
+
+func TestRedirectRead_StatusCodeHandling(t *testing.T) {
+	mockWebflowAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, http.StatusOK,
+			`{"redirects":[{"id":"`+testRedirectID+`","fromUrl":"/old","toUrl":"/new"}],`+
+				`"pagination":{"limit":100,"offset":0,"total":1}}`)
+	})
+
+	t.Run("state value is kept when the program has none", func(t *testing.T) {
+		resp, err := (&Redirect{}).Read(context.Background(), infer.ReadRequest[RedirectArgs, RedirectState]{
+			ID:    testRedirectResourceID(),
+			State: RedirectState{RedirectArgs: RedirectArgs{SiteID: testSiteID, StatusCode: 302}},
+		})
+		if err != nil {
+			t.Fatalf("Read failed: %v", err)
+		}
+		if resp.Inputs.StatusCode != 302 {
+			t.Errorf("statusCode must be preserved from state, got %d", resp.Inputs.StatusCode)
+		}
+	})
+
+	t.Run("import has no statusCode", func(t *testing.T) {
+		resp, err := (&Redirect{}).Read(context.Background(), infer.ReadRequest[RedirectArgs, RedirectState]{
+			ID: testRedirectResourceID(),
+		})
+		if err != nil {
+			t.Fatalf("Read failed: %v", err)
+		}
+		if resp.Inputs.StatusCode != 0 || resp.Inputs.SourcePath != "/old" || resp.Inputs.DestinationPath != "/new" {
+			t.Errorf("unexpected imported inputs: %+v", resp.Inputs)
+		}
+		// An imported redirect must not diff against a program that still carries a statusCode.
+		diff, err := (&Redirect{}).Diff(context.Background(), infer.DiffRequest[RedirectArgs, RedirectState]{
+			Inputs: RedirectArgs{SiteID: testSiteID, SourcePath: "/old", DestinationPath: "/new", StatusCode: 301},
+			State:  resp.State,
+		})
+		if err != nil || diff.HasChanges {
+			t.Errorf("import followed by diff must be clean, got %+v (err %v)", diff, err)
+		}
+	})
 }
 
 func TestRedirectRead_MissingRedirectSignalsDeletion(t *testing.T) {
@@ -350,6 +460,9 @@ func TestRedirectUpdate_PatchesInPlace(t *testing.T) {
 	if gotBody["toUrl"] != "/updated-page" {
 		t.Errorf("unexpected body: %v", gotBody)
 	}
+	if _, ok := gotBody["statusCode"]; ok {
+		t.Errorf("statusCode must never be sent to the API: %v", gotBody)
+	}
 	if resp.Output.DestinationPath != "/updated-page" || resp.Output.StatusCode != 302 ||
 		resp.Output.CreatedOn != "2024-01-15T10:30:00Z" {
 		t.Errorf("unexpected state: %+v", resp.Output)
@@ -361,7 +474,7 @@ func TestRedirectUpdate_DryRun(t *testing.T) {
 	mockWebflowAPI(t, func(w http.ResponseWriter, r *http.Request) { called = true })
 	resp, err := (&Redirect{}).Update(context.Background(), infer.UpdateRequest[RedirectArgs, RedirectState]{
 		ID:     testRedirectResourceID(),
-		Inputs: RedirectArgs{SiteID: "", SourcePath: "/old-page", DestinationPath: "/updated-page", StatusCode: 302},
+		Inputs: RedirectArgs{SiteID: "", SourcePath: "/old-page", DestinationPath: "/updated-page"},
 		DryRun: true,
 	})
 	if err != nil {
@@ -370,7 +483,7 @@ func TestRedirectUpdate_DryRun(t *testing.T) {
 	if called {
 		t.Error("API must not be called in DryRun mode")
 	}
-	if resp.Output.DestinationPath != "/updated-page" || resp.Output.StatusCode != 302 {
+	if resp.Output.DestinationPath != "/updated-page" || resp.Output.CreatedOn != "" {
 		t.Errorf("unexpected preview state: %+v", resp.Output)
 	}
 }
@@ -385,22 +498,17 @@ func TestRedirectUpdate_ValidationErrors(t *testing.T) {
 	}{
 		{
 			"invalid siteId",
-			RedirectArgs{SiteID: "invalid", SourcePath: "/old", DestinationPath: "/new", StatusCode: 301},
+			RedirectArgs{SiteID: "invalid", SourcePath: "/old", DestinationPath: "/new"},
 			"validation failed",
 		},
 		{
 			"missing destinationPath",
-			RedirectArgs{SiteID: testSiteID, SourcePath: "/old", DestinationPath: "", StatusCode: 301},
+			RedirectArgs{SiteID: testSiteID, SourcePath: "/old", DestinationPath: ""},
 			"destinationPath is required",
 		},
 		{
-			"invalid statusCode",
-			RedirectArgs{SiteID: testSiteID, SourcePath: "/old", DestinationPath: "/new", StatusCode: 303},
-			"must be either 301 or 302",
-		},
-		{
 			"siteId mismatch",
-			RedirectArgs{SiteID: testOtherSiteID, SourcePath: "/old", DestinationPath: "/new", StatusCode: 301},
+			RedirectArgs{SiteID: testOtherSiteID, SourcePath: "/old", DestinationPath: "/new"},
 			"does not match",
 		},
 	}
@@ -478,8 +586,8 @@ func TestRedirectDiff_NoChanges(t *testing.T) {
 
 func TestRedirectDiff_SiteIDChangeReplaces(t *testing.T) {
 	resp := redirectDiff(t,
-		RedirectArgs{SiteID: testOtherSiteID, SourcePath: "/old-page", DestinationPath: "/new-page", StatusCode: 301},
-		RedirectArgs{SiteID: testSiteID, SourcePath: "/old-page", DestinationPath: "/new-page", StatusCode: 301})
+		RedirectArgs{SiteID: testOtherSiteID, SourcePath: "/old-page", DestinationPath: "/new-page"},
+		RedirectArgs{SiteID: testSiteID, SourcePath: "/old-page", DestinationPath: "/new-page"})
 	if !resp.HasChanges || !resp.DeleteBeforeReplace || resp.DetailedDiff["siteId"].Kind != p.UpdateReplace {
 		t.Errorf("expected siteId replacement, got %+v", resp)
 	}
@@ -487,41 +595,51 @@ func TestRedirectDiff_SiteIDChangeReplaces(t *testing.T) {
 
 func TestRedirectDiff_SourcePathChangeReplaces(t *testing.T) {
 	resp := redirectDiff(t,
-		RedirectArgs{SiteID: testSiteID, SourcePath: "/new-old-page", DestinationPath: "/new-page", StatusCode: 301},
-		RedirectArgs{SiteID: testSiteID, SourcePath: "/old-page", DestinationPath: "/new-page", StatusCode: 301})
+		RedirectArgs{SiteID: testSiteID, SourcePath: "/new-old-page", DestinationPath: "/new-page"},
+		RedirectArgs{SiteID: testSiteID, SourcePath: "/old-page", DestinationPath: "/new-page"})
 	if !resp.HasChanges || !resp.DeleteBeforeReplace || resp.DetailedDiff["sourcePath"].Kind != p.UpdateReplace {
 		t.Errorf("expected sourcePath replacement, got %+v", resp)
 	}
 }
 
-func TestRedirectDiff_DestinationAndStatusCodeUpdateInPlace(t *testing.T) {
+func TestRedirectDiff_DestinationUpdatesInPlace(t *testing.T) {
 	resp := redirectDiff(t,
-		RedirectArgs{SiteID: testSiteID, SourcePath: "/old-page", DestinationPath: "/updated-page", StatusCode: 302},
-		RedirectArgs{SiteID: testSiteID, SourcePath: "/old-page", DestinationPath: "/new-page", StatusCode: 301})
+		RedirectArgs{SiteID: testSiteID, SourcePath: "/old-page", DestinationPath: "/updated-page"},
+		RedirectArgs{SiteID: testSiteID, SourcePath: "/old-page", DestinationPath: "/new-page"})
 	if !resp.HasChanges || resp.DeleteBeforeReplace {
 		t.Errorf("expected in-place update, got %+v", resp)
 	}
-	if resp.DetailedDiff["destinationPath"].Kind != p.Update || resp.DetailedDiff["statusCode"].Kind != p.Update {
-		t.Errorf("expected destinationPath and statusCode as Update, got %+v", resp.DetailedDiff)
-	}
-	if len(resp.DetailedDiff) != 2 {
-		t.Errorf("expected both changes to accumulate, got %+v", resp.DetailedDiff)
+	if resp.DetailedDiff["destinationPath"].Kind != p.Update || len(resp.DetailedDiff) != 1 {
+		t.Errorf("expected only destinationPath as Update, got %+v", resp.DetailedDiff)
 	}
 }
 
-func TestRedirectDiff_StatusCodeZeroInStateIsNotDrift(t *testing.T) {
-	// The list endpoint does not return statusCode; an imported redirect may hold 0.
-	resp := redirectDiff(t,
-		RedirectArgs{SiteID: testSiteID, SourcePath: "/old", DestinationPath: "/new", StatusCode: 301},
-		RedirectArgs{SiteID: testSiteID, SourcePath: "/old", DestinationPath: "/new", StatusCode: 0})
-	if resp.HasChanges {
-		t.Errorf("expected no changes when state.StatusCode is 0, got %+v", resp)
+func TestRedirectDiff_StatusCodeNeverDiffs(t *testing.T) {
+	base := RedirectArgs{SiteID: testSiteID, SourcePath: "/old", DestinationPath: "/new"}
+	cases := []struct {
+		name          string
+		inputs, state int
+	}{
+		{"301 vs 302", 301, 302},
+		{"0 in state (imported)", 301, 0},
+		{"0 in program (removed)", 0, 301},
+		{"undocumented value", 307, 301},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			inputs, state := base, base
+			inputs.StatusCode, state.StatusCode = tt.inputs, tt.state
+			resp := redirectDiff(t, inputs, state)
+			if resp.HasChanges || len(resp.DetailedDiff) != 0 {
+				t.Errorf("statusCode is deprecated and must never diff, got %+v", resp)
+			}
+		})
 	}
 }
 
 func TestRedirectDiff_EmptyStateNeedsCreate(t *testing.T) {
 	resp := redirectDiff(t,
-		RedirectArgs{SiteID: testSiteID, SourcePath: "/contact", DestinationPath: "/contact-us", StatusCode: 301},
+		RedirectArgs{SiteID: testSiteID, SourcePath: "/contact", DestinationPath: "/contact-us"},
 		RedirectArgs{})
 	if !resp.HasChanges {
 		t.Error("expected changes against an empty state")

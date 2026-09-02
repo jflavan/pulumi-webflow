@@ -65,20 +65,6 @@ func TestValidateDestinationPath(t *testing.T) {
 	}
 }
 
-func TestValidateStatusCode(t *testing.T) {
-	for _, code := range []int{301, 302} {
-		if err := ValidateStatusCode(code); err != nil {
-			t.Errorf("ValidateStatusCode(%d) = %v, want nil", code, err)
-		}
-	}
-	for _, code := range []int{0, 200, 307, 308, 400, 404, 500} {
-		err := ValidateStatusCode(code)
-		if err == nil || !strings.Contains(err.Error(), "301 or 302") {
-			t.Errorf("ValidateStatusCode(%d) = %v, want '301 or 302' error", code, err)
-		}
-	}
-}
-
 func TestValidateRedirectID(t *testing.T) {
 	for _, id := range []string{"42e1a2b7aa1a13f768a0042a", "redir_12345", "abc-DEF"} {
 		if err := ValidateRedirectID(id); err != nil {
@@ -248,18 +234,22 @@ func TestPostRedirect_SendsBody(t *testing.T) {
 	})
 	client := useMockAPI(t, server)
 
-	result, err := PostRedirect(context.Background(), client, testSiteID, "/old", "/new", 301)
+	result, err := PostRedirect(context.Background(), client, testSiteID, "/old", "/new")
 	if err != nil {
 		t.Fatalf("PostRedirect failed: %v", err)
 	}
 	if gotMethod != http.MethodPost || gotPath != "/v2/sites/"+testSiteID+"/redirects" {
 		t.Errorf("unexpected request %s %s", gotMethod, gotPath)
 	}
-	if gotBody["fromUrl"] != "/old" || gotBody["toUrl"] != "/new" || gotBody["statusCode"] != float64(301) {
+	if gotBody["fromUrl"] != "/old" || gotBody["toUrl"] != "/new" {
 		t.Errorf("unexpected body: %v", gotBody)
 	}
-	if result.ID != "new-redirect-1" || result.SourcePath != "/old" || result.StatusCode != 0 || result.CreatedOn != "" {
-		t.Errorf("unexpected result (statusCode/createdOn must not be invented): %+v", result)
+	// The documented body is exactly {fromUrl, toUrl}: redirects are always 301.
+	if _, ok := gotBody["statusCode"]; ok || len(gotBody) != 2 {
+		t.Errorf("POST body must contain only fromUrl and toUrl, got %v", gotBody)
+	}
+	if result.ID != "new-redirect-1" || result.SourcePath != "/old" || result.CreatedOn != "" {
+		t.Errorf("unexpected result (createdOn must not be invented): %+v", result)
 	}
 }
 
@@ -268,7 +258,7 @@ func TestPostRedirect_BadRequest(t *testing.T) {
 		writeJSON(t, w, http.StatusBadRequest, "invalid redirect configuration")
 	})
 	client := useMockAPI(t, server)
-	_, err := PostRedirect(context.Background(), client, testSiteID, "invalid", "/new", 301)
+	_, err := PostRedirect(context.Background(), client, testSiteID, "invalid", "/new")
 	if err == nil || !strings.Contains(err.Error(), "bad request") {
 		t.Errorf("expected 'bad request' error, got: %v", err)
 	}
@@ -284,18 +274,18 @@ func TestPatchRedirect_SendsOnlyMutableFields(t *testing.T) {
 	})
 	client := useMockAPI(t, server)
 
-	result, err := PatchRedirect(context.Background(), client, testSiteID, "redirect1", "/updated", 302)
+	result, err := PatchRedirect(context.Background(), client, testSiteID, "redirect1", "/updated")
 	if err != nil {
 		t.Fatalf("PatchRedirect failed: %v", err)
 	}
 	if gotMethod != http.MethodPatch || gotPath != "/v2/sites/"+testSiteID+"/redirects/redirect1" {
 		t.Errorf("unexpected request %s %s", gotMethod, gotPath)
 	}
-	if gotBody["toUrl"] != "/updated" || gotBody["statusCode"] != float64(302) {
-		t.Errorf("unexpected body: %v", gotBody)
+	if gotBody["toUrl"] != "/updated" || len(gotBody) != 1 {
+		t.Errorf("PATCH body must contain only toUrl, got %v", gotBody)
 	}
-	if _, ok := gotBody["fromUrl"]; ok {
-		t.Errorf("fromUrl must not be sent on PATCH: %v", gotBody)
+	if _, ok := gotBody["statusCode"]; ok {
+		t.Errorf("statusCode must not be sent on PATCH: %v", gotBody)
 	}
 	if result.DestinationPath != "/updated" {
 		t.Errorf("unexpected result: %+v", result)
@@ -307,7 +297,7 @@ func TestPatchRedirect_NotFound(t *testing.T) {
 		writeJSON(t, w, http.StatusNotFound, "redirect not found")
 	})
 	client := useMockAPI(t, server)
-	_, err := PatchRedirect(context.Background(), client, testSiteID, "nonexistent", "/new", 301)
+	_, err := PatchRedirect(context.Background(), client, testSiteID, "nonexistent", "/new")
 	if !IsNotFound(err) {
 		t.Errorf("expected IsNotFound error, got: %v", err)
 	}

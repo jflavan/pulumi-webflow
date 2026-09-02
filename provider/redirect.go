@@ -18,15 +18,14 @@ import (
 // RedirectRule represents a redirect configuration in Webflow.
 // This struct matches the Webflow API v2 response format for redirect rules.
 //
-// The documented API object carries only id, fromUrl and toUrl. statusCode and createdOn are
-// decoded when present so that a future API revision is picked up, but callers must not rely
-// on them being set.
+// The documented API object is exactly {id, fromUrl, toUrl}: Webflow redirects are always
+// 301 (permanent) and carry no status code. CreatedOn is NOT documented; it is decoded on a
+// best-effort basis in case the API ever reports it and is otherwise left empty.
 type RedirectRule struct {
-	ID              string `json:"id,omitempty"`         // Webflow-assigned redirect ID
-	SourcePath      string `json:"fromUrl"`              // Path to redirect from (e.g., "/old-page")
-	DestinationPath string `json:"toUrl"`                // Path to redirect to (e.g., "/new-page")
-	StatusCode      int    `json:"statusCode,omitempty"` // 301 or 302 when the API reports it
-	CreatedOn       string `json:"createdOn,omitempty"`  // Creation timestamp when the API reports it
+	ID              string `json:"id,omitempty"`        // Webflow-assigned redirect ID
+	SourcePath      string `json:"fromUrl"`             // Path to redirect from (e.g., "/old-page")
+	DestinationPath string `json:"toUrl"`               // Path to redirect to (e.g., "/new-page")
+	CreatedOn       string `json:"createdOn,omitempty"` // Undocumented; best-effort, usually empty
 }
 
 // RedirectPagination is the pagination block of a redirect list response.
@@ -43,10 +42,10 @@ type RedirectResponse struct {
 }
 
 // RedirectRequest represents the request body for POST/PATCH redirects.
+// Only fromUrl and toUrl are documented; there is no status code (redirects are always 301).
 type RedirectRequest struct {
-	SourcePath      string `json:"fromUrl,omitempty"`    // Path to redirect from
-	DestinationPath string `json:"toUrl,omitempty"`      // Path to redirect to
-	StatusCode      int    `json:"statusCode,omitempty"` // 301 or 302 (not part of the documented API; sent when set)
+	SourcePath      string `json:"fromUrl,omitempty"` // Path to redirect from
+	DestinationPath string `json:"toUrl,omitempty"`   // Path to redirect to
 }
 
 // redirectPageSize is the page size requested when listing redirects.
@@ -104,19 +103,6 @@ func ValidateDestinationPath(path string) error {
 	return nil
 }
 
-// ValidateStatusCode validates that a statusCode is either 301 or 302.
-// 301 = permanent redirect, 302 = temporary redirect
-// Returns actionable error messages explaining redirect types and accepted values.
-func ValidateStatusCode(statusCode int) error {
-	if statusCode != 301 && statusCode != 302 {
-		return fmt.Errorf("statusCode must be either 301 or 302: got %d. "+
-			"301 = permanent redirect (use for pages moved permanently). "+
-			"302 = temporary redirect (use for temporary page moves or maintenance). "+
-			"Example: statusCode=301 for permanent moves, statusCode=302 for temporary redirects", statusCode)
-	}
-	return nil
-}
-
 // ValidateRedirectID validates a Webflow redirect ID parsed from a resource ID before it is
 // interpolated into an API URL.
 func ValidateRedirectID(redirectID string) error {
@@ -157,6 +143,11 @@ func ExtractIDsFromRedirectResourceID(resourceID string) (siteID, redirectID str
 
 // ListRedirectsPage retrieves one page of redirects for a Webflow site.
 // It calls GET /v2/sites/{site_id}/redirects?limit=N&offset=M.
+//
+// The list endpoint documents no query parameters; limit and offset are sent on a best-effort
+// basis because the response carries a pagination block. An API that ignores them returns the
+// same (full) page every time, which forEachRedirectPage handles by stopping on an empty page
+// or once offset >= pagination.total.
 func ListRedirectsPage(
 	ctx context.Context, client *http.Client, siteID string, limit, offset int,
 ) (*RedirectResponse, error) {
@@ -210,8 +201,10 @@ func FindRedirect(ctx context.Context, client *http.Client, siteID, redirectID s
 }
 
 // forEachRedirectPage calls visit for every page of redirects until visit returns false or the
-// pagination reports no more results. It stops on an empty page so an API that ignores the
-// offset parameter cannot cause an infinite loop.
+// pagination reports no more results. limit/offset are undocumented for this endpoint, so the
+// loop is guarded: it terminates on an empty page or when offset >= pagination.total, which
+// also covers an API that ignores the offset parameter (the second page would then be
+// identical and offset would reach total).
 func forEachRedirectPage(
 	ctx context.Context, client *http.Client, siteID string, visit func(*RedirectResponse) bool,
 ) error {
@@ -235,16 +228,16 @@ func forEachRedirectPage(
 }
 
 // PostRedirect creates a new redirect for a Webflow site.
-// It calls POST /v2/sites/{site_id}/redirects endpoint.
+// It calls POST /v2/sites/{site_id}/redirects with {fromUrl, toUrl}; the API has no status
+// code field because Webflow redirects are always 301.
 // Returns the created redirect or an error if the request fails.
 func PostRedirect(
 	ctx context.Context, client *http.Client,
-	siteID, sourcePath, destinationPath string, statusCode int,
+	siteID, sourcePath, destinationPath string,
 ) (*RedirectRule, error) {
 	requestBody := RedirectRequest{
 		SourcePath:      sourcePath,
 		DestinationPath: destinationPath,
-		StatusCode:      statusCode,
 	}
 
 	var redirect RedirectRule
@@ -262,11 +255,10 @@ func PostRedirect(
 // Returns the updated redirect or an error if the request fails.
 func PatchRedirect(
 	ctx context.Context, client *http.Client,
-	siteID, redirectID, destinationPath string, statusCode int,
+	siteID, redirectID, destinationPath string,
 ) (*RedirectRule, error) {
 	requestBody := RedirectRequest{
 		DestinationPath: destinationPath,
-		StatusCode:      statusCode,
 	}
 
 	var redirect RedirectRule
