@@ -10,7 +10,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
@@ -20,6 +24,17 @@ import (
 // It implements the infer.CustomResource interface for CRUD operations.
 // Note: Assets are immutable - updates require replacement.
 type Asset struct{}
+
+// Compile-time checks for the optional infer interfaces Asset implements.
+var (
+	_ infer.CustomCheck[AssetArgs]                      = (*Asset)(nil)
+	_ infer.ExplicitDependencies[AssetArgs, AssetState] = (*Asset)(nil)
+)
+
+// assetCleanupTimeout bounds the best-effort deletion of orphaned asset metadata after a
+// failed upload. It runs on a context detached from the apply's cancellation so that a
+// cancelled or timed-out apply still cleans up.
+const assetCleanupTimeout = 30 * time.Second
 
 // AssetArgs defines the input properties for the Asset resource.
 type AssetArgs struct {
@@ -71,7 +86,9 @@ func (r *Asset) Annotate(a infer.Annotator) {
 	a.Describe(r, "Uploads and manages an asset (image, file, document) in a Webflow site. "+
 		"Create registers the asset metadata with Webflow and then uploads the file bytes from "+
 		"fileSource to Webflow's storage. Assets are immutable: changing any input, or changing the "+
-		"content of a local fileSource, replaces the asset.")
+		"content of a local fileSource, replaces the asset. After 'pulumi import' the fileSource and "+
+		"fileHash are unknown; set them in your program and the first refresh adopts them without replacing "+
+		"the asset.")
 }
 
 // Annotate adds descriptions to the AssetArgs fields.
@@ -84,7 +101,7 @@ func (args *AssetArgs) Annotate(a infer.Annotator) {
 	a.Describe(&args.FileName,
 		"The name of the file as it will appear in Webflow, including the extension. "+
 			"Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. "+
-			"Must not exceed 255 characters or contain <, >, :, \", |, ?, *.")
+			"Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, \", |, ?, *.")
 
 	a.Describe(&args.FileSource,
 		"Where the file bytes come from: a local file path (resolved relative to the Pulumi program's "+
@@ -126,9 +143,82 @@ func (state *AssetState) Annotate(a infer.Annotator) {
 		"The timestamp when the asset was last modified (RFC3339 format, read-only).")
 }
 
+// WireDependencies marks the presigned upload URL and the signed S3 form fields as always
+// secret, independent of how the SDK or the schema flags them: they carry the upload
+// signature and must never appear in plain text in state or console output.
+func (r *Asset) WireDependencies(f infer.FieldSelector, args *AssetArgs, state *AssetState) {
+	f.OutputField(&state.UploadURL).AlwaysSecret()
+	f.OutputField(&state.UploadDetails).AlwaysSecret()
+}
+
+// validateFileSource checks that fileSource is set (its readability is checked at apply time).
+func validateFileSource(fileSource string) error {
+	if strings.TrimSpace(fileSource) == "" {
+		return errors.New("fileSource is required but was not provided. " +
+			"Provide a local file path (e.g., './assets/logo.png') or an http(s) URL " +
+			"(e.g., 'https://example.com/logo.png') for the file to upload")
+	}
+	return nil
+}
+
+// validateOptionalAssetFolderID validates parentFolder when it is set.
+func validateOptionalAssetFolderID(parentFolder string) error {
+	if parentFolder == "" {
+		return nil
+	}
+	if err := ValidateAssetFolderID(parentFolder); err != nil {
+		return fmt.Errorf("parentFolder: %w", err)
+	}
+	return nil
+}
+
+// validateOptionalFileHash validates fileHash when it is set.
+func validateOptionalFileHash(fileHash string) error {
+	if fileHash == "" {
+		return nil
+	}
+	return ValidateFileHash(fileHash)
+}
+
+// Check validates the known inputs at preview time: siteId, fileName and parentFolder formats,
+// a non-empty fileSource and, when given, the fileHash format. Unknown values are validated
+// again at apply time.
+func (r *Asset) Check(ctx context.Context, req infer.CheckRequest) (infer.CheckResponse[AssetArgs], error) {
+	inputs, failures, err := checkStrings[AssetArgs](ctx, req.NewInputs,
+		stringValidator{property: "siteId", validate: ValidateSiteID},
+		stringValidator{property: "fileName", validate: ValidateFileName},
+		stringValidator{property: "fileSource", validate: validateFileSource},
+		stringValidator{property: "parentFolder", validate: validateOptionalAssetFolderID},
+		stringValidator{property: "fileHash", validate: validateOptionalFileHash},
+	)
+	return infer.CheckResponse[AssetArgs]{Inputs: inputs, Failures: failures}, err
+}
+
+// localFileHashForDiff hashes a local fileSource for Diff. A missing file is reported as
+// (hash "", nil) after a warning so a preview on a machine without the file does not fail;
+// any other read problem is an error.
+func localFileHashForDiff(ctx context.Context, fileSource string) (string, error) {
+	if _, err := os.Stat(filepath.Clean(strings.TrimSpace(fileSource))); errors.Is(err, fs.ErrNotExist) {
+		NewLogContext(ctx).
+			WithField("fileSource", fileSource).
+			Warn("Local fileSource does not exist, so the asset content cannot be compared during preview; " +
+				"the comparison is skipped and the file must exist at apply time")
+		return "", nil
+	}
+	data, err := ReadAssetSource(ctx, fileSource)
+	if err != nil {
+		return "", fmt.Errorf("cannot determine whether asset content changed: %w", err)
+	}
+	return ComputeFileHash(data), nil
+}
+
 // Diff determines what changes need to be made to the asset resource.
 // Assets are immutable - any change requires replacement (delete + recreate).
 // A local fileSource whose content hash differs from the recorded fileHash is also a replacement.
+//
+// Import safety: after 'pulumi import' the state carries no fileSource or fileHash. Empty
+// state values are treated as unknown rather than as a difference, so the first refresh or
+// update after an import adopts the program's values instead of replacing the asset.
 func (r *Asset) Diff(
 	ctx context.Context, req infer.DiffRequest[AssetArgs, AssetState],
 ) (infer.DiffResponse, error) {
@@ -147,8 +237,13 @@ func (r *Asset) Diff(
 		return replace("fileName"), nil
 	case req.State.ParentFolder != req.Inputs.ParentFolder:
 		return replace("parentFolder"), nil
-	case req.State.FileSource != req.Inputs.FileSource:
+	case req.State.FileSource != "" && req.State.FileSource != req.Inputs.FileSource:
 		return replace("fileSource"), nil
+	}
+
+	// Without a recorded hash (imported asset) there is nothing to compare against.
+	if req.State.FileHash == "" {
+		return infer.DiffResponse{}, nil
 	}
 
 	// Determine the hash the new inputs imply. An explicit fileHash wins; otherwise a local
@@ -156,17 +251,34 @@ func (r *Asset) Diff(
 	// Diff (that would be a network call on every preview); set fileHash to track them.
 	expectedHash := strings.ToLower(req.Inputs.FileHash)
 	if expectedHash == "" && req.Inputs.FileSource != "" && !IsRemoteAssetSource(req.Inputs.FileSource) {
-		data, err := ReadAssetSource(ctx, req.Inputs.FileSource)
+		hash, err := localFileHashForDiff(ctx, req.Inputs.FileSource)
 		if err != nil {
-			return infer.DiffResponse{}, fmt.Errorf("cannot determine whether asset content changed: %w", err)
+			return infer.DiffResponse{}, err
 		}
-		expectedHash = ComputeFileHash(data)
+		expectedHash = hash
 	}
-	if expectedHash != "" && req.State.FileHash != "" && !strings.EqualFold(expectedHash, req.State.FileHash) {
+	if expectedHash != "" && !strings.EqualFold(expectedHash, req.State.FileHash) {
 		return replace("fileHash"), nil
 	}
 
 	return infer.DiffResponse{}, nil
+}
+
+// validateAssetArgs validates fully-resolved inputs at apply time.
+func validateAssetArgs(args AssetArgs) error {
+	if err := ValidateSiteID(args.SiteID); err != nil {
+		return fmt.Errorf("validation failed for Asset resource: %w", err)
+	}
+	if err := ValidateFileName(args.FileName); err != nil {
+		return fmt.Errorf("validation failed for Asset resource: %w", err)
+	}
+	if err := validateOptionalAssetFolderID(args.ParentFolder); err != nil {
+		return fmt.Errorf("validation failed for Asset resource (%w)", err)
+	}
+	if err := validateOptionalFileHash(args.FileHash); err != nil {
+		return fmt.Errorf("validation failed for Asset resource: %w", err)
+	}
+	return nil
 }
 
 // Create registers the asset with Webflow and uploads the file content.
@@ -186,22 +298,8 @@ func (r *Asset) Create(
 		WithField("siteId", req.Inputs.SiteID).
 		WithField("fileName", req.Inputs.FileName)
 
-	if err := ValidateSiteID(req.Inputs.SiteID); err != nil {
-		return infer.CreateResponse[AssetState]{}, fmt.Errorf("validation failed for Asset resource: %w", err)
-	}
-	if err := ValidateFileName(req.Inputs.FileName); err != nil {
-		return infer.CreateResponse[AssetState]{}, fmt.Errorf("validation failed for Asset resource: %w", err)
-	}
-	if req.Inputs.ParentFolder != "" {
-		if err := ValidateAssetFolderID(req.Inputs.ParentFolder); err != nil {
-			return infer.CreateResponse[AssetState]{},
-				fmt.Errorf("validation failed for Asset resource (parentFolder): %w", err)
-		}
-	}
-	if req.Inputs.FileHash != "" {
-		if err := ValidateFileHash(req.Inputs.FileHash); err != nil {
-			return infer.CreateResponse[AssetState]{}, fmt.Errorf("validation failed for Asset resource: %w", err)
-		}
+	if err := validateAssetArgs(req.Inputs); err != nil {
+		return infer.CreateResponse[AssetState]{}, err
 	}
 
 	data, err := ReadAssetSource(ctx, req.Inputs.FileSource)
@@ -242,8 +340,12 @@ func (r *Asset) Create(
 	log = log.WithField("assetId", uploadResp.ID)
 	log.Debug("Uploading asset file to storage")
 	if err := UploadAssetFile(ctx, uploadResp.UploadURL, uploadResp.UploadDetails, req.Inputs.FileName, data); err != nil {
-		// Best effort: do not leave an orphaned metadata record behind.
-		if delErr := DeleteAsset(ctx, client, uploadResp.ID); delErr != nil {
+		// Best effort: do not leave an orphaned metadata record behind. The cleanup runs on a
+		// context detached from the apply's cancellation (with its own short timeout) so it
+		// still happens when the apply was cancelled or timed out mid-upload.
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), assetCleanupTimeout)
+		defer cancel()
+		if delErr := DeleteAsset(cleanupCtx, client, uploadResp.ID); delErr != nil {
 			log.Warnf("Failed to clean up asset metadata after upload failure: %v", delErr)
 		}
 		return infer.CreateResponse[AssetState]{}, fmt.Errorf("failed to upload asset file: %w", err)
@@ -268,7 +370,9 @@ func (r *Asset) Create(
 }
 
 // Read retrieves the current state of an asset from Webflow (GET /v2/assets/{asset_id}).
-// Used for drift detection and import operations.
+// Used for drift detection and import operations. The endpoint does not return the file
+// source, hash or upload details, so those are carried over from state; on import (empty
+// state) they stay empty and Diff treats them as unknown.
 func (r *Asset) Read(
 	ctx context.Context, req infer.ReadRequest[AssetArgs, AssetState],
 ) (infer.ReadResponse[AssetArgs, AssetState], error) {
@@ -296,17 +400,24 @@ func (r *Asset) Read(
 		return infer.ReadResponse[AssetArgs, AssetState]{}, fmt.Errorf("failed to read asset: %w", err)
 	}
 
+	importing := req.State.AssetID == ""
+	folderID := asset.FolderID
+	if folderID == "" {
+		folderID = req.State.FolderID
+	}
+	parentFolder := req.State.ParentFolder
+	if importing {
+		// The folder the asset lives in is the only source of the parentFolder input on import.
+		parentFolder = folderID
+	}
+
 	// The GET endpoint does not return the hash, source, or upload details; carry them from state.
 	currentInputs := AssetArgs{
 		SiteID:       siteID,
 		FileName:     asset.OriginalFileName,
 		FileSource:   req.State.FileSource,
 		FileHash:     req.State.FileHash,
-		ParentFolder: req.State.ParentFolder,
-	}
-	folderID := asset.FolderID
-	if folderID == "" {
-		folderID = req.State.FolderID
+		ParentFolder: parentFolder,
 	}
 	currentState := AssetState{
 		AssetArgs:     currentInputs,

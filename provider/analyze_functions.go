@@ -9,12 +9,14 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/pulumi/pulumi-go-provider/infer"
 )
 
-// This file defines the five Pulumi invoke functions backed by the Webflow Analyze API (beta).
-// All of them require the 'sites:read' scope and a workspace with the Analyze add-on.
+// This file defines the five Pulumi invoke functions backed by the Webflow Analyze API
+// (GET /v2/sites/{site_id}/analyze/reports/{report}, with a transitional /beta fallback; see
+// analyze.go). All of them require the 'sites:read' scope and a workspace with the Analyze add-on.
 
 const analyzeScopeNote = " Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. " +
 	"Webflow allows one Analyze request in flight per access token; concurrent requests are retried. " +
@@ -67,7 +69,7 @@ func (t *AnalyticsTimeOnPageTimeseriesArgs) Annotate(a infer.Annotator) {
 // ---------------------------------------------------------------------------
 
 // GetAnalyticsTraffic returns a daily time series of sessions, users or pageviews.
-// It calls GET /beta/sites/{site_id}/analyze/reports/traffic.
+// It calls GET /v2/sites/{site_id}/analyze/reports/traffic.
 type GetAnalyticsTraffic struct{}
 
 // GetAnalyticsTrafficInput defines the input parameters for GetAnalyticsTraffic.
@@ -174,7 +176,7 @@ func (f *GetAnalyticsTraffic) Invoke(
 // ---------------------------------------------------------------------------
 
 // GetAnalyticsTopPages returns the most-visited pages of a site.
-// It calls GET /beta/sites/{site_id}/analyze/reports/top_pages.
+// It calls GET /v2/sites/{site_id}/analyze/reports/top_pages.
 type GetAnalyticsTopPages struct{}
 
 // GetAnalyticsTopPagesInput defines the input parameters for GetAnalyticsTopPages.
@@ -339,7 +341,7 @@ func (f *GetAnalyticsTopPages) Invoke(
 // ---------------------------------------------------------------------------
 
 // GetAnalyticsTopDimensions returns the top values of a chosen dimension.
-// It calls GET /beta/sites/{site_id}/analyze/reports/top_dimensions.
+// It calls GET /v2/sites/{site_id}/analyze/reports/top_dimensions.
 type GetAnalyticsTopDimensions struct{}
 
 // GetAnalyticsTopDimensionsInput defines the input parameters for GetAnalyticsTopDimensions.
@@ -474,7 +476,7 @@ func (f *GetAnalyticsTopDimensions) Invoke(
 // ---------------------------------------------------------------------------
 
 // GetAnalyticsTopEvents returns the most-fired events of a site.
-// It calls GET /beta/sites/{site_id}/analyze/reports/top_events.
+// It calls GET /v2/sites/{site_id}/analyze/reports/top_events.
 type GetAnalyticsTopEvents struct{}
 
 // GetAnalyticsTopEventsInput defines the input parameters for GetAnalyticsTopEvents.
@@ -578,7 +580,8 @@ type GetAnalyticsTopEventsOutput struct {
 func (f *GetAnalyticsTopEvents) Annotate(a infer.Annotator) {
 	a.Describe(f, "Returns the most-fired events of a Webflow site, ranked by how often they fired, with an "+
 		"optional daily time series per event (Analyze API, beta). The top-events report does not support "+
-		"the 'referrer' filter."+analyzeScopeNote)
+		"the 'referrer' filter, nor the 'nextCollectionId', 'nextItemSlug', 'nextPageId', 'previousCollectionId', "+
+		"'previousItemSlug' and 'previousPageId' filter dimensions."+analyzeScopeNote)
 }
 
 // Annotate adds descriptions to the GetAnalyticsTopEventsInput fields.
@@ -612,6 +615,12 @@ func (i GetAnalyticsTopEventsInput) buildQuery() (*analyzeQuery, error) {
 	if i.Referrer != "" {
 		return nil, validationError(fn, fmt.Errorf("the top-events report does not support the 'referrer' "+
 			"filter (got '%s'). Remove it or use a different report", i.Referrer))
+	}
+	// top_events has a narrower filter schema than the other reports (no referrer, no
+	// next*/previous* dimensions); reject those here rather than letting Webflow answer 400.
+	if dim := unsupportedFilterDimension(i.Filters, analyzeTopEventsFilterDimensionValues); dim != "" {
+		return nil, validationError(fn, fmt.Errorf("the top-events report does not support filtering by '%s'. "+
+			"Valid filters dimensions for top_events: %s", dim, strings.Join(analyzeTopEventsFilterDimensionValues, ", ")))
 	}
 	if err := validateLimit(i.Limit, analyzeTopEventsMaxLimit); err != nil {
 		return nil, validationError(fn, err)
@@ -653,7 +662,7 @@ func (f *GetAnalyticsTopEvents) Invoke(
 // ---------------------------------------------------------------------------
 
 // GetAnalyticsTimeOnPage returns the average time spent on a page.
-// It calls GET /beta/sites/{site_id}/analyze/reports/time_on_page.
+// It calls GET /v2/sites/{site_id}/analyze/reports/time_on_page.
 type GetAnalyticsTimeOnPage struct{}
 
 // GetAnalyticsTimeOnPageInput defines the input parameters for GetAnalyticsTimeOnPage.

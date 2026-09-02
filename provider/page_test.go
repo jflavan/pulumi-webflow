@@ -198,7 +198,7 @@ func TestGetPageMetadata(t *testing.T) {
 	defer server.Close()
 	client := useMockAPI(t, server)
 
-	page, err := GetPageMetadata(context.Background(), client, testPageID, "", false)
+	page, err := GetPageMetadata(context.Background(), client, testPageID, "", "")
 	if err != nil {
 		t.Fatalf("GetPageMetadata: %v", err)
 	}
@@ -211,11 +211,11 @@ func TestGetPageMetadata(t *testing.T) {
 		t.Errorf("unexpected page %+v", page)
 	}
 
-	if _, err := GetPageMetadata(context.Background(), client, testPageID, testLocaleID, true); err != nil {
+	if _, err := GetPageMetadata(context.Background(), client, testPageID, testLocaleID, testLocaleID); err != nil {
 		t.Fatal(err)
 	}
-	if gotQuery != "localeId="+testLocaleID+"&translatable=true" {
-		t.Errorf("unexpected query %q", gotQuery)
+	if gotQuery != "localeId="+testLocaleID+"&translatable="+testLocaleID {
+		t.Errorf("translatable must be sent verbatim as the locale ID, got query %q", gotQuery)
 	}
 }
 
@@ -227,7 +227,7 @@ func TestGetPageMetadata_NotFoundIsTyped(t *testing.T) {
 	defer server.Close()
 	client := useMockAPI(t, server)
 
-	if _, err := GetPageMetadata(context.Background(), client, testPageID, "", false); !IsNotFound(err) {
+	if _, err := GetPageMetadata(context.Background(), client, testPageID, "", ""); !IsNotFound(err) {
 		t.Fatalf("expected IsNotFound, got %v", err)
 	}
 }

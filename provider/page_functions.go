@@ -8,7 +8,9 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/pulumi/pulumi-go-provider/infer"
 )
@@ -149,8 +151,9 @@ type GetPageInput struct {
 	PageID string `pulumi:"pageId"`
 	// LocaleID optionally selects the locale to read.
 	LocaleID string `pulumi:"localeId,optional"`
-	// Translatable, when true, targets the translation content of the secondary locale.
-	Translatable bool `pulumi:"translatable,optional"`
+	// Translatable is the ID of the secondary locale being translated into; it returns the
+	// page's translatable content for that locale.
+	Translatable string `pulumi:"translatable,optional"`
 }
 
 // GetPageOutput defines the output of the GetPage function.
@@ -169,8 +172,10 @@ func (f *GetPage) Annotate(a infer.Annotator) {
 func (i *GetPageInput) Annotate(a infer.Annotator) {
 	a.Describe(&i.PageID, "The Webflow page ID (24-character lowercase hexadecimal string).")
 	a.Describe(&i.LocaleID, "Optional locale ID. When omitted the primary locale is returned.")
-	a.Describe(&i.Translatable, "When true, adds ?translatable=true so the secondary locale's "+
-		"translation content is returned instead of content inherited from the primary locale.")
+	a.Describe(&i.Translatable, "Optional ID of the secondary locale you are translating into "+
+		"(24-character lowercase hexadecimal string), sent verbatim as ?translatable=<localeId> to return the "+
+		"page's translatable content for that locale. Webflow returns a 400 error when this is the primary "+
+		"locale ID or any other value, and a 403 error when translation exclusions are not enabled for the site.")
 }
 
 // Invoke implements infer.Fn for GetPage.
@@ -183,6 +188,10 @@ func (f *GetPage) Invoke(
 	if err := ValidateLocaleID(req.Input.LocaleID); err != nil {
 		return infer.FunctionResponse[GetPageOutput]{}, fmt.Errorf("validation failed for getPage: %w", err)
 	}
+	if err := ValidateLocaleID(req.Input.Translatable); err != nil {
+		return infer.FunctionResponse[GetPageOutput]{}, fmt.Errorf(
+			"validation failed for getPage: translatable must be the ID of a secondary locale: %w", err)
+	}
 
 	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
@@ -191,6 +200,21 @@ func (f *GetPage) Invoke(
 
 	page, err := GetPageMetadata(ctx, client, req.Input.PageID, req.Input.LocaleID, req.Input.Translatable)
 	if err != nil {
+		if req.Input.Translatable != "" {
+			var apiErr *APIError
+			if errors.As(err, &apiErr) {
+				switch apiErr.StatusCode {
+				case http.StatusBadRequest:
+					return infer.FunctionResponse[GetPageOutput]{}, fmt.Errorf("failed to get page: Webflow rejected "+
+						"translatable='%s' (HTTP 400). translatable must be the ID of a secondary locale of the site; "+
+						"the primary locale ID or any other value is rejected: %w", req.Input.Translatable, err)
+				case http.StatusForbidden:
+					return infer.FunctionResponse[GetPageOutput]{}, fmt.Errorf("failed to get page: Webflow refused the "+
+						"translatable request (HTTP 403). Translation exclusions must be enabled for the site "+
+						"(Site Settings > Localization) before translatable content can be read: %w", err)
+				}
+			}
+		}
 		return infer.FunctionResponse[GetPageOutput]{}, fmt.Errorf("failed to get page: %w", err)
 	}
 

@@ -13,8 +13,20 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 )
+
+// maxPageContentNodes is the documented maximum number of nodes one
+// POST /v2/pages/{page_id}/dom request may update.
+const maxPageContentNodes = 1000
+
+// pageDOMPageSize is the page size used when reading the DOM (GET /v2/pages/{page_id}/dom
+// accepts limit up to 100).
+const pageDOMPageSize = 100
+
+// domNodeTypeText is the DOM node type whose content the Update Page Content endpoint edits.
+const domNodeTypeText = "text"
 
 // DOMText is the text of a text node as returned by GET /v2/pages/{page_id}/dom.
 // The API returns an object {"html": ..., "text": ...}; older payloads used a plain string,
@@ -62,7 +74,7 @@ type DOMNode struct {
 	ComponentID string `json:"componentId,omitempty"`
 }
 
-// PageContentResponse represents the Webflow API response for GET /pages/{page_id}/dom.
+// PageContentResponse represents the Webflow API response for GET /v2/pages/{page_id}/dom.
 type PageContentResponse struct {
 	// PageID is the unique identifier for the page.
 	PageID string `json:"pageId,omitempty"`
@@ -80,7 +92,7 @@ type PageContentResponse struct {
 	LastUpdated string `json:"lastUpdated,omitempty"`
 }
 
-// PageContentRequest represents the request body for POST /pages/{page_id}/dom.
+// PageContentRequest represents the request body for POST /v2/pages/{page_id}/dom.
 type PageContentRequest struct {
 	// Nodes is the array of node updates to apply.
 	Nodes []DOMNodeUpdate `json:"nodes"`
@@ -90,11 +102,12 @@ type PageContentRequest struct {
 type DOMNodeUpdate struct {
 	// NodeID is the unique identifier for the node to update (required).
 	NodeID string `json:"nodeId"`
-	// Text is the new content for text nodes (HTML allowed). Empty clears the node.
+	// Text is the new HTML content for text nodes (required by the API; its tags must match the
+	// node's current content as returned by GET /v2/pages/{page_id}/dom).
 	Text *string `json:"text,omitempty"`
 }
 
-// PageContentUpdateResponse is the response of POST /pages/{page_id}/dom.
+// PageContentUpdateResponse is the response of POST /v2/pages/{page_id}/dom.
 // A 200 with a non-empty errors list still means some nodes were not updated.
 type PageContentUpdateResponse struct {
 	Errors []string `json:"errors"`
@@ -106,70 +119,151 @@ func ValidateNodeID(nodeID string) error {
 		return errors.New("nodeId is required but was not provided. " +
 			"Please provide a valid node ID from the page's DOM structure. " +
 			"You can retrieve node IDs by fetching the page content first using the Webflow API " +
-			"GET /pages/{page_id}/dom endpoint")
+			"GET /v2/pages/{page_id}/dom endpoint")
 	}
 	return nil
 }
 
-// GeneratePageContentResourceID generates a Pulumi resource ID for a PageContent resource.
-// Format: {pageID}/content
-func GeneratePageContentResourceID(pageID string) string {
-	return pageID + "/content"
+// ValidateNodeText validates the replacement text of a node. Webflow requires the text (HTML)
+// to be present; an empty string does not clear a node, it is rejected.
+func ValidateNodeText(text string) error {
+	if strings.TrimSpace(text) == "" {
+		return errors.New("text is required but was empty. " +
+			"Webflow does not clear a node when text is empty; provide the node's new HTML content, " +
+			"using the same tags the node currently has (see GET /v2/pages/{page_id}/dom)")
+	}
+	return nil
 }
 
-// ExtractPageIDFromPageContentResourceID extracts the pageID from a PageContent resource ID.
-// Expected format: {pageID}/content
-func ExtractPageIDFromPageContentResourceID(resourceID string) (string, error) {
-	if resourceID == "" {
-		return "", errors.New("resourceId cannot be empty")
-	}
-
-	suffix := "/content"
-	if len(resourceID) <= len(suffix) || !strings.HasSuffix(resourceID, suffix) {
-		return "", fmt.Errorf("invalid resource ID format: expected {pageId}/content, got: %s", resourceID)
-	}
-
-	pageID := strings.TrimSuffix(resourceID, suffix)
-	if pageID == "" {
-		return "", fmt.Errorf("invalid resource ID format: expected {pageId}/content, got: %s", resourceID)
-	}
-
-	return pageID, nil
-}
-
-// pageDOMQuery builds the optional ?localeId= query string.
-func pageDOMQuery(localeID string) string {
+// ValidatePageContentLocaleID validates the locale ID of a PageContent resource, which is
+// required: the Update Page Content endpoint only edits secondary locales.
+func ValidatePageContentLocaleID(localeID string) error {
 	if localeID == "" {
+		return errors.New("localeId is required but was not provided. " +
+			"Webflow's Update Page Content endpoint only edits static content in a secondary locale; " +
+			"the primary locale's content cannot be changed via the API. " +
+			"Provide the ID of a secondary locale (24-character lowercase hexadecimal string, listed under " +
+			"Site Settings > Localization or via the Get Site endpoint)")
+	}
+	return ValidateLocaleID(localeID)
+}
+
+// GeneratePageContentResourceID generates a Pulumi resource ID for a PageContent resource.
+// Format: {pageID}/content/{localeID}
+func GeneratePageContentResourceID(pageID, localeID string) string {
+	return pageID + "/content/" + localeID
+}
+
+// ExtractIDsFromPageContentResourceID extracts the pageID and localeID from a PageContent
+// resource ID. The current format is {pageID}/content/{localeID}; the legacy {pageID}/content
+// form (from before localeId was required) is accepted and returns an empty localeID, which
+// callers fill from state.
+func ExtractIDsFromPageContentResourceID(resourceID string) (pageID, localeID string, err error) {
+	if resourceID == "" {
+		return "", "", errors.New("resourceId cannot be empty")
+	}
+	parts := strings.Split(resourceID, "/")
+	if (len(parts) != 2 && len(parts) != 3) || parts[1] != "content" || parts[0] == "" {
+		return "", "", fmt.Errorf(
+			"invalid resource ID format: expected {pageId}/content/{localeId}, got: %s", resourceID)
+	}
+	if len(parts) == 3 {
+		if parts[2] == "" {
+			return "", "", fmt.Errorf(
+				"invalid resource ID format: expected {pageId}/content/{localeId}, got: %s", resourceID)
+		}
+		localeID = parts[2]
+	}
+	return parts[0], localeID, nil
+}
+
+// pageDOMQuery builds the query string for the DOM endpoints. localeID is added when set;
+// limit and offset are added when limit is positive.
+func pageDOMQuery(localeID string, limit, offset int) string {
+	q := url.Values{}
+	if localeID != "" {
+		q.Set("localeId", localeID)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+		q.Set("offset", strconv.Itoa(offset))
+	}
+	if len(q) == 0 {
 		return ""
 	}
-	return "?localeId=" + url.QueryEscape(localeID)
+	return "?" + q.Encode()
 }
 
-// GetPageContent retrieves the DOM structure of a page (GET /v2/pages/{page_id}/dom).
-// localeID is optional; when empty Webflow returns the primary locale.
+// GetPageContent retrieves one page of the DOM structure of a page (GET /v2/pages/{page_id}/dom).
+// localeID is optional; when empty Webflow returns the primary locale. No pagination
+// parameters are sent, so Webflow applies its defaults; use ListPageTextNodes to read every node.
 func GetPageContent(ctx context.Context, client *http.Client, pageID, localeID string) (*PageContentResponse, error) {
+	return getPageContentPage(ctx, client, pageID, localeID, 0, 0)
+}
+
+// getPageContentPage retrieves one page of DOM nodes with explicit pagination.
+func getPageContentPage(
+	ctx context.Context, client *http.Client, pageID, localeID string, limit, offset int,
+) (*PageContentResponse, error) {
 	var response PageContentResponse
-	u := apiURL("/v2/pages/%s/dom", pageID) + pageDOMQuery(localeID)
+	u := apiURL("/v2/pages/%s/dom", pageID) + pageDOMQuery(localeID, limit, offset)
 	if _, err := doRequest(ctx, client, http.MethodGet, u, nil, &response); err != nil {
 		return nil, err
 	}
 	return &response, nil
 }
 
-// PostPageContent updates static text content of a page (POST /v2/pages/{page_id}/dom).
-// Webflow documents localeId as required; when localeID is empty the parameter is omitted and
-// Webflow targets the primary locale. The operation fails when the response lists any errors.
+// ListPageTextNodes retrieves every text node of a page's DOM, following pagination with
+// limit 100. Text nodes are the only nodes the Update Page Content endpoint can edit.
+func ListPageTextNodes(ctx context.Context, client *http.Client, pageID, localeID string) ([]DOMNode, error) {
+	nodes := []DOMNode{}
+	offset := 0
+	for {
+		page, err := getPageContentPage(ctx, client, pageID, localeID, pageDOMPageSize, offset)
+		if err != nil {
+			return nil, err
+		}
+		for _, node := range page.Nodes {
+			if node.Type == domNodeTypeText {
+				nodes = append(nodes, node)
+			}
+		}
+		// Stop when the server returned fewer than a full page, or we have reached the total.
+		if len(page.Nodes) < pageDOMPageSize {
+			break
+		}
+		offset += len(page.Nodes)
+		if page.Pagination.Total > 0 && offset >= page.Pagination.Total {
+			break
+		}
+	}
+	return nodes, nil
+}
+
+// PostPageContent updates static text content of a page in a secondary locale
+// (POST /v2/pages/{page_id}/dom?localeId=...). localeId is required by Webflow and must be a
+// secondary locale of the site; the primary locale cannot be edited via the API. The operation
+// fails when the response lists any errors.
 func PostPageContent(
 	ctx context.Context, client *http.Client, pageID, localeID string, nodes []DOMNodeUpdate,
 ) (*PageContentUpdateResponse, error) {
-	u := apiURL("/v2/pages/%s/dom", pageID) + pageDOMQuery(localeID)
+	if err := ValidatePageContentLocaleID(localeID); err != nil {
+		return nil, err
+	}
+	if len(nodes) > maxPageContentNodes {
+		return nil, fmt.Errorf("cannot update %d nodes in one request: Webflow accepts at most %d nodes "+
+			"per Update Page Content request. Split the nodes across several PageContent resources",
+			len(nodes), maxPageContentNodes)
+	}
+	u := apiURL("/v2/pages/%s/dom", pageID) + pageDOMQuery(localeID, 0, 0)
 	var response PageContentUpdateResponse
 	if _, err := doRequest(ctx, client, http.MethodPost, u, PageContentRequest{Nodes: nodes}, &response); err != nil {
 		return nil, err
 	}
 	if len(response.Errors) > 0 {
 		return &response, fmt.Errorf("webflow rejected %d node update(s): %s. "+
-			"Verify the node IDs exist on the page (GET /v2/pages/{page_id}/dom) and are text nodes",
+			"Verify the node IDs exist on the page (GET /v2/pages/{page_id}/dom), are text nodes, and that "+
+			"the new text uses the same HTML tags as the current content",
 			len(response.Errors), strings.Join(response.Errors, "; "))
 	}
 	return &response, nil

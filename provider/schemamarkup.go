@@ -17,8 +17,11 @@ import (
 	"strings"
 )
 
-// webflowBetaPathPrefix is the URL prefix of the Webflow Data API beta surface.
-// The reference documentation and all generated code samples use "/beta/..." on api.webflow.com.
+// webflowBetaPathPrefix is the URL prefix of the Webflow Data API beta surface, used by the
+// page schema markup endpoints. Every schema markup reference page and generated code sample
+// uses "/beta/pages/{page_id}/schema-markup" on api.webflow.com; only the May 18 2026 changelog
+// entry writes the path as "/v2/beta/...". The reference is followed here. (The Analyze reports
+// have since moved to /v2/ and only fall back to this prefix; see analyze.go.)
 const webflowBetaPathPrefix = "/beta"
 
 // maxSchemaMarkupBytes is the documented raw input limit for a single schema markup entry (60KB).

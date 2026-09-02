@@ -125,7 +125,12 @@ func ValidateAssetID(assetID string) error {
 	return nil
 }
 
-// ValidateFileName validates that a fileName is non-empty and has a reasonable format.
+// maxAssetFileNameLength is the exclusive upper bound Webflow documents for asset file names:
+// "File names must be less than 100 characters".
+const maxAssetFileNameLength = 100
+
+// ValidateFileName validates that a fileName is non-empty, shorter than 100 characters (the
+// documented Webflow limit) and free of characters most filesystems reject.
 // Returns actionable error messages that explain what's wrong and how to fix it.
 func ValidateFileName(fileName string) error {
 	if fileName == "" {
@@ -134,10 +139,11 @@ func ValidateFileName(fileName string) error {
 			"(e.g., 'logo.png', 'hero-image.jpg', 'document.pdf')")
 	}
 
-	// Check for reasonable length
-	if len(fileName) > 255 {
-		return fmt.Errorf("fileName is too long: '%s' exceeds maximum length of 255 characters. "+
-			"Please use a shorter file name", fileName)
+	// Webflow: "File names must be less than 100 characters".
+	if len(fileName) >= maxAssetFileNameLength {
+		return fmt.Errorf("fileName is too long: '%s' is %d characters but Webflow requires file names to be "+
+			"less than %d characters. Please use a shorter file name",
+			fileName, len(fileName), maxAssetFileNameLength)
 	}
 
 	// Check for common invalid characters (most filesystems disallow these)

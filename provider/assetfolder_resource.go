@@ -21,6 +21,8 @@ import (
 // Deleting this resource will only remove it from Pulumi state, not from Webflow.
 type AssetFolder struct{}
 
+var _ infer.CustomCheck[AssetFolderArgs] = (*AssetFolder)(nil)
+
 // AssetFolderArgs defines the input properties for the AssetFolder resource.
 type AssetFolderArgs struct {
 	// SiteID is the Webflow site ID (24-character lowercase hexadecimal string).
@@ -102,6 +104,19 @@ func (state *AssetFolderState) Annotate(a infer.Annotator) {
 			"This is updated when assets are added or removed from the folder.")
 }
 
+// Check validates the known inputs at preview time: siteId and parentFolder formats and a
+// non-empty displayName. Unknown values are validated again at apply time.
+func (r *AssetFolder) Check(
+	ctx context.Context, req infer.CheckRequest,
+) (infer.CheckResponse[AssetFolderArgs], error) {
+	inputs, failures, err := checkStrings[AssetFolderArgs](ctx, req.NewInputs,
+		stringValidator{property: "siteId", validate: ValidateSiteID},
+		stringValidator{property: "displayName", validate: ValidateDisplayName},
+		stringValidator{property: "parentFolder", validate: validateOptionalAssetFolderID},
+	)
+	return infer.CheckResponse[AssetFolderArgs]{Inputs: inputs, Failures: failures}, err
+}
+
 // Diff determines what changes need to be made to the asset folder resource.
 // Since Webflow doesn't support updates, all changes require replacement. The old folder is
 // created-before-deleted (the delete is a no-op anyway) and a warning tells the user it stays behind.
@@ -151,11 +166,9 @@ func (r *AssetFolder) Create(
 	if err := ValidateDisplayName(req.Inputs.DisplayName); err != nil {
 		return infer.CreateResponse[AssetFolderState]{}, fmt.Errorf("validation failed for AssetFolder resource: %w", err)
 	}
-	if req.Inputs.ParentFolder != "" {
-		if err := ValidateAssetFolderID(req.Inputs.ParentFolder); err != nil {
-			return infer.CreateResponse[AssetFolderState]{},
-				fmt.Errorf("validation failed for AssetFolder resource (parentFolder): %w", err)
-		}
+	if err := validateOptionalAssetFolderID(req.Inputs.ParentFolder); err != nil {
+		return infer.CreateResponse[AssetFolderState]{},
+			fmt.Errorf("validation failed for AssetFolder resource (%w)", err)
 	}
 
 	client, err := GetHTTPClient(ctx, currentProviderVersion())

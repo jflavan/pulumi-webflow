@@ -20,10 +20,21 @@ import (
 	"github.com/pulumi/pulumi-go-provider/infer"
 )
 
-// This file contains the HTTP layer and shared types for the Webflow Analyze API (beta):
-// GET /beta/sites/{site_id}/analyze/reports/{report}. All reports require the 'sites:read'
+// This file contains the HTTP layer and shared types for the Webflow Analyze API:
+// GET /v2/sites/{site_id}/analyze/reports/{report}. All reports require the 'sites:read'
 // scope and a workspace with the Analyze add-on. Each access token may have only one Analyze
 // request in flight at a time; additional concurrent requests receive 429 and are retried.
+//
+// Path prefix: the current reference (every code sample and the working-with-analyze guide)
+// documents the reports under /v2/. The older v2.0.0-beta snapshot and the June 9 2026
+// changelog still show /beta/. The provider therefore tries /v2/ first and, when that path
+// answers 404, retries once at /beta/ so either deployment works during the transition.
+
+// webflowV2PathPrefix is the URL prefix of the stable Webflow Data API v2 surface.
+const webflowV2PathPrefix = "/v2"
+
+// analyzePathPrefixes lists the prefixes tried for an Analyze report, in order.
+var analyzePathPrefixes = []string{webflowV2PathPrefix, webflowBetaPathPrefix}
 
 // analyzeEarliestStartTime is the earliest startTime the Analyze API accepts.
 var analyzeEarliestStartTime = time.Date(2025, time.April, 9, 0, 0, 0, 0, time.UTC)
@@ -56,6 +67,14 @@ var (
 		"pageId", "pagePath", "previousCollectionId", "previousItemSlug", "previousPageId", "referrer",
 		"region", "timeOfDay", "timezone", "trafficSource", "utmCampaign", "utmContent", "utmMedium",
 		"utmSource", "utmTerm", "visitStatus",
+	}
+	// analyzeTopEventsFilterDimensionValues is the narrower filter schema of the top_events
+	// report: it has no referrer and no next*/previous* navigation dimensions.
+	analyzeTopEventsFilterDimensionValues = []string{
+		"audienceIds", "browser", "collectionId", "country", "dayOfWeek", "deviceBrand", "deviceType",
+		"domain", "itemSlug", "language", "locale", "os", "pageId", "pagePath", "region", "timeOfDay",
+		"timezone", "trafficSource", "utmCampaign", "utmContent", "utmMedium", "utmSource", "utmTerm",
+		"visitStatus",
 	}
 )
 
@@ -203,7 +222,10 @@ func (q *analyzeQuery) setInt(key string, value int) {
 	}
 }
 
-// setJSON adds a JSON-encoded object parameter (used for 'timeseries').
+// setJSON adds a JSON-encoded object parameter. It is used for 'timeseries', which the
+// reference samples send as a JSON-encoded object in the query string, exactly like
+// timeseries={"bucketTimeZone":"UTC"} (URL-encoded on the wire); the API does not accept
+// the bracketed timeseries[bucketTimeZone]=UTC form used by 'filter'.
 func (q *analyzeQuery) setJSON(key string, value any) error {
 	encoded, err := json.Marshal(value)
 	if err != nil {
@@ -248,9 +270,10 @@ func (q *analyzeQuery) encode() string {
 	return q.values.Encode()
 }
 
-// analyzeReportURL builds the URL of an Analyze report for a site.
-func analyzeReportURL(siteID, report string, q *analyzeQuery) string {
-	u := apiURL(webflowBetaPathPrefix+"/sites/%s/analyze/reports/%s", siteID, report)
+// analyzeReportURL builds the URL of an Analyze report for a site under the given path prefix
+// ("/v2" or "/beta").
+func analyzeReportURL(prefix, siteID, report string, q *analyzeQuery) string {
+	u := apiURL(prefix+"/sites/%s/analyze/reports/%s", siteID, report)
 	if encoded := q.encode(); encoded != "" {
 		u += "?" + encoded
 	}
@@ -258,8 +281,23 @@ func analyzeReportURL(siteID, report string, q *analyzeQuery) string {
 }
 
 // getAnalyzeReport performs GET on an Analyze report and decodes the response into out.
+// The /v2 path is tried first; a 404 there is retried once at the transitional /beta path.
+// Only when both answer 404 is the not-found error returned.
 func getAnalyzeReport(ctx context.Context, client *http.Client, siteID, report string, q *analyzeQuery, out any) error {
-	_, err := doRequest(ctx, client, http.MethodGet, analyzeReportURL(siteID, report, q), nil, out, http.StatusOK)
+	var err error
+	for i, prefix := range analyzePathPrefixes {
+		_, err = doRequest(ctx, client, http.MethodGet, analyzeReportURL(prefix, siteID, report, q), nil, out,
+			http.StatusOK)
+		if err == nil || !IsNotFound(err) || i == len(analyzePathPrefixes)-1 {
+			return err
+		}
+		NewLogContext(ctx).
+			WithField("siteId", siteID).
+			WithField("report", report).
+			WithField("prefix", prefix).
+			WithField("fallback", analyzePathPrefixes[i+1]).
+			Debug("Analyze report path answered 404; retrying at the transitional path prefix")
+	}
 	return err
 }
 
@@ -326,13 +364,30 @@ func validateEnum(name, value string, allowed []string, required bool) error {
 	return fmt.Errorf("%s '%s' is not valid. Valid values: %s", name, value, strings.Join(allowed, ", "))
 }
 
-// validateLimit checks an optional row limit against the report's maximum.
+// validateLimit checks an optional row limit against the report's maximum. Zero means the
+// input was omitted: the parameter is not sent and Webflow applies its default of 25.
 func validateLimit(limit, maxLimit int) error {
 	if limit < 0 || limit > maxLimit {
-		return fmt.Errorf("limit %d is out of range. Provide a value between 1 and %d, or omit it to use "+
-			"the default of 25", limit, maxLimit)
+		return fmt.Errorf("limit %d is out of range. Provide a value between 1 and %d, or omit it "+
+			"(leave it at 0) so the parameter is not sent and Webflow applies its default of 25", limit, maxLimit)
 	}
 	return nil
+}
+
+// unsupportedFilterDimension returns the first (alphabetically) advanced filter dimension that
+// is not in allowed, or "" when every dimension is allowed.
+func unsupportedFilterDimension(filters map[string]AnalyticsDimensionFilter, allowed []string) string {
+	dims := make([]string, 0, len(filters))
+	for dim := range filters {
+		dims = append(dims, dim)
+	}
+	sort.Strings(dims)
+	for _, dim := range dims {
+		if validateEnum("filters dimension", dim, allowed, true) != nil {
+			return dim
+		}
+	}
+	return ""
 }
 
 // validateBucketTimeZone checks that a time zone is a valid IANA name.
@@ -359,10 +414,10 @@ func ValidateAnalyticsCommonFilters(f AnalyticsCommonFilters) error {
 	if f.Country != "" && len(f.Country) != 2 {
 		return fmt.Errorf("country '%s' must be an ISO 3166-1 alpha-2 code (two letters, e.g., 'US')", f.Country)
 	}
+	if dim := unsupportedFilterDimension(f.Filters, analyzeFilterDimensionValues); dim != "" {
+		return validateEnum("filters dimension", dim, analyzeFilterDimensionValues, true)
+	}
 	for dim, df := range f.Filters {
-		if err := validateEnum("filters dimension", dim, analyzeFilterDimensionValues, true); err != nil {
-			return err
-		}
 		if df.isEmpty() {
 			return fmt.Errorf("filters['%s'] must specify at least one of 'eq', 'in', 'ne' or 'nin'", dim)
 		}

@@ -207,17 +207,19 @@ func ListPages(ctx context.Context, client *http.Client, siteID, localeID string
 }
 
 // GetPageMetadata retrieves a single page by ID (GET /v2/pages/{page_id}).
-// localeID selects a locale; translatable adds ?translatable=true to target a secondary
-// locale's translation content (August 2026 API addition).
+// localeID selects a locale. translatable is the ID of the secondary locale being translated
+// into and is sent verbatim as ?translatable=<localeId>: Webflow answers 400 when it is the
+// primary locale ID or any other value, and 403 when translation exclusions are disabled for
+// the site (August 2026 API addition).
 func GetPageMetadata(
-	ctx context.Context, client *http.Client, pageID, localeID string, translatable bool,
+	ctx context.Context, client *http.Client, pageID, localeID, translatable string,
 ) (*Page, error) {
 	query := url.Values{}
 	if localeID != "" {
 		query.Set("localeId", localeID)
 	}
-	if translatable {
-		query.Set("translatable", "true")
+	if translatable != "" {
+		query.Set("translatable", translatable)
 	}
 	u := apiURL("/v2/pages/%s", pageID)
 	if len(query) > 0 {

@@ -23,32 +23,43 @@ import (
 )
 
 const (
-	testAnalyzeSiteID = "580e63e98c9a982ac9b8b741"
-	testAnalyzeStart  = "2026-04-01T00:00:00Z"
-	testAnalyzeEnd    = "2026-04-08T00:00:00Z"
-	testAnalyzePath   = "/beta/sites/" + testAnalyzeSiteID + "/analyze/reports/"
-	testAnalyzeAuth   = "test-token-abc123def456"
-	testAnalyzePageID = "65f1b2c4a8d3e5f7a9c1b2d3"
-	testAnalyzeWindow = `"window":{"startTime":"2026-04-01T00:00:00Z","endTime":"2026-04-08T00:00:00Z"}`
+	testAnalyzeSiteID   = "580e63e98c9a982ac9b8b741"
+	testAnalyzeStart    = "2026-04-01T00:00:00Z"
+	testAnalyzeEnd      = "2026-04-08T00:00:00Z"
+	testAnalyzePath     = "/v2/sites/" + testAnalyzeSiteID + "/analyze/reports/"
+	testAnalyzeBetaPath = "/beta/sites/" + testAnalyzeSiteID + "/analyze/reports/"
+	testAnalyzeAuth     = "test-token-abc123def456"
+	testAnalyzePageID   = "65f1b2c4a8d3e5f7a9c1b2d3"
+	testAnalyzeWindow   = `"window":{"startTime":"2026-04-01T00:00:00Z","endTime":"2026-04-08T00:00:00Z"}`
 )
 
-// analyzeRecorder records the single request an Analyze test makes.
+// analyzeRecorder records the requests an Analyze test makes; method/path/query hold the last one.
 type analyzeRecorder struct {
 	method string
 	path   string
 	query  url.Values
+	paths  []string
 }
 
 // newAnalyzeServer starts a mock Analyze server replying with a fixed status and body.
 func newAnalyzeServer(t *testing.T, status int, body string) *analyzeRecorder {
 	t.Helper()
+	return newAnalyzeServerFunc(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body))
+	})
+}
+
+// newAnalyzeServerFunc starts a mock Analyze server driven by handler and records every request.
+func newAnalyzeServerFunc(t *testing.T, handler http.HandlerFunc) *analyzeRecorder {
+	t.Helper()
 	t.Setenv("WEBFLOW_API_TOKEN", testAnalyzeAuth)
 	rec := &analyzeRecorder{}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rec.method, rec.path, rec.query = r.Method, r.URL.Path, r.URL.Query()
+		rec.paths = append(rec.paths, r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(status)
-		_, _ = w.Write([]byte(body))
+		handler(w, r)
 	}))
 	t.Cleanup(server.Close)
 	useMockAPI(t, server)
@@ -68,6 +79,9 @@ func assertAnalyzeRequest(t *testing.T, rec *analyzeRecorder, report string, wan
 	}
 	if rec.path != testAnalyzePath+report {
 		t.Errorf("expected path %s, got %s", testAnalyzePath+report, rec.path)
+	}
+	if len(rec.paths) != 1 {
+		t.Errorf("a successful /v2 request must not be retried at /beta, got %v", rec.paths)
 	}
 	for k, v := range want {
 		if got := rec.query.Get(k); got != v {
@@ -209,11 +223,58 @@ func TestGetAnalyticsTraffic_Success(t *testing.T) {
 }
 
 func TestGetAnalyticsTraffic_NotFound(t *testing.T) {
-	notFoundAnalyzeServer(t)
+	rec := notFoundAnalyzeServer(t)
 
 	_, err := invokeTraffic(trafficInput())
 	if !IsNotFound(err) || !strings.Contains(err.Error(), "traffic report") {
 		t.Fatalf("expected wrapped not-found error, got %v", err)
+	}
+	// Both prefixes are tried, /v2 first, before the 404 is reported.
+	want := []string{testAnalyzePath + "traffic", testAnalyzeBetaPath + "traffic"}
+	if len(rec.paths) != 2 || rec.paths[0] != want[0] || rec.paths[1] != want[1] {
+		t.Errorf("expected /v2 then /beta, got %v", rec.paths)
+	}
+}
+
+// TestGetAnalyticsTraffic_BetaFallback verifies the transitional fallback: when the /v2 path
+// answers 404 the same report is fetched once from /beta and its response is used.
+func TestGetAnalyticsTraffic_BetaFallback(t *testing.T) {
+	rec := newAnalyzeServerFunc(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/v2/") {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"Requested resource not found"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"report":"traffic",` + testAnalyzeWindow + `,"metricScope":"session",
+			"data":[{"timestamp":"2026-04-01T00:00:00Z","count":7}]}`))
+	})
+
+	out, err := invokeTraffic(trafficInput())
+	if err != nil {
+		t.Fatalf("Invoke: %v", err)
+	}
+	want := []string{testAnalyzePath + "traffic", testAnalyzeBetaPath + "traffic"}
+	if len(rec.paths) != 2 || rec.paths[0] != want[0] || rec.paths[1] != want[1] {
+		t.Fatalf("expected /v2 then /beta, got %v", rec.paths)
+	}
+	if rec.query.Get("metricScope") != "session" || rec.query.Get("bucketTimeZone") != "UTC" {
+		t.Errorf("the fallback request must carry the same query, got %v", rec.query)
+	}
+	if len(out.Data) != 1 || out.Data[0].Count != 7 {
+		t.Errorf("expected the /beta response to be used, got %+v", out)
+	}
+}
+
+// TestGetAnalyticsTraffic_NoFallbackOnOtherErrors verifies that only a 404 triggers the retry.
+func TestGetAnalyticsTraffic_NoFallbackOnOtherErrors(t *testing.T) {
+	rec := newAnalyzeServer(t, http.StatusForbidden, `{"message":"missing sites:read"}`)
+
+	_, err := invokeTraffic(trafficInput())
+	if err == nil || !strings.Contains(err.Error(), "forbidden") {
+		t.Fatalf("expected forbidden error, got %v", err)
+	}
+	if len(rec.paths) != 1 || rec.paths[0] != testAnalyzePath+"traffic" {
+		t.Errorf("a 403 must not be retried at /beta, got %v", rec.paths)
 	}
 }
 
@@ -456,6 +517,57 @@ func TestGetAnalyticsTopEvents_RejectsReferrer(t *testing.T) {
 	_, err := invokeTopEvents(in)
 	if err == nil || !strings.Contains(err.Error(), "referrer") {
 		t.Fatalf("expected referrer error, got %v", err)
+	}
+}
+
+// TestGetAnalyticsTopEvents_FilterDimensions verifies the narrower top_events filter schema:
+// referrer and the next*/previous* dimensions are rejected while the documented ones pass.
+func TestGetAnalyticsTopEvents_FilterDimensions(t *testing.T) {
+	rec := newAnalyzeServer(t, http.StatusOK, `{"report":"top_events",`+testAnalyzeWindow+`,"limit":25,"data":[]}`)
+
+	for _, dim := range []string{
+		"referrer", "nextCollectionId", "nextItemSlug", "nextPageId",
+		"previousCollectionId", "previousItemSlug", "previousPageId",
+	} {
+		t.Run("rejects "+dim, func(t *testing.T) {
+			in := topEventsInput()
+			in.Filters = map[string]AnalyticsDimensionFilter{dim: {Eq: "x"}}
+			_, err := invokeTopEvents(in)
+			if err == nil || !strings.Contains(err.Error(), dim) || !strings.Contains(err.Error(), "top-events") {
+				t.Fatalf("expected top-events dimension error mentioning %q, got %v", dim, err)
+			}
+		})
+	}
+	if rec.method != "" {
+		t.Fatalf("rejected dimensions must not reach the API, got %s %s", rec.method, rec.path)
+	}
+
+	for _, dim := range analyzeTopEventsFilterDimensionValues {
+		t.Run("accepts "+dim, func(t *testing.T) {
+			in := topEventsInput()
+			in.Filters = map[string]AnalyticsDimensionFilter{dim: {Eq: "x"}}
+			if _, err := invokeTopEvents(in); err != nil {
+				t.Fatalf("dimension %q should be accepted: %v", dim, err)
+			}
+			if got := rec.query.Get("filter[" + dim + "][eq]"); got != "x" {
+				t.Errorf("filter for %q not sent: %v", dim, rec.query)
+			}
+		})
+	}
+}
+
+func TestValidateLimit(t *testing.T) {
+	if err := validateLimit(0, analyzeTopPagesMaxLimit); err != nil {
+		t.Errorf("0 means omitted and must be accepted: %v", err)
+	}
+	if err := validateLimit(analyzeTopPagesMaxLimit, analyzeTopPagesMaxLimit); err != nil {
+		t.Errorf("the maximum must be accepted: %v", err)
+	}
+	for _, bad := range []int{-1, analyzeTopPagesMaxLimit + 1} {
+		err := validateLimit(bad, analyzeTopPagesMaxLimit)
+		if err == nil || !strings.Contains(err.Error(), "leave it at 0") || !strings.Contains(err.Error(), "default of 25") {
+			t.Errorf("limit %d: expected an error explaining that 0 means omitted, got %v", bad, err)
+		}
 	}
 }
 

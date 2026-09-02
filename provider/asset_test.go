@@ -72,7 +72,9 @@ func TestValidateFileName(t *testing.T) {
 		{"with extension", "logo.png", false},
 		{"multiple dots", "my.hero.image.jpg", false},
 		{"spaces", "my logo image.png", false},
+		{"99 characters", strings.Repeat("a", 95) + ".png", false},
 		{"empty", "", true},
+		{"100 characters", strings.Repeat("a", 96) + ".png", true},
 		{"too long", strings.Repeat("a", 256) + ".png", true},
 		{"invalid <", "my<file.png", true},
 		{"invalid :", "my:file.png", true},
@@ -84,6 +86,9 @@ func TestValidateFileName(t *testing.T) {
 				t.Errorf("ValidateFileName() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+	if err := ValidateFileName(strings.Repeat("a", 100)); err == nil || !strings.Contains(err.Error(), "less than 100") {
+		t.Errorf("the length error should cite the documented limit, got %v", err)
 	}
 }
 

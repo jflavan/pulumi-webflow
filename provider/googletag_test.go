@@ -17,6 +17,7 @@ import (
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
 )
 
 const (
@@ -172,6 +173,9 @@ func TestGoogleTagCreate_DryRunSkipsAPIAndValidation(t *testing.T) {
 	if resp.Output.EffectiveOrder != nil {
 		t.Errorf("preview must not fabricate effectiveOrder")
 	}
+	if resp.ID != "" {
+		t.Errorf("preview with unknown siteId/tagId must not fabricate an ID, got %q", resp.ID)
+	}
 }
 
 func TestGoogleTagCreate_ValidationErrors(t *testing.T) {
@@ -237,6 +241,9 @@ func TestGoogleTagRead_ListsAndFindsTag(t *testing.T) {
 	if resp.Inputs.DisplayName != "Renamed in dashboard" {
 		t.Errorf("expected drifted displayName, got %q", resp.Inputs.DisplayName)
 	}
+	if resp.Inputs.TagID != testGoogleTagID {
+		t.Errorf("the user's tagId casing must be kept when Webflow only normalized case, got %q", resp.Inputs.TagID)
+	}
 	if resp.Inputs.Order != nil {
 		t.Errorf("order should stay unset when not configured, got %v", *resp.Inputs.Order)
 	}
@@ -259,6 +266,84 @@ func TestGoogleTagRead_ExplicitOrderDrift(t *testing.T) {
 	}
 	if resp.Inputs.Order == nil || *resp.Inputs.Order != 5 {
 		t.Errorf("expected drifted order 5, got %v", resp.Inputs.Order)
+	}
+}
+
+func TestGoogleTagRead_ImportUsesAPITagID(t *testing.T) {
+	newGoogleTagServer(t, func(w http.ResponseWriter, r *http.Request, body []byte) {
+		_, _ = w.Write([]byte(`{"googleTagIds":[{"displayName":"P","tagId":"G-1A2B3C4D5E","order":0}]}`))
+	})
+
+	// Import: no inputs, and the ID may be spelled differently from the API.
+	resp, err := (&GoogleTag{}).Read(context.Background(), infer.ReadRequest[GoogleTagArgs, GoogleTagState]{
+		ID: GenerateGoogleTagResourceID(testGoogleTagSiteID, "g-1a2b3c4d5e"),
+	})
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if resp.Inputs.TagID != "G-1A2B3C4D5E" || resp.Inputs.DisplayName != "P" || resp.Inputs.SiteID != testGoogleTagSiteID {
+		t.Errorf("import should take the API values, got %+v", resp.Inputs)
+	}
+}
+
+func TestGoogleTagReadDelete_InvalidSiteIDRejectedBeforeAPI(t *testing.T) {
+	newGoogleTagServer(t, noAPICall(t))
+	for _, id := range []string{"nope/google_tags/" + testGoogleTagID, "5F0C8C9E1C9D440000E8D8C3/google_tags/G-1"} {
+		if _, err := (&GoogleTag{}).Read(
+			context.Background(), infer.ReadRequest[GoogleTagArgs, GoogleTagState]{ID: id},
+		); err == nil || !strings.Contains(err.Error(), "siteId") {
+			t.Errorf("Read(%q): expected siteId error, got %v", id, err)
+		}
+		if _, err := (&GoogleTag{}).Delete(
+			context.Background(), infer.DeleteRequest[GoogleTagState]{ID: id},
+		); err == nil || !strings.Contains(err.Error(), "siteId") {
+			t.Errorf("Delete(%q): expected siteId error, got %v", id, err)
+		}
+	}
+}
+
+func TestGoogleTagCheck(t *testing.T) {
+	inputs := property.NewMap(map[string]property.Value{
+		"siteId":      property.New("bad"),
+		"tagId":       property.New("UA-1-1"),
+		"displayName": property.New("  "),
+		"order":       property.New(-1.0),
+	})
+	resp, err := (&GoogleTag{}).Check(context.Background(), infer.CheckRequest{NewInputs: inputs})
+	if err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	got := map[string]string{}
+	for _, f := range resp.Failures {
+		got[f.Property] = f.Reason
+	}
+	if len(got) != 4 || !strings.Contains(got["siteId"], "invalid format") || !strings.Contains(got["tagId"], "UA-") ||
+		!strings.Contains(got["displayName"], "required") || !strings.Contains(got["order"], "negative") {
+		t.Errorf("unexpected failures %+v", resp.Failures)
+	}
+
+	unknown := property.NewMap(map[string]property.Value{
+		"siteId":      property.New(property.Computed),
+		"tagId":       property.New(property.Computed),
+		"displayName": property.New(property.Computed),
+		"order":       property.New(property.Computed),
+	})
+	if resp, err := (&GoogleTag{}).Check(
+		context.Background(), infer.CheckRequest{NewInputs: unknown},
+	); err != nil || len(resp.Failures) != 0 {
+		t.Errorf("unknown inputs must not fail Check: %+v %v", resp.Failures, err)
+	}
+
+	valid := property.NewMap(map[string]property.Value{
+		"siteId":      property.New(testGoogleTagSiteID),
+		"tagId":       property.New(testGoogleTagID),
+		"displayName": property.New("Primary"),
+		"order":       property.New(2.0),
+	})
+	resp, err = (&GoogleTag{}).Check(context.Background(), infer.CheckRequest{NewInputs: valid})
+	if err != nil || len(resp.Failures) != 0 || resp.Inputs.TagID != testGoogleTagID || resp.Inputs.Order == nil ||
+		*resp.Inputs.Order != 2 {
+		t.Errorf("valid inputs must pass Check: %+v %v", resp, err)
 	}
 }
 

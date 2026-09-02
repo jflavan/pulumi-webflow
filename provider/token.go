@@ -53,11 +53,28 @@ type AuthorizedByResponse struct {
 	LastName  string `json:"lastName,omitempty"`
 }
 
+// tokenEndpoint identifies which token endpoint produced an error.
+type tokenEndpoint string
+
+const (
+	tokenEndpointIntrospect   tokenEndpoint = "token/introspect"
+	tokenEndpointAuthorizedBy tokenEndpoint = "token/authorized_by"
+)
+
+// introspectTokenTypeNote explains the most common cause of a 4xx from token/introspect:
+// the endpoint only accepts OAuth access tokens issued to a Data Client App, so a site API
+// token (Site settings > Apps & integrations > API access) is rejected.
+const introspectTokenTypeNote = "Note: GET /v2/token/introspect only accepts Data Client App (OAuth) " +
+	"access tokens, so a site API token receives a 4xx response from it. Configure the provider with an " +
+	"OAuth access token issued to a Data Client App to use getTokenInfo, or keep using the site token " +
+	"for the other resources and functions"
+
 // GetTokenIntrospect retrieves token authorization information (GET /v2/token/introspect).
+// The endpoint requires a Data Client App (OAuth) access token; site API tokens receive 4xx.
 func GetTokenIntrospect(ctx context.Context, client *http.Client) (*TokenIntrospectResponse, error) {
 	var response TokenIntrospectResponse
 	if _, err := doRequest(ctx, client, http.MethodGet, apiURL("/v2/token/introspect"), nil, &response); err != nil {
-		return nil, wrapTokenError(err)
+		return nil, wrapTokenError(err, tokenEndpointIntrospect)
 	}
 	return &response, nil
 }
@@ -66,19 +83,30 @@ func GetTokenIntrospect(ctx context.Context, client *http.Client) (*TokenIntrosp
 func GetAuthorizedBy(ctx context.Context, client *http.Client) (*AuthorizedByResponse, error) {
 	var response AuthorizedByResponse
 	if _, err := doRequest(ctx, client, http.MethodGet, apiURL("/v2/token/authorized_by"), nil, &response); err != nil {
-		return nil, wrapTokenError(err)
+		return nil, wrapTokenError(err, tokenEndpointAuthorizedBy)
 	}
 	return &response, nil
 }
 
 // wrapTokenError swaps the generic APIError message for token-endpoint-specific guidance.
-// The APIError body is already truncated by doRequest.
-func wrapTokenError(err error) error {
+// The APIError body is already truncated by doRequest. For token/introspect, a 4xx other
+// than 429 additionally explains that the endpoint needs a Data Client App (OAuth) token.
+func wrapTokenError(err error, endpoint tokenEndpoint) error {
 	var apiErr *APIError
-	if errors.As(err, &apiErr) {
-		return handleTokenError(apiErr.StatusCode, []byte(apiErr.Body))
+	if !errors.As(err, &apiErr) {
+		return err
 	}
-	return err
+	wrapped := handleTokenError(apiErr.StatusCode, []byte(apiErr.Body))
+	if endpoint == tokenEndpointIntrospect && isClientErrorStatus(apiErr.StatusCode) &&
+		apiErr.StatusCode != http.StatusTooManyRequests {
+		return fmt.Errorf("%w. %s", wrapped, introspectTokenTypeNote)
+	}
+	return wrapped
+}
+
+// isClientErrorStatus reports whether status is a 4xx response.
+func isClientErrorStatus(status int) bool {
+	return status >= http.StatusBadRequest && status < http.StatusInternalServerError
 }
 
 // handleTokenError converts HTTP error responses to actionable error messages for token endpoints.
