@@ -121,9 +121,16 @@ func TestCreateHTTPClient_Success(t *testing.T) {
 		t.Fatal("CreateHTTPClient returned nil client")
 	}
 
-	// Verify timeout is set
-	if client.Timeout == 0 {
-		t.Error("HTTP client timeout not set")
+	// No whole-request timeout: Pulumi's context governs cancellation, and a client-level
+	// timeout would include retry sleeps and misreport long Retry-After waits as timeouts.
+	if client.Timeout != 0 {
+		t.Errorf("HTTP client must not set a whole-request timeout, got %v", client.Timeout)
+	}
+	if sharedBaseTransport().ResponseHeaderTimeout == 0 {
+		t.Error("shared transport must set a response header timeout")
+	}
+	if sharedBaseTransport().Proxy == nil {
+		t.Error("shared transport must honour proxy environment variables")
 	}
 
 	// Verify transport is configured

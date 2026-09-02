@@ -9,6 +9,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	p "github.com/pulumi/pulumi-go-provider"
@@ -50,11 +51,16 @@ func (lc *LogContext) formatMessage(msg string) string {
 		return msg
 	}
 
-	parts := make([]string, 0, len(lc.fields))
-	for k, v := range lc.fields {
+	keys := make([]string, 0, len(lc.fields))
+	for k := range lc.fields {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys) // deterministic output so log lines are stable and greppable
+
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
 		// Apply SafeString to ensure sensitive data is redacted
-		safeValue := SafeString(k, v)
-		parts = append(parts, fmt.Sprintf("%s=%s", k, safeValue))
+		parts = append(parts, fmt.Sprintf("%s=%s", k, SafeString(k, lc.fields[k])))
 	}
 	return fmt.Sprintf("%s [%s]", msg, strings.Join(parts, ", "))
 }
@@ -135,15 +141,25 @@ func SafeString(fieldName string, value interface{}) string {
 
 	str := fmt.Sprintf("%v", value)
 
-	// Check if field name suggests sensitive data
-	lowerName := strings.ToLower(fieldName)
-	if strings.Contains(lowerName, "token") ||
-		strings.Contains(lowerName, "password") ||
-		strings.Contains(lowerName, "secret") ||
-		strings.Contains(lowerName, "key") ||
-		strings.Contains(lowerName, "authorization") {
+	if isSensitiveFieldName(fieldName) {
 		return RedactSensitiveData(str)
 	}
 
 	return str
+}
+
+// isSensitiveFieldName reports whether a log field name suggests credential material.
+// "key" is matched as a suffix (apiKey, secret_key, privatekey) rather than a substring,
+// so ordinary fields such as "keyword" or "hotkey" are not blanked.
+func isSensitiveFieldName(fieldName string) bool {
+	lowerName := strings.ToLower(fieldName)
+	if strings.Contains(lowerName, "token") ||
+		strings.Contains(lowerName, "password") ||
+		strings.Contains(lowerName, "secret") ||
+		strings.Contains(lowerName, "authorization") ||
+		strings.Contains(lowerName, "credential") ||
+		strings.Contains(lowerName, "signature") {
+		return true
+	}
+	return lowerName == "key" || strings.HasSuffix(lowerName, "key") || strings.HasSuffix(lowerName, "_key")
 }

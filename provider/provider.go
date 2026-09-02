@@ -31,11 +31,14 @@ func Provider() p.Provider {
 	prov, err := infer.NewProviderBuilder().
 		WithDisplayName("Webflow (Unofficial)").
 		WithDescription(
-			"Unofficial community-maintained Pulumi provider for managing Webflow sites, "+
-				"redirects, and robots.txt. Not affiliated with Pulumi Corporation or Webflow, Inc.",
+			"Unofficial community-maintained Pulumi provider for managing Webflow sites, pages, CMS collections, "+
+				"assets, redirects, robots.txt, custom code, webhooks, Google Tags, schema markup, and ecommerce settings. "+
+				"Not affiliated with Pulumi Corporation or Webflow, Inc.",
 		).
 		WithHomepage("https://github.com/JDetmar/pulumi-webflow").
 		WithRepository("https://github.com/JDetmar/pulumi-webflow").
+		WithPublisher("Justin Detmar").
+		WithLicense("MIT").
 		WithPluginDownloadURL("github://api.github.com/JDetmar/pulumi-webflow").
 		WithNamespace(Name).
 		WithConfig(infer.Config(&Config{})).

@@ -15,7 +15,6 @@ import (
 	"io"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -193,50 +192,9 @@ func FormatRobotsTxtContent(rules []RobotsTxtRule, sitemap string) string {
 	return builder.String()
 }
 
-// webflowAPIBaseURL is the base URL for Webflow API v2.
-const webflowAPIBaseURL = "https://api.webflow.com"
-
-// maxRetries is the maximum number of retry attempts for rate-limited requests.
+// maxRetries is the number of retries performed by the legacy per-function retry loops.
+// New code relies on the retry transport and doRequest instead.
 const maxRetries = 3
-
-// getRetryAfterDuration parses the Retry-After header and returns the backoff duration.
-// The header can be either a number of seconds or an HTTP date.
-// Returns a default backoff if the header is invalid or not present.
-func getRetryAfterDuration(retryAfter string, defaultBackoff time.Duration) time.Duration {
-	if retryAfter == "" {
-		return defaultBackoff
-	}
-
-	// Try parsing as seconds (most common)
-	if seconds, err := strconv.Atoi(retryAfter); err == nil && seconds > 0 {
-		return time.Duration(seconds) * time.Second
-	}
-
-	// If parsing fails, use the default backoff
-	return defaultBackoff
-}
-
-// handleNetworkError converts network errors to actionable error messages with recovery guidance.
-// Returns different messages for timeout vs connection failures vs generic network issues.
-func handleNetworkError(err error) error {
-	switch {
-	case strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "deadline exceeded"):
-		return fmt.Errorf("network timeout: the request to Webflow API timed out after 30 seconds. "+
-			"This may indicate network connectivity issues or Webflow API is slow to respond. "+
-			"To fix this: 1) Check your internet connection, 2) Verify Webflow API status, "+
-			"3) Wait a few minutes and retry, 4) If the problem persists, contact Webflow support: %w", err)
-	case strings.Contains(err.Error(), "connection refused") || strings.Contains(err.Error(), "no such host"):
-		return fmt.Errorf("connection failed: unable to connect to Webflow API. "+
-			"This may indicate network connectivity issues or DNS problems. "+
-			"To fix this: 1) Check your internet connection, 2) Verify DNS resolution (try: nslookup api.webflow.com), "+
-			"3) Check firewall/proxy settings, 4) If using a VPN, try disconnecting: %w", err)
-	default:
-		return fmt.Errorf("network error: request to Webflow API failed. "+
-			"This may indicate network connectivity issues. "+
-			"To fix this: 1) Check your internet connection, 2) Verify Webflow API is accessible, "+
-			"3) Wait a few minutes and retry, 4) If the problem persists, check network logs: %w", err)
-	}
-}
 
 // GetRobotsTxt retrieves the robots.txt configuration for a Webflow site.
 // It calls GET /v2/sites/{site_id}/robots_txt endpoint.
@@ -499,48 +457,4 @@ func DeleteRobotsTxt(ctx context.Context, client *http.Client, siteID string) er
 	}
 
 	return fmt.Errorf("max retries exceeded: %w", lastErr)
-}
-
-// handleWebflowError converts HTTP error responses to actionable error messages.
-// Error messages follow Pulumi diagnostic formatting and include actionable guidance.
-func handleWebflowError(statusCode int, body []byte) error {
-	switch statusCode {
-	case 400:
-		return fmt.Errorf("bad request: the request to Webflow API was incorrectly formatted. "+
-			"Details: %s. "+
-			"Please check your resource configuration and ensure all required fields are provided with valid values. "+
-			"If the error persists, verify your robots.txt content follows the correct format", string(body))
-	case 401:
-		return errors.New("unauthorized: authentication failed. " +
-			"Your Webflow API token is invalid or has expired. " +
-			"To fix this: 1) Verify your token in the Webflow dashboard (Settings > Integrations > API Access), " +
-			"2) Ensure the token has 'site_config:read' and 'site_config:write' scopes, " +
-			"3) Update your Pulumi config with: 'pulumi config set webflow:apiToken <your-token> --secret'")
-	case 403:
-		return errors.New("forbidden: access denied to this resource. " +
-			"Your API token does not have permission to access this Webflow site. " +
-			"To fix this: 1) Verify the site ID is correct, " +
-			"2) Ensure your API token has 'site_config:read' and 'site_config:write' scopes, " +
-			"3) Check that the site belongs to the Webflow workspace associated with your API token")
-	case 404:
-		return errors.New("not found: the Webflow site or robots.txt configuration does not exist. " +
-			"To fix this: 1) Verify the site ID is correct (24-character lowercase hex string), " +
-			"2) Check that the site exists in your Webflow dashboard, " +
-			"3) Ensure you're using the correct site ID for your Webflow workspace")
-	case 429:
-		return errors.New("rate limited: too many requests to Webflow API. " +
-			"The provider will automatically retry with exponential backoff. " +
-			"If this error persists, please wait a few minutes before trying again. " +
-			"Consider reducing the frequency of operations or contact Webflow support if rate limits are consistently exceeded")
-	case 500:
-		return fmt.Errorf("server error: Webflow API encountered an internal error. "+
-			"Details: %s. "+
-			"This is a temporary issue on Webflow's side. "+
-			"Please wait a few minutes and try again. "+
-			"If the problem persists, check Webflow's status page or contact Webflow support", string(body))
-	default:
-		return fmt.Errorf("unexpected error (HTTP %d): %s. "+
-			"This is an unexpected response from the Webflow API. "+
-			"Please check Webflow's status page or contact Webflow support if this error persists", statusCode, string(body))
-	}
 }
