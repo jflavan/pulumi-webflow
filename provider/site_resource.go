@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
@@ -45,8 +44,10 @@ type SiteArgs struct {
 	// PublishPageID limits the publish to a single page ID when Publish is true.
 	PublishPageID string `pulumi:"publishPageId,optional"`
 	// TemplateName is the template to use for site creation.
-	// Optional - used only during site creation, cannot be changed after creation (IMMUTABLE).
-	// WARNING: Changing this value will DELETE the existing site and CREATE a new one (DESTRUCTIVE).
+	// Optional - used only during site creation; the API never reports it back, so an imported
+	// site has no templateName in state.
+	// WARNING: Changing this value between two non-empty values will DELETE the existing site
+	// and CREATE a new one (DESTRUCTIVE).
 	// Examples: "mast-framework", "blank", or any other Webflow template identifier.
 	TemplateName string `pulumi:"templateName,optional"`
 }
@@ -91,16 +92,24 @@ func (r *SiteResource) Annotate(a infer.Annotator) {
 	a.SetToken("index", "Site")
 	a.Describe(r, "Manages Webflow sites programmatically. "+
 		"This resource allows you to create, configure, and manage Webflow sites through infrastructure code. "+
-		"Create, Read, Update, and Delete operations are fully supported for complete site lifecycle management.")
+		"Create, Read, Update, and Delete operations are fully supported for complete site lifecycle management. "+
+		"\n\n**Required scopes:** creating a site (POST /v2/workspaces/{workspace_id}/sites) requires the "+
+		"`workspace:write` scope and an Enterprise workspace; reading a site requires `sites:read`; "+
+		"updating, publishing and deleting a site require `sites:write`. "+
+		"\n\n**Import:** `pulumi import webflow:index:Site my-site <siteId>`. The Webflow API does not report "+
+		"the template a site was created from, so `templateName` is empty after import and only affects "+
+		"creation; it is compared only when both the program and the state hold a value.")
 }
 
 // Annotate adds descriptions to the SiteArgs fields.
 func (args *SiteArgs) Annotate(a infer.Annotator) {
 	a.Describe(&args.WorkspaceID,
-		"The Webflow workspace ID where the site will be created. "+
-			"Required for site creation (Enterprise workspace required by Webflow API). "+
-			"Example: '5f0c8c9e1c9d440000e8d8c3'. "+
-			"You can find your workspace ID in the Webflow dashboard under Account Settings > Workspace.")
+		"The Webflow workspace ID where the site will be created "+
+			"(24-character lowercase hexadecimal string). "+
+			"Required for site creation (Enterprise workspace and the `workspace:write` scope are required "+
+			"by the Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. "+
+			"You can find your workspace ID in the Webflow dashboard under Account Settings > Workspace. "+
+			"Changing this value replaces the site.")
 
 	a.Describe(&args.DisplayName,
 		"The human-readable name of the site as shown in the Webflow dashboard. "+
@@ -109,7 +118,8 @@ func (args *SiteArgs) Annotate(a infer.Annotator) {
 			"This is the name users will see when managing the site.")
 
 	a.Describe(&args.ParentFolderID,
-		"The folder ID where the site will be organized in the Webflow dashboard. "+
+		"The folder ID where the site will be organized in the Webflow dashboard "+
+			"(24-character lowercase hexadecimal string). "+
 			"Optional - the site will be placed at the workspace root if not specified. "+
 			"Removing this property from your program moves the site back to the workspace root. "+
 			"This is useful for organizing multiple sites into logical groups within your workspace.")
@@ -135,14 +145,18 @@ func (args *SiteArgs) Annotate(a infer.Annotator) {
 			"Custom domain IDs can be read from the Webflow site settings or the sites API.")
 
 	a.Describe(&args.PublishPageID,
-		"When `publish` is true, publish only the page with this ID instead of the whole site. "+
+		"When `publish` is true, publish only the page with this ID "+
+			"(24-character lowercase hexadecimal string) instead of the whole site. "+
 			"Maps to the `pageId` field of the Webflow publish endpoint.")
 
 	a.Describe(&args.TemplateName,
 		"The template to use for site creation. "+
 			"Optional - if not specified, Webflow will create a blank site. "+
-			"**WARNING: This field is IMMUTABLE.** Once set, it cannot be changed. "+
-			"Changing this value will trigger a REPLACE operation, which will: "+
+			"**This value only affects creation.** The Webflow API does not report which template a site "+
+			"was created from, so it cannot be read back: after `pulumi import` the state holds no "+
+			"templateName, and adding one to the program later does not change or replace the site. "+
+			"**WARNING:** changing from one non-empty template to a different non-empty template triggers a "+
+			"REPLACE operation, which will: "+
 			"(1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), "+
 			"(2) CREATE a new site with the new template, "+
 			"(3) REPLACE all dependent resources (redirects, robots.txt, etc.). "+
@@ -194,6 +208,42 @@ func (state *SiteState) Annotate(a infer.Annotator) {
 			"Empty when the provider has not published the site.")
 }
 
+// siteCheckValidators lists the known-value validators applied by Check.
+var siteCheckValidators = []stringValidator{
+	{property: "workspaceId", validate: ValidateWorkspaceID},
+	{property: "displayName", validate: ValidateDisplayName},
+	{property: "parentFolderId", validate: ValidateParentFolderID},
+	{property: "publishPageId", validate: ValidatePublishPageID},
+	{property: "templateName", validate: ValidateTemplateName},
+}
+
+// Check validates the inputs that are already known at preview time. Values that still depend
+// on other resources' outputs are skipped here and validated again in Create or Update.
+func (r *SiteResource) Check(
+	ctx context.Context, req infer.CheckRequest,
+) (infer.CheckResponse[SiteArgs], error) {
+	inputs, failures, err := checkStrings[SiteArgs](ctx, req.NewInputs, siteCheckValidators...)
+	return infer.CheckResponse[SiteArgs]{Inputs: inputs, Failures: failures}, err
+}
+
+// validateSiteArgs validates the fully-resolved inputs shared by Create and Update.
+// workspaceId is validated by Create only: it is not needed to update an existing site.
+func validateSiteArgs(args SiteArgs) error {
+	if err := ValidateDisplayName(args.DisplayName); err != nil {
+		return fmt.Errorf("validation failed for Site resource: %w", err)
+	}
+	if err := ValidateParentFolderID(args.ParentFolderID); err != nil {
+		return fmt.Errorf("validation failed for Site resource: %w", err)
+	}
+	if err := ValidatePublishPageID(args.PublishPageID); err != nil {
+		return fmt.Errorf("validation failed for Site resource: %w", err)
+	}
+	if err := ValidateTemplateName(args.TemplateName); err != nil {
+		return fmt.Errorf("validation failed for Site resource: %w", err)
+	}
+	return nil
+}
+
 // Diff determines what changes need to be made to the site resource.
 // For sites, workspace ID and site ID are immutable (primary key).
 // Other fields (displayName, timeZone, etc.) can be updated.
@@ -217,7 +267,11 @@ func (r *SiteResource) Diff(
 		return diff, nil
 	}
 
-	if req.Inputs.TemplateName != req.State.TemplateName {
+	// templateName only affects creation and cannot be read back from the API, so an imported
+	// site carries no template in state. Compare it only when both sides hold a value; otherwise
+	// `pulumi import` followed by `pulumi up` would replace (permanently delete) the site.
+	if req.Inputs.TemplateName != "" && req.State.TemplateName != "" &&
+		req.Inputs.TemplateName != req.State.TemplateName {
 		diff.HasChanges = true
 		diff.DeleteBeforeReplace = false
 		diff.DetailedDiff["templateName"] = p.PropertyDiff{
@@ -294,16 +348,13 @@ func (r *SiteResource) Create(
 		// Read-only fields will be populated from API response
 	}
 
-	// Preview: return the expected state without validating or calling the API.
-	// Inputs may still be unknown at this point (they arrive zeroed), so validation
-	// is deferred to apply time when every value is resolved.
+	// Preview: return the inputs without an ID and without calling the API. An empty ID tells
+	// the framework to present the ID and every output as unknown to dependent resources.
+	// Inputs may still be unknown at this point (they arrive zeroed), so validation of the
+	// resolved values happens at apply time (Check already validated the known ones).
 	if req.DryRun {
 		log.Debug("Dry run mode - skipping API call")
-		previewID := fmt.Sprintf("preview-%d", time.Now().Unix())
-		return infer.CreateResponse[SiteState]{
-			ID:     previewID,
-			Output: state,
-		}, nil
+		return infer.CreateResponse[SiteState]{Output: state}, nil
 	}
 
 	// Validate inputs BEFORE any API call
@@ -311,9 +362,9 @@ func (r *SiteResource) Create(
 		log.Errorf("Validation failed: %v", err)
 		return infer.CreateResponse[SiteState]{}, fmt.Errorf("validation failed for Site resource: %w", err)
 	}
-	if err := ValidateDisplayName(req.Inputs.DisplayName); err != nil {
+	if err := validateSiteArgs(req.Inputs); err != nil {
 		log.Errorf("Validation failed: %v", err)
-		return infer.CreateResponse[SiteState]{}, fmt.Errorf("validation failed for Site resource: %w", err)
+		return infer.CreateResponse[SiteState]{}, err
 	}
 	// Note: shortName is read-only (auto-generated by Webflow) and is not validated
 
@@ -369,7 +420,8 @@ func (r *SiteResource) Create(
 //
 // Import Support: Accepts siteId directly
 // Example: pulumi import webflow:index:Site my-site "69307a0ff82ccd49b929ed6d"
-// The workspaceId is automatically fetched from the Webflow API.
+// The workspaceId is automatically fetched from the Webflow API. templateName cannot be
+// recovered (the API never reports it) and stays empty after import; Diff tolerates that.
 func (r *SiteResource) Read(
 	ctx context.Context, req infer.ReadRequest[SiteArgs, SiteState],
 ) (infer.ReadResponse[SiteArgs, SiteState], error) {
@@ -456,9 +508,9 @@ func (r *SiteResource) Update(
 		log.Errorf("Validation failed: %v", err)
 		return infer.UpdateResponse[SiteState]{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
-	if err := ValidateDisplayName(req.Inputs.DisplayName); err != nil {
+	if err := validateSiteArgs(req.Inputs); err != nil {
 		log.Errorf("Validation failed: %v", err)
-		return infer.UpdateResponse[SiteState]{}, fmt.Errorf("validation failed for Site resource: %w", err)
+		return infer.UpdateResponse[SiteState]{}, err
 	}
 
 	client, err := GetHTTPClient(ctx, currentProviderVersion())

@@ -16,6 +16,7 @@ import (
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
 )
 
 const (
@@ -176,7 +177,8 @@ func TestValidateSiteID(t *testing.T) {
 	}{
 		{"valid 24-char hex", testSiteID, false},
 		{"valid all lowercase", "abcdef0123456789abcdef01", false},
-		{"preview placeholder", "preview-1234567890", false},
+		// No resource returns placeholder IDs any more; a literal "preview-x" is not a site ID.
+		{"preview placeholder is rejected", "preview-1234567890", true},
 		{"too short", "5f0c8c9e1c9d44", true},
 		{"too long", testSiteID + "abc", true},
 		{"invalid characters", "5f0c8c9e1c9d440000e8d8XY", true},
@@ -408,27 +410,81 @@ func TestRobotsTxt_Create_DryRun_SkipsValidationAndAPI(t *testing.T) {
 	resource := &RobotsTxt{}
 
 	// siteId arrives zeroed during preview when it is an unknown output of another resource
-	resp, err := resource.Create(context.Background(), infer.CreateRequest[RobotsTxtArgs]{
-		Inputs: RobotsTxtArgs{SiteID: "", Content: "User-agent: *\nAllow: /"},
-		DryRun: true,
-	})
-	if err != nil {
-		t.Fatalf("Create (DryRun) failed: %v", err)
+	for _, siteID := range []string{"", testSiteID} {
+		resp, err := resource.Create(context.Background(), infer.CreateRequest[RobotsTxtArgs]{
+			Inputs: RobotsTxtArgs{SiteID: siteID, Content: "User-agent: *\nAllow: /"},
+			DryRun: true,
+		})
+		if err != nil {
+			t.Fatalf("Create (DryRun) failed: %v", err)
+		}
+		if called {
+			t.Error("API must not be called in DryRun mode")
+		}
+		// An empty ID makes the framework present the ID and all outputs as unknown.
+		if resp.ID != "" {
+			t.Errorf("preview must not return an ID, got %q", resp.ID)
+		}
+		if resp.Output.Content != "User-agent: *\nAllow: /" || resp.Output.SiteID != siteID {
+			t.Errorf("inputs not preserved in preview output: %+v", resp.Output)
+		}
+		if resp.Output.LastModified != "" {
+			t.Errorf("preview must not fabricate lastModified, got %q", resp.Output.LastModified)
+		}
 	}
-	if called {
-		t.Error("API must not be called in DryRun mode")
-	}
-	if resp.ID != "/robots.txt" || resp.Output.Content != "User-agent: *\nAllow: /" || resp.Output.LastModified == "" {
-		t.Errorf("unexpected preview response: id=%q output=%+v", resp.ID, resp.Output)
-	}
+}
 
-	resp, err = resource.Create(context.Background(), infer.CreateRequest[RobotsTxtArgs]{
-		Inputs: RobotsTxtArgs{SiteID: testSiteID, Content: "User-agent: *\nAllow: /"},
-		DryRun: true,
+func TestRobotsTxt_Check(t *testing.T) {
+	resource := &RobotsTxt{}
+
+	t.Run("known invalid values fail", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"siteId":  property.New("preview-123"),
+				"content": property.New(""),
+			}),
+		})
+		if err != nil {
+			t.Fatalf("Check: %v", err)
+		}
+		if len(resp.Failures) != 2 {
+			t.Fatalf("expected siteId and content failures, got %+v", resp.Failures)
+		}
+		got := map[string]string{}
+		for _, f := range resp.Failures {
+			got[f.Property] = f.Reason
+		}
+		if !containsStr(got["siteId"], "24-character") || !containsStr(got["content"], "required") {
+			t.Errorf("unexpected failure reasons: %v", got)
+		}
 	})
-	if err != nil || resp.ID != testRobotsResourceID {
-		t.Errorf("expected preview ID %q, got %q (err %v)", testRobotsResourceID, resp.ID, err)
-	}
+
+	t.Run("unknown values are skipped", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"siteId":  property.New(property.Computed),
+				"content": property.New(property.Computed),
+			}),
+		})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Errorf("unknown inputs must not fail Check: failures=%+v err=%v", resp.Failures, err)
+		}
+	})
+
+	t.Run("valid values pass", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"siteId":  property.New(testSiteID),
+				"content": property.New(testRobotsContent),
+			}),
+		})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Errorf("valid inputs must pass Check: failures=%+v err=%v", resp.Failures, err)
+		}
+		if resp.Inputs.SiteID != testSiteID || resp.Inputs.Content != testRobotsContent {
+			t.Errorf("inputs not decoded: %+v", resp.Inputs)
+		}
+	})
 }
 
 func TestRobotsTxt_Create_ValidationErrors(t *testing.T) {
@@ -762,8 +818,11 @@ func TestRobotsTxt_Update_DryRun(t *testing.T) {
 	if called {
 		t.Error("API must not be called in DryRun mode")
 	}
-	if resp.Output.Content != "User-agent: *\nAllow: /\nDisallow: /new/" || resp.Output.LastModified == "" {
+	if resp.Output.Content != "User-agent: *\nAllow: /\nDisallow: /new/" {
 		t.Errorf("unexpected preview state: %+v", resp.Output)
+	}
+	if resp.Output.LastModified != "" {
+		t.Errorf("preview must not fabricate lastModified, got %q", resp.Output.LastModified)
 	}
 }
 
