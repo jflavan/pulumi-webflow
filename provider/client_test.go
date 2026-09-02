@@ -181,11 +181,13 @@ func TestDoRequest_SendsHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 	client := useMockAPI(t, server)
-	if _, err := doRequest(context.Background(), client, http.MethodPut, server.URL+"/v2/x", map[string]int{"a": 1}, nil); err != nil {
+	_, err := doRequest(context.Background(), client, http.MethodPut, server.URL+"/v2/x", map[string]int{"a": 1}, nil)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Get("Content-Type") != "application/json" || got.Get("Accept-Version") != "2.0.0" ||
-		!strings.HasPrefix(got.Get("Authorization"), "Bearer ") || !strings.HasPrefix(got.Get("User-Agent"), "pulumi-webflow/") {
+		!strings.HasPrefix(got.Get("Authorization"), "Bearer ") ||
+		!strings.HasPrefix(got.Get("User-Agent"), "pulumi-webflow/") {
 		t.Errorf("missing headers: %v", got)
 	}
 }

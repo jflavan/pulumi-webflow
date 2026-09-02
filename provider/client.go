@@ -131,7 +131,9 @@ func handleNetworkError(err error) error {
 	switch {
 	case errors.Is(err, context.Canceled):
 		return fmt.Errorf("request cancelled: %w", err)
-	case errors.Is(err, context.DeadlineExceeded) || strings.Contains(msg, "timeout") || strings.Contains(msg, "deadline exceeded"):
+	case errors.Is(err, context.DeadlineExceeded) ||
+		strings.Contains(msg, "timeout") ||
+		strings.Contains(msg, "deadline exceeded"):
 		return fmt.Errorf("network timeout: the request to the Webflow API timed out. "+
 			"This may indicate connectivity problems or that Webflow is slow to respond. "+
 			"To fix this: 1) Check your internet connection, 2) Check https://status.webflow.com, "+
