@@ -92,6 +92,27 @@ func (state *PageSchemaMarkupState) Annotate(a infer.Annotator) {
 			"the primary locale's markup instead. Always false for the primary locale. Read-only.")
 }
 
+var _ infer.CustomCheck[PageSchemaMarkupArgs] = (*PageSchemaMarkup)(nil)
+
+// validateSchemaMarkupInput checks that a known schemaMarkup parses as a single JSON object.
+func validateSchemaMarkupInput(markup string) error {
+	_, err := NormalizeSchemaMarkup(markup)
+	return err
+}
+
+// Check validates the known inputs at preview time: pageId and localeId formats and that
+// schemaMarkup parses as a JSON object. Unknown values are validated again at apply time.
+func (r *PageSchemaMarkup) Check(
+	ctx context.Context, req infer.CheckRequest,
+) (infer.CheckResponse[PageSchemaMarkupArgs], error) {
+	inputs, failures, err := checkStrings[PageSchemaMarkupArgs](ctx, req.NewInputs,
+		stringValidator{property: "pageId", validate: ValidatePageID},
+		stringValidator{property: "localeId", validate: ValidateLocaleID},
+		stringValidator{property: "schemaMarkup", validate: validateSchemaMarkupInput},
+	)
+	return infer.CheckResponse[PageSchemaMarkupArgs]{Inputs: inputs, Failures: failures}, err
+}
+
 // validatePageSchemaMarkupArgs validates all inputs and returns the canonical markup.
 func validatePageSchemaMarkupArgs(args PageSchemaMarkupArgs) (string, error) {
 	if err := ValidatePageID(args.PageID); err != nil {
@@ -144,6 +165,22 @@ func (r *PageSchemaMarkup) Diff(
 	return diff, nil
 }
 
+// parsePageSchemaMarkupResourceID extracts and validates the page and locale IDs of a resource
+// ID before any URL is built from them.
+func parsePageSchemaMarkupResourceID(resourceID string) (pageID, localeID string, err error) {
+	pageID, localeID, err = ExtractIDsFromPageSchemaMarkupResourceID(resourceID)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid resource ID: %w", err)
+	}
+	if err := ValidatePageID(pageID); err != nil {
+		return "", "", fmt.Errorf("invalid resource ID: %w", err)
+	}
+	if err := ValidateLocaleID(localeID); err != nil {
+		return "", "", fmt.Errorf("invalid resource ID: %w", err)
+	}
+	return pageID, localeID, nil
+}
+
 // stateFromSchemaMarkupResponse merges an API response into the resource state.
 func stateFromSchemaMarkupResponse(args PageSchemaMarkupArgs, resp *PageSchemaMarkupResponse) PageSchemaMarkupState {
 	return PageSchemaMarkupState{
@@ -182,8 +219,12 @@ func (r *PageSchemaMarkup) Create(
 	id := GeneratePageSchemaMarkupResourceID(req.Inputs.PageID, req.Inputs.LocaleID)
 
 	// During preview, return the expected state without making API calls.
-	// Validation is deferred to apply-time because inputs may contain Pulumi unknowns.
+	// Validation is deferred to apply-time because inputs may contain Pulumi unknowns, and no
+	// ID is reported while pageId is unknown.
 	if req.DryRun {
+		if req.Inputs.PageID == "" {
+			id = ""
+		}
 		return infer.CreateResponse[PageSchemaMarkupState]{
 			ID:     id,
 			Output: PageSchemaMarkupState{PageSchemaMarkupArgs: req.Inputs},
@@ -203,9 +244,9 @@ func (r *PageSchemaMarkup) Create(
 func (r *PageSchemaMarkup) Read(
 	ctx context.Context, req infer.ReadRequest[PageSchemaMarkupArgs, PageSchemaMarkupState],
 ) (infer.ReadResponse[PageSchemaMarkupArgs, PageSchemaMarkupState], error) {
-	pageID, localeID, err := ExtractIDsFromPageSchemaMarkupResourceID(req.ID)
+	pageID, localeID, err := parsePageSchemaMarkupResourceID(req.ID)
 	if err != nil {
-		return infer.ReadResponse[PageSchemaMarkupArgs, PageSchemaMarkupState]{}, fmt.Errorf("invalid resource ID: %w", err)
+		return infer.ReadResponse[PageSchemaMarkupArgs, PageSchemaMarkupState]{}, err
 	}
 
 	client, err := GetHTTPClient(ctx, currentProviderVersion())
@@ -270,9 +311,9 @@ func (r *PageSchemaMarkup) Update(
 func (r *PageSchemaMarkup) Delete(
 	ctx context.Context, req infer.DeleteRequest[PageSchemaMarkupState],
 ) (infer.DeleteResponse, error) {
-	pageID, localeID, err := ExtractIDsFromPageSchemaMarkupResourceID(req.ID)
+	pageID, localeID, err := parsePageSchemaMarkupResourceID(req.ID)
 	if err != nil {
-		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
+		return infer.DeleteResponse{}, err
 	}
 
 	client, err := GetHTTPClient(ctx, currentProviderVersion())

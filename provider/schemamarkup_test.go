@@ -17,6 +17,7 @@ import (
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
 )
 
 const (
@@ -177,8 +178,81 @@ func TestPageSchemaMarkupCreate_DryRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create dry-run: %v", err)
 	}
-	if resp.Output.SiteID != "" || resp.Output.LastUpdated != "" {
-		t.Errorf("preview must not fabricate outputs: %+v", resp.Output)
+	if resp.Output.SiteID != "" || resp.Output.LastUpdated != "" || resp.ID != "" {
+		t.Errorf("preview must not fabricate outputs or an ID: id=%q %+v", resp.ID, resp.Output)
+	}
+	known, err := (&PageSchemaMarkup{}).Create(context.Background(), infer.CreateRequest[PageSchemaMarkupArgs]{
+		Inputs: PageSchemaMarkupArgs{PageID: testSchemaPageID, SchemaMarkup: "{}"}, DryRun: true,
+	})
+	if err != nil || known.ID != testSchemaPageID+"/schema-markup" {
+		t.Errorf("preview with a known pageId reports the deterministic ID, got %q %v", known.ID, err)
+	}
+}
+
+func TestPageSchemaMarkupCheck(t *testing.T) {
+	bad := property.NewMap(map[string]property.Value{
+		"pageId":       property.New("x"),
+		"localeId":     property.New("en"),
+		"schemaMarkup": property.New(`[{"@type":"Thing"}]`),
+	})
+	resp, err := (&PageSchemaMarkup{}).Check(context.Background(), infer.CheckRequest{NewInputs: bad})
+	if err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	got := map[string]string{}
+	for _, f := range resp.Failures {
+		got[f.Property] = f.Reason
+	}
+	if len(got) != 3 || !strings.Contains(got["pageId"], "invalid format") ||
+		!strings.Contains(got["localeId"], "invalid format") || !strings.Contains(got["schemaMarkup"], "JSON object") {
+		t.Errorf("unexpected failures %+v", resp.Failures)
+	}
+	invalidJSON := property.NewMap(map[string]property.Value{
+		"pageId":       property.New(testSchemaPageID),
+		"schemaMarkup": property.New("{not json"),
+	})
+	resp, err = (&PageSchemaMarkup{}).Check(context.Background(), infer.CheckRequest{NewInputs: invalidJSON})
+	if err != nil || len(resp.Failures) != 1 || resp.Failures[0].Property != "schemaMarkup" ||
+		!strings.Contains(resp.Failures[0].Reason, "not valid JSON") {
+		t.Errorf("invalid JSON must fail on schemaMarkup: %+v %v", resp.Failures, err)
+	}
+
+	unknown := property.NewMap(map[string]property.Value{
+		"pageId":       property.New(property.Computed),
+		"localeId":     property.New(property.Computed),
+		"schemaMarkup": property.New(property.Computed),
+	})
+	if resp, err := (&PageSchemaMarkup{}).Check(
+		context.Background(), infer.CheckRequest{NewInputs: unknown},
+	); err != nil || len(resp.Failures) != 0 {
+		t.Errorf("unknown inputs must not fail Check: %+v %v", resp.Failures, err)
+	}
+
+	valid := property.NewMap(map[string]property.Value{
+		"pageId":       property.New(testSchemaPageID),
+		"localeId":     property.New(testSchemaLocaleID),
+		"schemaMarkup": property.New(testSchemaPretty),
+	})
+	resp, err = (&PageSchemaMarkup{}).Check(context.Background(), infer.CheckRequest{NewInputs: valid})
+	if err != nil || len(resp.Failures) != 0 || resp.Inputs.SchemaMarkup != testSchemaPretty {
+		t.Errorf("valid inputs must pass Check and keep the user's formatting: %+v %v", resp, err)
+	}
+}
+
+func TestPageSchemaMarkupReadDelete_InvalidIDsRejectedBeforeAPI(t *testing.T) {
+	newSchemaServer(t, func(w http.ResponseWriter, r *http.Request, body []byte) {
+		t.Errorf("no API call expected, got %s %s", r.Method, r.URL.Path)
+	})
+	for _, id := range []string{"bad/schema-markup", testSchemaPageID + "/schema-markup/en", ""} {
+		if _, err := (&PageSchemaMarkup{}).Read(context.Background(), schemaReadReq{ID: id}); err == nil ||
+			!strings.Contains(err.Error(), "invalid resource ID") {
+			t.Errorf("Read(%q): expected invalid resource ID error, got %v", id, err)
+		}
+		if _, err := (&PageSchemaMarkup{}).Delete(
+			context.Background(), infer.DeleteRequest[PageSchemaMarkupState]{ID: id},
+		); err == nil || !strings.Contains(err.Error(), "invalid resource ID") {
+			t.Errorf("Delete(%q): expected invalid resource ID error, got %v", id, err)
+		}
 	}
 }
 

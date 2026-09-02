@@ -57,27 +57,52 @@ func TestEcommerceSettingsResourceIDRoundTrip(t *testing.T) {
 	}
 }
 
-// ecomServer answers GET /v2/sites/{id}/ecommerce/settings with the given status.
+// testEcomConflictGeneric marks a 409 whose body is unrelated to ecommerce being disabled.
+const testEcomConflictGeneric = 4090
+
+// ecomServer answers GET /v2/sites/{id}/ecommerce/settings with the given status. The pseudo
+// status testEcomConflictGeneric answers 409 with a body that does not mention ecommerce.
 func ecomServer(t *testing.T, status *int) *httptest.Server {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/v2/sites/"+testEcomSiteID+"/ecommerce/settings" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
-		w.WriteHeader(*status)
 		switch *status {
 		case http.StatusOK:
+			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(EcommerceSettingsResponse{
 				SiteID: testEcomSiteID, CreatedOn: "2024-01-15T10:30:00Z", DefaultCurrency: "EUR",
 			})
 		case http.StatusConflict:
+			w.WriteHeader(http.StatusConflict)
 			_, _ = w.Write([]byte(`{"code":"ecommerce_not_enabled","message":"Site does not have ecommerce enabled"}`))
+		case testEcomConflictGeneric:
+			w.WriteHeader(http.StatusConflict)
+			_, _ = w.Write([]byte(`{"code":"conflict","message":"Site is being migrated"}`))
 		default:
+			w.WriteHeader(*status)
 			_, _ = w.Write([]byte(`{"message":"not found"}`))
 		}
 	}))
 	t.Cleanup(server.Close)
 	return server
+}
+
+func TestIsEcommerceNotEnabledBody(t *testing.T) {
+	for _, body := range []string{
+		`{"code":"ecommerce_not_enabled"}`, `{"message":"Site does not have ecommerce enabled"}`,
+		`{"message":"Feature not enabled"}`, "ECOMMERCE disabled",
+	} {
+		if !isEcommerceNotEnabledBody(body) {
+			t.Errorf("%q should be recognised as ecommerce-not-enabled", body)
+		}
+	}
+	for _, body := range []string{"", `{"message":"Site is being migrated"}`, `{"code":"conflict"}`} {
+		if isEcommerceNotEnabledBody(body) {
+			t.Errorf("%q must not be recognised as ecommerce-not-enabled", body)
+		}
+	}
 }
 
 func TestGetEcommerceSettings(t *testing.T) {
@@ -105,6 +130,15 @@ func TestGetEcommerceSettings(t *testing.T) {
 	if !strings.Contains(err.Error(), "ecommerce not enabled") || !strings.Contains(err.Error(), "Webflow dashboard") ||
 		!strings.Contains(err.Error(), "ecommerce_not_enabled") {
 		t.Errorf("error should be actionable and include details: %v", err)
+	}
+
+	// A 409 whose body does not describe ecommerce being disabled stays a generic conflict.
+	status = testEcomConflictGeneric
+	_, err = GetEcommerceSettings(context.Background(), client, testEcomSiteID)
+	var conflict *APIError
+	if IsEcommerceNotEnabled(err) || !errors.As(err, &conflict) || conflict.StatusCode != http.StatusConflict ||
+		!strings.Contains(err.Error(), "conflict") || !strings.Contains(err.Error(), "being migrated") {
+		t.Errorf("unrelated 409 must be a generic APIError conflict, got %v", err)
 	}
 
 	for _, s := range []int{
@@ -152,6 +186,13 @@ func TestEcommerceSettingsCreate(t *testing.T) {
 	}
 	if dry.Output.DefaultCurrency != "" || dry.Output.CreatedOn != "" {
 		t.Errorf("dry run must not fabricate a currency: %+v", dry.Output)
+	}
+	unknown, err := (&EcommerceSettings{}).Create(
+		context.Background(),
+		infer.CreateRequest[EcommerceSettingsArgs]{Inputs: EcommerceSettingsArgs{}, DryRun: true},
+	)
+	if err != nil || unknown.ID != "" {
+		t.Errorf("dry run with an unknown siteId must not fabricate an ID: %q %v", unknown.ID, err)
 	}
 
 	resp, err := (&EcommerceSettings{}).Create(
@@ -249,6 +290,9 @@ func TestEcommerceSettingsDiffUpdateDelete(t *testing.T) {
 	)
 	if err != nil || !resp.HasChanges || resp.DetailedDiff["siteId"].Kind != p.UpdateReplace {
 		t.Errorf("expected siteId replace, got %+v %v", resp, err)
+	}
+	if resp.DeleteBeforeReplace {
+		t.Error("a state-only resource must not request delete-before-replace")
 	}
 
 	up, err := (&EcommerceSettings{}).Update(

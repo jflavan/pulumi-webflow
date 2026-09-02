@@ -16,8 +16,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/blang/semver"
+
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
+	"github.com/pulumi/pulumi-go-provider/integration"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/tokens"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
 )
 
 const (
@@ -43,6 +49,8 @@ type assetMock struct {
 	uploadStatus  int
 	createStatus  int
 	uploadDetails map[string]string
+	// onUpload, when set, runs when the S3 upload request arrives, before it is answered.
+	onUpload func()
 }
 
 func newAssetMock(t *testing.T) *assetMock {
@@ -70,6 +78,9 @@ func newAssetMock(t *testing.T) *assetMock {
 			})
 		case r.Method == http.MethodPost && r.URL.Path == "/s3-upload":
 			m.uploadCalls++
+			if m.onUpload != nil {
+				m.onUpload()
+			}
 			m.uploadAuth = r.Header.Get("Authorization")
 			m.uploadFields, m.uploadOrder, m.uploadFile, m.uploadData = readMultipartParts(t, r)
 			w.WriteHeader(m.uploadStatus)
@@ -213,6 +224,31 @@ func TestAssetCreate_UploadFailureCleansUpMetadata(t *testing.T) {
 	}
 }
 
+// TestAssetCreate_CancelledApplyStillCleansUp verifies that when the apply context is cancelled
+// while the file is being uploaded (the metadata already exists), the orphaned metadata is
+// still deleted on a context detached from the cancellation.
+func TestAssetCreate_CancelledApplyStillCleansUp(t *testing.T) {
+	m := newAssetMock(t)
+	path := writeTempAsset(t, testAssetContent)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	m.uploadStatus = http.StatusForbidden
+	m.onUpload = cancel // the apply is cancelled mid-upload
+
+	_, err := (&Asset{}).Create(ctx, infer.CreateRequest[AssetArgs]{
+		Inputs: AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png", FileSource: path},
+	})
+	if err == nil || !strings.Contains(err.Error(), "failed to upload asset file") {
+		t.Fatalf("expected the upload to fail, got %v", err)
+	}
+	if ctx.Err() == nil {
+		t.Fatal("test setup: the apply context should have been cancelled during the upload")
+	}
+	if m.deleteCalls != 1 {
+		t.Errorf("orphaned metadata must be deleted despite the cancelled apply, delete calls = %d", m.deleteCalls)
+	}
+}
+
 func TestAssetCreate_APIError(t *testing.T) {
 	m := newAssetMock(t)
 	m.createStatus = http.StatusBadRequest
@@ -343,6 +379,133 @@ func TestAssetRead_Success(t *testing.T) {
 	}
 	if resp.Inputs.FileName != "logo.png" {
 		t.Errorf("inputs = %+v", resp.Inputs)
+	}
+}
+
+// TestAssetRead_ImportPopulatesFromAPI verifies that an import (empty state) captures the
+// identity fields from the API and leaves fileSource/fileHash empty for Diff to adopt later.
+func TestAssetRead_ImportPopulatesFromAPI(t *testing.T) {
+	t.Setenv("WEBFLOW_API_TOKEN", testAssetToken)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(AssetResponse{
+			ID: testAssetID, ContentType: "image/png", Size: 42, SiteID: testAssetSiteID,
+			HostedURL: "https://cdn.prod.website-files.com/x/logo.png", OriginalFileName: "logo.png",
+			FolderID: testAssetFolder,
+		})
+	}))
+	defer server.Close()
+	useMockAPI(t, server)
+
+	id := GenerateAssetResourceID(testAssetSiteID, testAssetID)
+	resp, err := (&Asset{}).Read(context.Background(), infer.ReadRequest[AssetArgs, AssetState]{ID: id})
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	in := resp.Inputs
+	if in.SiteID != testAssetSiteID || in.FileName != "logo.png" || in.ParentFolder != testAssetFolder {
+		t.Errorf("import should capture identity fields from the API: %+v", in)
+	}
+	if in.FileSource != "" || in.FileHash != "" {
+		t.Errorf("import cannot know fileSource/fileHash, got %+v", in)
+	}
+	if resp.State.AssetID != testAssetID || resp.State.FolderID != testAssetFolder || resp.State.Size != 42 {
+		t.Errorf("unexpected state %+v", resp.State)
+	}
+}
+
+func TestAssetCheck(t *testing.T) {
+	inputs := property.NewMap(map[string]property.Value{
+		"siteId":       property.New("bad"),
+		"fileName":     property.New(strings.Repeat("a", 100)),
+		"fileSource":   property.New("  "),
+		"parentFolder": property.New("nope"),
+		"fileHash":     property.New("xyz"),
+	})
+	resp, err := (&Asset{}).Check(context.Background(), infer.CheckRequest{NewInputs: inputs})
+	if err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	got := map[string]bool{}
+	for _, f := range resp.Failures {
+		got[f.Property] = true
+	}
+	for _, want := range []string{"siteId", "fileName", "fileSource", "parentFolder", "fileHash"} {
+		if !got[want] {
+			t.Errorf("expected a failure on %q, got %+v", want, resp.Failures)
+		}
+	}
+	if len(resp.Failures) != 5 {
+		t.Errorf("expected 5 failures, got %+v", resp.Failures)
+	}
+
+	unknown := property.NewMap(map[string]property.Value{
+		"siteId":       property.New(property.Computed),
+		"fileName":     property.New(property.Computed),
+		"fileSource":   property.New(property.Computed),
+		"parentFolder": property.New(property.Computed),
+	})
+	resp, err = (&Asset{}).Check(context.Background(), infer.CheckRequest{NewInputs: unknown})
+	if err != nil || len(resp.Failures) != 0 {
+		t.Errorf("unknown inputs must not fail Check: %+v %v", resp.Failures, err)
+	}
+
+	valid := property.NewMap(map[string]property.Value{
+		"siteId":       property.New(testAssetSiteID),
+		"fileName":     property.New("logo.png"),
+		"fileSource":   property.New("./logo.png"),
+		"parentFolder": property.New(testAssetFolder),
+	})
+	resp, err = (&Asset{}).Check(context.Background(), infer.CheckRequest{NewInputs: valid})
+	if err != nil || len(resp.Failures) != 0 {
+		t.Errorf("valid inputs must pass Check: %+v %v", resp.Failures, err)
+	}
+	if resp.Inputs.SiteID != testAssetSiteID || resp.Inputs.FileSource != "./logo.png" {
+		t.Errorf("inputs not decoded: %+v", resp.Inputs)
+	}
+}
+
+// TestAssetCreate_UploadOutputsAreSecret drives a real Create through the infer server and
+// checks that the presigned upload URL and form fields come back marked secret, regardless of
+// how the calling SDK flags them.
+func TestAssetCreate_UploadOutputsAreSecret(t *testing.T) {
+	newAssetMock(t)
+	path := writeTempAsset(t, testAssetContent)
+
+	srv, err := integration.NewServer(context.Background(), Name, semver.MustParse("0.0.1"),
+		integration.WithProvider(Provider()))
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	if err := srv.Configure(p.ConfigureRequest{Args: property.NewMap(map[string]property.Value{
+		"apiToken": property.New(testAssetToken),
+	})}); err != nil {
+		t.Fatalf("Configure: %v", err)
+	}
+	resp, err := srv.Create(p.CreateRequest{
+		Urn: resource.NewURN("stack", "proj", "", tokens.Type(Name+":index:Asset"), "logo"),
+		Properties: property.NewMap(map[string]property.Value{
+			"siteId":     property.New(testAssetSiteID),
+			"fileName":   property.New("logo.png"),
+			"fileSource": property.New(path),
+		}),
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	for _, key := range []string{"uploadUrl", "uploadDetails"} {
+		v, ok := resp.Properties.GetOk(key)
+		if !ok {
+			t.Errorf("output %q missing: %v", key, resp.Properties)
+			continue
+		}
+		if !v.Secret() {
+			t.Errorf("output %q must be secret, got %#v", key, v)
+		}
+	}
+	for _, key := range []string{"hostedUrl", "assetId", "fileHash"} {
+		if v, ok := resp.Properties.GetOk(key); !ok || v.Secret() {
+			t.Errorf("output %q should be present and public, got %#v (ok=%v)", key, v, ok)
+		}
 	}
 }
 
@@ -484,15 +647,60 @@ func TestAssetDiff(t *testing.T) {
 		}
 	})
 
-	t.Run("unreadable local file is an error", func(t *testing.T) {
+	t.Run("missing local file skips the content comparison", func(t *testing.T) {
 		in := base
 		in.FileSource = filepath.Join(t.TempDir(), "missing.png")
 		st := state
 		st.FileSource = in.FileSource
+		resp, err := (&Asset{}).Diff(
+			context.Background(), infer.DiffRequest[AssetArgs, AssetState]{Inputs: in, State: st},
+		)
+		if err != nil {
+			t.Fatalf("a missing file must not fail the preview: %v", err)
+		}
+		if resp.HasChanges {
+			t.Errorf("a missing file must not be reported as a change: %+v", resp)
+		}
+	})
+
+	t.Run("unreadable local file is still an error", func(t *testing.T) {
+		in := base
+		in.FileSource = t.TempDir() // a directory exists but cannot be hashed
+		st := state
+		st.FileSource = in.FileSource
 		if _, err := (&Asset{}).Diff(
 			context.Background(), infer.DiffRequest[AssetArgs, AssetState]{Inputs: in, State: st},
-		); err == nil {
-			t.Error("expected error for unreadable fileSource")
+		); err == nil || !strings.Contains(err.Error(), "directory") {
+			t.Errorf("expected directory error, got %v", err)
+		}
+	})
+
+	t.Run("imported state without fileSource and fileHash is not a change", func(t *testing.T) {
+		// After 'pulumi import' the state carries only what GET /v2/assets returns.
+		imported := AssetState{
+			AssetArgs: AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png", ParentFolder: testAssetFolder},
+			AssetID:   testAssetID,
+		}
+		remote := base
+		remote.FileSource = "https://example.invalid/logo.png"
+		explicit := base
+		explicit.FileHash = "e9800998ecf8427ed41d8cd98f00b204"
+		for name, in := range map[string]AssetArgs{"local source": base, "remote source": remote, "explicit hash": explicit} {
+			resp, err := (&Asset{}).Diff(
+				context.Background(), infer.DiffRequest[AssetArgs, AssetState]{Inputs: in, State: imported},
+			)
+			if err != nil || resp.HasChanges {
+				t.Errorf("%s: imported asset must not be replaced: %+v %v", name, resp, err)
+			}
+		}
+		// Identity fields are still compared after an import.
+		other := base
+		other.FileName = "other.png"
+		resp, err := (&Asset{}).Diff(
+			context.Background(), infer.DiffRequest[AssetArgs, AssetState]{Inputs: other, State: imported},
+		)
+		if err != nil || !resp.HasChanges || resp.DetailedDiff["fileName"].Kind != p.UpdateReplace {
+			t.Errorf("fileName change after import must still replace: %+v %v", resp, err)
 		}
 	})
 

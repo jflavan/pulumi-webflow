@@ -99,16 +99,25 @@ func handleEcommerceNotEnabledError(body []byte) error {
 	return &EcommerceNotEnabledError{Details: TruncateForLogging(string(body), maxErrorBodyLength)}
 }
 
+// isEcommerceNotEnabledBody reports whether a 409 response body describes the documented
+// "ecommerce not enabled" conflict (Webflow answers with code/message text such as
+// "ecommerce_not_enabled" / "Site does not have ecommerce enabled").
+func isEcommerceNotEnabledBody(body string) bool {
+	lower := strings.ToLower(body)
+	return strings.Contains(lower, "ecommerce") || strings.Contains(lower, "not enabled")
+}
+
 // GetEcommerceSettings retrieves the ecommerce settings for a Webflow site.
 // It calls GET /v2/sites/{site_id}/ecommerce/settings. Requires the ecommerce:read scope.
-// A 409 Conflict (ecommerce not enabled) is returned as *EcommerceNotEnabledError; other
-// non-success responses are *APIError.
+// A 409 Conflict whose body says ecommerce is not enabled is returned as
+// *EcommerceNotEnabledError; every other non-success response, including a 409 with an
+// unrelated body, is the generic *APIError.
 func GetEcommerceSettings(ctx context.Context, client *http.Client, siteID string) (*EcommerceSettingsResponse, error) {
 	var response EcommerceSettingsResponse
 	_, err := doRequest(ctx, client, http.MethodGet, apiURL("/v2/sites/%s/ecommerce/settings", siteID), nil, &response)
 	if err != nil {
 		var apiErr *APIError
-		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusConflict {
+		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusConflict && isEcommerceNotEnabledBody(apiErr.Body) {
 			return nil, handleEcommerceNotEnabledError([]byte(apiErr.Body))
 		}
 		return nil, err

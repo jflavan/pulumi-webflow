@@ -17,6 +17,7 @@ import (
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
 )
 
 // pageMetadataMock records PUT/GET requests against /v2/pages/{id}.
@@ -149,8 +150,14 @@ func TestPageMetadataCreate_DryRunThenValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dry run: %v", err)
 	}
-	if m.putCalls != 0 || resp.Output.SiteID != "" || resp.Output.LastUpdated != "" {
-		t.Errorf("dry run must not call the API or fabricate values: %+v", resp.Output)
+	if m.putCalls != 0 || resp.Output.SiteID != "" || resp.Output.LastUpdated != "" || resp.ID != "" {
+		t.Errorf("dry run must not call the API or fabricate values: id=%q %+v", resp.ID, resp.Output)
+	}
+	known, err := (&PageMetadata{}).Create(context.Background(), infer.CreateRequest[PageMetadataArgs]{
+		Inputs: PageMetadataArgs{PageID: testPageID, LocaleID: testLocaleID, Title: "x"}, DryRun: true,
+	})
+	if err != nil || known.ID != testPageID+"/metadata/"+testLocaleID {
+		t.Errorf("dry run with a known pageId reports the deterministic ID: %q %v", known.ID, err)
 	}
 
 	tests := []struct {
@@ -176,6 +183,47 @@ func TestPageMetadataCreate_DryRunThenValidation(t *testing.T) {
 	}
 	if m.putCalls != 0 {
 		t.Error("validation failures must not reach the API")
+	}
+}
+
+func TestPageMetadataCheck(t *testing.T) {
+	bad := property.NewMap(map[string]property.Value{
+		"pageId":   property.New("bad"),
+		"localeId": property.New("en"),
+		"title":    property.New("x"),
+	})
+	resp, err := (&PageMetadata{}).Check(context.Background(), infer.CheckRequest{NewInputs: bad})
+	if err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	got := map[string]string{}
+	for _, f := range resp.Failures {
+		got[f.Property] = f.Reason
+	}
+	if len(got) != 2 || !strings.Contains(got["pageId"], "pageId has invalid format") ||
+		!strings.Contains(got["localeId"], "localeId has invalid format") {
+		t.Errorf("unexpected failures %+v", resp.Failures)
+	}
+
+	unknown := property.NewMap(map[string]property.Value{
+		"pageId":   property.New(property.Computed),
+		"localeId": property.New(property.Computed),
+		"title":    property.New(property.Computed),
+	})
+	if resp, err := (&PageMetadata{}).Check(
+		context.Background(), infer.CheckRequest{NewInputs: unknown},
+	); err != nil || len(resp.Failures) != 0 {
+		t.Errorf("unknown inputs must not fail Check: %+v %v", resp.Failures, err)
+	}
+
+	// An omitted localeId is valid (primary locale).
+	valid := property.NewMap(map[string]property.Value{
+		"pageId": property.New(testPageID),
+		"seo":    property.New(property.NewMap(map[string]property.Value{"title": property.New("SEO")})),
+	})
+	resp, err = (&PageMetadata{}).Check(context.Background(), infer.CheckRequest{NewInputs: valid})
+	if err != nil || len(resp.Failures) != 0 || resp.Inputs.SEO == nil || resp.Inputs.SEO.Title != "SEO" {
+		t.Errorf("valid inputs must pass Check: %+v %v", resp, err)
 	}
 }
 

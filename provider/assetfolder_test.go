@@ -16,6 +16,7 @@ import (
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
 )
 
 const (
@@ -231,6 +232,47 @@ func TestAssetFolderCreate_DryRunThenValidation(t *testing.T) {
 				t.Errorf("expected error containing %q, got %v", tt.want, err)
 			}
 		})
+	}
+}
+
+func TestAssetFolderCheck(t *testing.T) {
+	inputs := property.NewMap(map[string]property.Value{
+		"siteId":       property.New("bad"),
+		"displayName":  property.New(""),
+		"parentFolder": property.New("nope"),
+	})
+	resp, err := (&AssetFolder{}).Check(context.Background(), infer.CheckRequest{NewInputs: inputs})
+	if err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	got := map[string]string{}
+	for _, f := range resp.Failures {
+		got[f.Property] = f.Reason
+	}
+	if len(got) != 3 || !strings.Contains(got["siteId"], "invalid format") ||
+		!strings.Contains(got["displayName"], "displayName is required") ||
+		!strings.Contains(got["parentFolder"], "assetFolderId has invalid format") {
+		t.Errorf("unexpected failures %+v", resp.Failures)
+	}
+
+	unknown := property.NewMap(map[string]property.Value{
+		"siteId":       property.New(property.Computed),
+		"displayName":  property.New(property.Computed),
+		"parentFolder": property.New(property.Computed),
+	})
+	if resp, err := (&AssetFolder{}).Check(
+		context.Background(), infer.CheckRequest{NewInputs: unknown},
+	); err != nil || len(resp.Failures) != 0 {
+		t.Errorf("unknown inputs must not fail Check: %+v %v", resp.Failures, err)
+	}
+
+	valid := property.NewMap(map[string]property.Value{
+		"siteId":      property.New(testFolderSiteID),
+		"displayName": property.New("Images"),
+	})
+	resp, err = (&AssetFolder{}).Check(context.Background(), infer.CheckRequest{NewInputs: valid})
+	if err != nil || len(resp.Failures) != 0 || resp.Inputs.DisplayName != "Images" {
+		t.Errorf("valid inputs must pass Check: %+v %v", resp, err)
 	}
 }
 

@@ -38,14 +38,15 @@ func TestGetPageFunction_Invoke(t *testing.T) {
 	defer server.Close()
 	useMockAPI(t, server)
 
+	const secondaryLocale = "653fd9af6a07fc9cfd7a5e58"
 	resp, err := (&GetPage{}).Invoke(context.Background(), infer.FunctionRequest[GetPageInput]{
-		Input: GetPageInput{PageID: testPageID, LocaleID: testLocaleID, Translatable: true},
+		Input: GetPageInput{PageID: testPageID, LocaleID: testLocaleID, Translatable: secondaryLocale},
 	})
 	if err != nil {
 		t.Fatalf("Invoke: %v", err)
 	}
-	if gotQuery != "localeId="+testLocaleID+"&translatable=true" {
-		t.Errorf("unexpected query %q", gotQuery)
+	if gotQuery != "localeId="+testLocaleID+"&translatable="+secondaryLocale {
+		t.Errorf("translatable must be sent verbatim as a locale ID, got query %q", gotQuery)
 	}
 	out := resp.Output
 	if out.PageID != testPageID || out.Title != "About" || out.Slug != "about" || !out.IsBranch ||
@@ -79,12 +80,59 @@ func TestGetPageFunction_ValidationAndErrors(t *testing.T) {
 		!strings.Contains(err.Error(), "localeId has invalid format") {
 		t.Errorf("expected locale validation error, got %v", err)
 	}
+	if _, err := (&GetPage{}).Invoke(context.Background(), infer.FunctionRequest[GetPageInput]{
+		Input: GetPageInput{PageID: testPageID, Translatable: "true"},
+	}); err == nil ||
+		!strings.Contains(err.Error(), "translatable must be the ID of a secondary locale") {
+		t.Errorf("expected translatable validation error, got %v", err)
+	}
 	_, err := (&GetPage{}).Invoke(
 		context.Background(),
 		infer.FunctionRequest[GetPageInput]{Input: GetPageInput{PageID: testPageID}},
 	)
 	if err == nil || !IsNotFound(err) {
 		t.Errorf("expected not found error, got %v", err)
+	}
+}
+
+// TestGetPageFunction_TranslatableErrors verifies the documented 400 (wrong locale) and 403
+// (translation exclusions disabled) responses are explained when translatable is set.
+func TestGetPageFunction_TranslatableErrors(t *testing.T) {
+	t.Setenv("WEBFLOW_API_TOKEN", "test-token-12345678901234567890")
+	status := http.StatusBadRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(`{"message":"invalid translatable locale"}`))
+	}))
+	defer server.Close()
+	useMockAPI(t, server)
+
+	invoke := func() error {
+		_, err := (&GetPage{}).Invoke(context.Background(), infer.FunctionRequest[GetPageInput]{
+			Input: GetPageInput{PageID: testPageID, Translatable: testLocaleID},
+		})
+		return err
+	}
+	err := invoke()
+	var apiErr *APIError
+	if err == nil || !strings.Contains(err.Error(), "secondary locale") ||
+		!strings.Contains(err.Error(), "primary locale") ||
+		!asAPIError(err, &apiErr) || apiErr.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected explained 400 wrapping the APIError, got %v", err)
+	}
+	status = http.StatusForbidden
+	err = invoke()
+	if err == nil || !strings.Contains(err.Error(), "Translation exclusions") ||
+		!asAPIError(err, &apiErr) || apiErr.StatusCode != http.StatusForbidden {
+		t.Errorf("expected explained 403 wrapping the APIError, got %v", err)
+	}
+	// Without translatable the generic message is kept.
+	status = http.StatusBadRequest
+	_, err = (&GetPage{}).Invoke(context.Background(), infer.FunctionRequest[GetPageInput]{
+		Input: GetPageInput{PageID: testPageID},
+	})
+	if err == nil || strings.Contains(err.Error(), "secondary locale") {
+		t.Errorf("expected generic 400 without translatable, got %v", err)
 	}
 }
 

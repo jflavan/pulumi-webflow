@@ -9,6 +9,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -100,6 +101,38 @@ func TestGetTokenIntrospect(t *testing.T) {
 				t.Errorf("status %d: error %q should contain %q", tt.status, err, want)
 			}
 		}
+		// token/introspect needs a Data Client App (OAuth) token; every 4xx says so.
+		is4xx := tt.status >= 400 && tt.status < 500
+		if strings.Contains(err.Error(), "Data Client App") != is4xx {
+			t.Errorf("status %d: Data Client App note presence should be %v, got %q", tt.status, is4xx, err)
+		}
+	}
+}
+
+// TestWrapTokenError_IntrospectNoteOnlyForIntrospect verifies the Data Client App guidance is
+// attached to 4xx responses of token/introspect only (never to 429 or 5xx, never to authorized_by).
+func TestWrapTokenError_IntrospectNoteOnlyForIntrospect(t *testing.T) {
+	for _, status := range []int{
+		http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound,
+	} {
+		err := wrapTokenError(&APIError{StatusCode: status, Body: "site token"}, tokenEndpointIntrospect)
+		if !strings.Contains(err.Error(), "Data Client App") || !strings.Contains(err.Error(), "site token") {
+			t.Errorf("introspect %d: expected Data Client App note with details, got %v", status, err)
+		}
+		err = wrapTokenError(&APIError{StatusCode: status, Body: "x"}, tokenEndpointAuthorizedBy)
+		if strings.Contains(err.Error(), "Data Client App") {
+			t.Errorf("authorized_by %d: must not carry the introspect note, got %v", status, err)
+		}
+	}
+	for _, status := range []int{http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway} {
+		err := wrapTokenError(&APIError{StatusCode: status, Body: "x"}, tokenEndpointIntrospect)
+		if strings.Contains(err.Error(), "Data Client App") {
+			t.Errorf("introspect %d: must not carry the token-type note, got %v", status, err)
+		}
+	}
+	plain := errors.New("network down")
+	if err := wrapTokenError(plain, tokenEndpointIntrospect); err != plain { //nolint:errorlint // identity check
+		t.Errorf("non-API errors must pass through unchanged, got %v", err)
 	}
 }
 

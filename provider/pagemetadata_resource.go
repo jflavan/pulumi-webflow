@@ -20,6 +20,20 @@ import (
 // (title, slug, SEO and Open Graph). Pages themselves are created in the Webflow Designer.
 type PageMetadata struct{}
 
+var _ infer.CustomCheck[PageMetadataArgs] = (*PageMetadata)(nil)
+
+// Check validates the known pageId and localeId formats at preview time. Unknown values, and
+// the "at least one managed field" rule, are validated at apply time.
+func (r *PageMetadata) Check(
+	ctx context.Context, req infer.CheckRequest,
+) (infer.CheckResponse[PageMetadataArgs], error) {
+	inputs, failures, err := checkStrings[PageMetadataArgs](ctx, req.NewInputs,
+		stringValidator{property: "pageId", validate: ValidatePageID},
+		stringValidator{property: "localeId", validate: ValidateLocaleID},
+	)
+	return infer.CheckResponse[PageMetadataArgs]{Inputs: inputs, Failures: failures}, err
+}
+
 // PageSEOArgs configures the SEO settings of a page.
 type PageSEOArgs struct {
 	// Title is the SEO title. Empty means "not managed".
@@ -340,8 +354,11 @@ func (r *PageMetadata) Create(
 	id := GeneratePageMetadataResourceID(req.Inputs.PageID, req.Inputs.LocaleID)
 
 	// During preview, return the inputs without calling the API. Inputs may be unknown at this
-	// point, so validation is deferred to apply time.
+	// point, so validation is deferred to apply time and no ID is reported while pageId is unknown.
 	if req.DryRun {
+		if req.Inputs.PageID == "" {
+			id = ""
+		}
 		return infer.CreateResponse[PageMetadataState]{
 			ID:     id,
 			Output: PageMetadataState{PageMetadataArgs: req.Inputs},
@@ -379,7 +396,7 @@ func (r *PageMetadata) Read(
 		return infer.ReadResponse[PageMetadataArgs, PageMetadataState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	page, err := GetPageMetadata(ctx, client, pageID, localeID, false)
+	page, err := GetPageMetadata(ctx, client, pageID, localeID, "")
 	if err != nil {
 		if IsNotFound(err) {
 			return infer.ReadResponse[PageMetadataArgs, PageMetadataState]{ID: ""}, nil

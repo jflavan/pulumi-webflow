@@ -66,15 +66,15 @@ func (state *EcommerceSettingsState) Annotate(a infer.Annotator) {
 }
 
 // Diff determines what changes need to be made to the ecommerce settings resource.
-// Only siteId changes trigger replacement since this is a read-only resource.
+// Only siteId changes trigger replacement since this is a read-only resource. Delete is a
+// state-only no-op, so the default create-before-delete ordering is kept.
 func (r *EcommerceSettings) Diff(
 	ctx context.Context, req infer.DiffRequest[EcommerceSettingsArgs, EcommerceSettingsState],
 ) (infer.DiffResponse, error) {
 	if req.State.SiteID != req.Inputs.SiteID {
 		return infer.DiffResponse{
-			DeleteBeforeReplace: true,
-			HasChanges:          true,
-			DetailedDiff:        map[string]p.PropertyDiff{"siteId": {Kind: p.UpdateReplace}},
+			HasChanges:   true,
+			DetailedDiff: map[string]p.PropertyDiff{"siteId": {Kind: p.UpdateReplace}},
 		}, nil
 	}
 	return infer.DiffResponse{}, nil
@@ -87,8 +87,12 @@ func (r *EcommerceSettings) Create(
 	state := EcommerceSettingsState{EcommerceSettingsArgs: req.Inputs}
 	resourceID := GenerateEcommerceSettingsResourceID(req.Inputs.SiteID)
 
-	// During preview the real values are unknown; return the inputs only.
+	// During preview the real values are unknown; return the inputs only, and no ID when the
+	// site ID itself is still unknown.
 	if req.DryRun {
+		if req.Inputs.SiteID == "" {
+			resourceID = ""
+		}
 		return infer.CreateResponse[EcommerceSettingsState]{ID: resourceID, Output: state}, nil
 	}
 

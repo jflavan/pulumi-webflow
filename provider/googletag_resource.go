@@ -103,6 +103,28 @@ func intPtrEqual(a, b *int) bool {
 	return *a == *b
 }
 
+var _ infer.CustomCheck[GoogleTagArgs] = (*GoogleTag)(nil)
+
+// Check validates the known inputs at preview time: siteId and tagId formats, a non-empty
+// displayName and a non-negative order. Unknown values are validated again at apply time.
+func (r *GoogleTag) Check(ctx context.Context, req infer.CheckRequest) (infer.CheckResponse[GoogleTagArgs], error) {
+	inputs, failures, err := checkStrings[GoogleTagArgs](ctx, req.NewInputs,
+		stringValidator{property: "siteId", validate: ValidateSiteID},
+		stringValidator{property: "tagId", validate: ValidateGoogleTagID},
+		stringValidator{property: "displayName", validate: ValidateGoogleTagDisplayName},
+	)
+	if err != nil {
+		return infer.CheckResponse[GoogleTagArgs]{Inputs: inputs, Failures: failures}, err
+	}
+	if order, known := knownNumber(req.NewInputs, "order"); known {
+		o := int(order)
+		if verr := ValidateGoogleTagOrder(&o); verr != nil {
+			failures = append(failures, checkFailure("order", verr))
+		}
+	}
+	return infer.CheckResponse[GoogleTagArgs]{Inputs: inputs, Failures: failures}, nil
+}
+
 // Diff determines what changes need to be made to the GoogleTag resource.
 // siteId and tagId changes trigger replacement; displayName and order update in place.
 func (r *GoogleTag) Diff(
@@ -170,8 +192,12 @@ func (r *GoogleTag) Create(
 	id := GenerateGoogleTagResourceID(req.Inputs.SiteID, req.Inputs.TagID)
 
 	// During preview, return the expected state without making API calls.
-	// Validation is deferred to apply-time because inputs may contain Pulumi unknowns.
+	// Validation is deferred to apply-time because inputs may contain Pulumi unknowns, and no
+	// ID is reported while either part of it is unknown.
 	if req.DryRun {
+		if req.Inputs.SiteID == "" || req.Inputs.TagID == "" {
+			id = ""
+		}
 		return infer.CreateResponse[GoogleTagState]{
 			ID:     id,
 			Output: GoogleTagState{GoogleTagArgs: req.Inputs},
@@ -199,6 +225,9 @@ func (r *GoogleTag) Read(
 	if err != nil {
 		return infer.ReadResponse[GoogleTagArgs, GoogleTagState]{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
+	if err := ValidateSiteID(siteID); err != nil {
+		return infer.ReadResponse[GoogleTagArgs, GoogleTagState]{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
 
 	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
@@ -220,9 +249,17 @@ func (r *GoogleTag) Read(
 		return infer.ReadResponse[GoogleTagArgs, GoogleTagState]{ID: ""}, nil
 	}
 
+	// Webflow normalizes tag ID casing; keep the user's spelling when it is the same tag
+	// (Diff compares case-insensitively) so refresh does not rewrite the program's value.
+	// On import (no inputs) the API's spelling is used.
+	inputTagID := entry.TagID
+	if strings.EqualFold(req.Inputs.TagID, entry.TagID) && req.Inputs.TagID != "" {
+		inputTagID = req.Inputs.TagID
+	}
+
 	inputs := GoogleTagArgs{
 		SiteID:      siteID,
-		TagID:       entry.TagID,
+		TagID:       inputTagID,
 		DisplayName: entry.DisplayName,
 		// Preserve the user's intent: only report an explicit order when one was configured.
 		Order: req.Inputs.Order,
@@ -266,6 +303,9 @@ func (r *GoogleTag) Delete(
 ) (infer.DeleteResponse, error) {
 	siteID, tagID, err := ExtractIDsFromGoogleTagResourceID(req.ID)
 	if err != nil {
+		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
+	if err := ValidateSiteID(siteID); err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
 
