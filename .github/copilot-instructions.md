@@ -5,7 +5,7 @@ Concise, task-agnostic instructions so an agent can work efficiently without ext
 ## What this repo is
 - Unofficial Pulumi **native provider** for Webflow (Go provider + generated SDKs for Node/TS, Python, Go, .NET, Java).
 - Large repo with many docs/examples; core source lives in `provider/`, generated SDKs in `sdk/`, examples in `examples/`, docs in `docs/`.
-- Toolchain versions managed by **mise** (`.config/mise.toml`): Go `latest`, Node `20.19.5`, Python `3.11.8`, .NET `8.0.414`, Java `corretto-11`, Pulumi `latest`, pulumictl `0.0.50`, schema-tools `0.6.0`, golangci-lint `2.7.2`, yarn `1.22.22`. Pulumi home pinned to `.pulumi` in repo.
+- Toolchain versions managed by **mise** (`.config/mise.toml`): Go `latest`, Node `20.19.5`, Python `3.11.8`, .NET `8.0.414`, Java `corretto-11`, Pulumi `latest`, pulumictl `0.0.50`, schema-tools `0.6.0`, golangci-lint `2.13.2`, yarn `1.22.22`. Pulumi home pinned to `.pulumi` in repo.
 
 ## Bootstrap (do this first)
 1. From repo root, activate tools: `eval "$(mise activate bash)" && mise install`. This installs pulumictl/schema-tools etc. and avoids “pulumictl: not found” during builds.
@@ -28,7 +28,7 @@ Concise, task-agnostic instructions so an agent can work efficiently without ext
 - `examples/`: Extensive Pulumi programs serving as documentation and reference implementations.
 - `docs/`: Guides, troubleshooting, sprint artifacts. `CLAUDE.md` repeats the “run make codegen after provider changes” rule.
 - `Makefile`: All build/test targets and codegen steps; uses `pulumictl convert-version` and `pulumi package gen-sdk`.
-- Config & lint: `.config/mise.toml`, `.golangci.yml`, `.pulumi.version`.
+- Config & lint: `.config/mise.toml`, `.golangci.yml` (Go and Pulumi versions are derived from `go.mod` by `scripts/get-versions.sh`).
 - GitHub Actions: `build.yml` (push) runs codegen, provider build/tests, SDK matrix build, example tests, and lint; `run-acceptance-tests.yml` runs on `comment /run-acceptance-tests`; `pull-request.yml` posts PR comment for maintainers; `release.yml` handles publishing.
 
 ## Working tips to avoid CI friction

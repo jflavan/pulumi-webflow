@@ -7,16 +7,120 @@ filled in for Maven Central compliance. This script patches the file with:
 - Correct POM metadata (license, developer info, SCM URLs)
 - gradle-nexus-publish-plugin for Maven Central Portal publishing
 - Proper GPG signing configuration (3-param useInMemoryPgpKeys)
+
+The script is idempotent: running it on an already patched file is a no-op.
+It fails (exit code 1) when an expected anchor is missing from the file and
+the corresponding patch has not already been applied, so that changes in the
+pulumi-java-gen output are noticed instead of silently producing an
+incomplete POM.
 """
 
 import re
 import sys
 from pathlib import Path
 
+# Project metadata stamped into the POM.
+ARTIFACT_ID = "pulumi-webflow"
+POM_NAME = "Pulumi Webflow Provider"
+INCEPTION_YEAR = "2025"
+PROJECT_URL = "https://github.com/jdetmar/pulumi-webflow"
+SCM_CONNECTION = "scm:git:git://github.com/jdetmar/pulumi-webflow.git"
+SCM_DEVELOPER_CONNECTION = "scm:git:ssh://github.com:jdetmar/pulumi-webflow.git"
+LICENSE_NAME = "MIT License"
+LICENSE_URL = "https://opensource.org/licenses/MIT"
+DEVELOPER_ID = "jdetmar"
+DEVELOPER_NAME = "Justin Detmar"
+DEVELOPER_EMAIL = "jdetmar@users.noreply.github.com"
+
+# Maven Central Portal endpoints (not legacy OSSRH).
+# See: https://central.sonatype.org/publish/publish-portal-api/
+STAGING_URL = "https://ossrh-staging-api.central.sonatype.com/service/local/"
+SNAPSHOT_URL = "https://central.sonatype.com/repository/maven-snapshots/"
+
+NEXUS_PUBLISH_PLUGIN = 'id("io.github.gradle-nexus.publish-plugin") version "2.0.0"'
+
+NEXUS_BLOCK = """
+if (publishRepoUsername) {
+    nexusPublishing {
+        repositories {
+            sonatype {
+                nexusUrl.set(uri(publishStagingURL))
+                snapshotRepositoryUrl.set(uri(publishRepoURL))
+                username = publishRepoUsername
+                password = publishRepoPassword
+            }
+        }
+    }
+}
+"""
+
 
 class PatchError(Exception):
     """Raised when patching fails due to unexpected file format."""
-    pass
+
+
+def _missing(what: str, anchor: str) -> PatchError:
+    return PatchError(
+        f"Failed to patch {what}: expected anchor {anchor!r} not found in build.gradle "
+        "and the patch is not already applied. The pulumi-java-gen output format may "
+        "have changed; update scripts/patch-java-build-gradle.py."
+    )
+
+
+def replace_literal(content: str, old: str, new: str, what: str, *, count: int = 0) -> str:
+    """
+    Replace `old` with `new`.
+
+    Raises PatchError when `old` is absent unless `new` is already present
+    (i.e. the file was patched by an earlier run).
+    """
+    if old in content:
+        return content.replace(old, new, count) if count else content.replace(old, new)
+    if new in content:
+        return content
+    raise _missing(what, old)
+
+
+def replace_regex(
+    content: str,
+    pattern: str,
+    repl: str,
+    what: str,
+    done_marker: str,
+    *,
+    count: int = 0,
+    flags: int = 0,
+) -> str:
+    """
+    Regex variant of replace_literal.
+
+    `done_marker` is a literal that only exists once the patch has been applied;
+    it is used to recognise an already patched file.
+    """
+    new_content, n = re.subn(pattern, repl, content, count=count, flags=flags)
+    if n:
+        return new_content
+    if done_marker in content:
+        return content
+    raise _missing(what, pattern)
+
+
+def insert_after_anchor(content: str, anchor: str, addition: str, what: str, done_marker: str) -> str:
+    """Insert `addition` right after `anchor` unless `done_marker` is already present."""
+    if done_marker in content:
+        return content
+    if anchor not in content:
+        raise _missing(what, anchor)
+    return content.replace(anchor, anchor + addition, 1)
+
+
+def insert_before_anchor(content: str, anchor: str, addition: str, what: str, done_marker: str) -> str:
+    """Insert `addition` right before `anchor` unless `done_marker` is already present."""
+    if done_marker in content:
+        return content
+    if anchor not in content:
+        raise _missing(what, anchor)
+    return content.replace(anchor, addition + anchor, 1)
 
 
 def patch_build_gradle(filepath: str) -> None:
@@ -37,161 +141,157 @@ def patch_build_gradle(filepath: str) -> None:
         raise FileNotFoundError(f"build.gradle not found: {filepath}")
 
     try:
-        content = path.read_text(encoding='utf-8')
+        content = path.read_text(encoding="utf-8")
     except PermissionError:
         raise PermissionError(f"Cannot read build.gradle (permission denied): {filepath}")
 
     original_content = content
 
-    # Add nexus publish plugin if not present
-    if 'io.github.gradle-nexus.publish-plugin' not in content:
-        content = content.replace(
-            'id("maven-publish")',
-            'id("maven-publish")\n    id("io.github.gradle-nexus.publish-plugin") version "2.0.0"'
-        )
+    # --- Plugins -----------------------------------------------------------
+    content = insert_after_anchor(
+        content,
+        'id("maven-publish")',
+        f"\n    {NEXUS_PUBLISH_PLUGIN}",
+        "nexus publish plugin",
+        done_marker="io.github.gradle-nexus.publish-plugin",
+    )
 
-    # Add signingKeyId variable if not present
-    if 'def signingKeyId' not in content:
-        content = content.replace(
-            'def signingKey = System.getenv("SIGNING_KEY")',
-            'def signingKeyId = System.getenv("SIGNING_KEY_ID")\ndef signingKey = System.getenv("SIGNING_KEY")'
-        )
+    # --- Signing / publishing variables -----------------------------------
+    content = insert_before_anchor(
+        content,
+        'def signingKey = System.getenv("SIGNING_KEY")',
+        'def signingKeyId = System.getenv("SIGNING_KEY_ID")\n',
+        "signingKeyId variable",
+        done_marker="def signingKeyId",
+    )
 
-    # Add publishStagingURL with default if not present or missing default
-    # Note: The staging URL is for Maven Central Portal's staging API (not legacy OSSRH)
-    # See: https://central.sonatype.org/publish/publish-portal-api/
-    staging_url = "https://ossrh-staging-api.central.sonatype.com/service/local/"
-
-    if 'def publishStagingURL' not in content:
-        content = content.replace(
+    staging_default = f'def publishStagingURL = System.getenv("PUBLISH_STAGING_URL") ?: "{STAGING_URL}"'
+    if "def publishStagingURL" not in content:
+        content = insert_before_anchor(
+            content,
             'def publishRepoUsername = System.getenv("PUBLISH_REPO_USERNAME")',
-            f'def publishStagingURL = System.getenv("PUBLISH_STAGING_URL") ?: "{staging_url}"\ndef publishRepoUsername = System.getenv("PUBLISH_REPO_USERNAME")'
+            f"{staging_default}\n",
+            "publishStagingURL variable",
+            done_marker="def publishStagingURL",
         )
-    elif 'def publishStagingURL' in content:
-        # publishStagingURL exists; check if it already has a default value
-        after_def = content.split('def publishStagingURL', 1)[1]
-        first_line = after_def.split('\n', 1)[0] if '\n' in after_def else after_def
-        if '?:' not in first_line:
-            # publishStagingURL exists but without default value
-            content = content.replace(
-                'def publishStagingURL = System.getenv("PUBLISH_STAGING_URL")',
-                f'def publishStagingURL = System.getenv("PUBLISH_STAGING_URL") ?: "{staging_url}"'
-            )
+    else:
+        # publishStagingURL exists; make sure it has a default value.
+        content = replace_regex(
+            content,
+            r'def publishStagingURL = System\.getenv\("PUBLISH_STAGING_URL"\)(?![ \t]*\?:)',
+            staging_default,
+            "publishStagingURL default",
+            done_marker='System.getenv("PUBLISH_STAGING_URL") ?:',
+            count=1,
+        )
 
     # Update publishRepoURL default to Maven Central snapshots (only if no default exists)
-    content = re.sub(
-        r'def publishRepoURL = System\.getenv\("PUBLISH_REPO_URL"\)(?!\s*\?:)',
-        'def publishRepoURL = System.getenv("PUBLISH_REPO_URL") ?: "https://central.sonatype.com/repository/maven-snapshots/"',
-        content
-    )
-
-    # Fix artifactId
-    content = content.replace(
-        'artifactId = "webflow"',
-        'artifactId = "pulumi-webflow"'
-    )
-
-    # Fix inceptionYear
-    content = content.replace(
-        'inceptionYear = ""',
-        'inceptionYear = "2025"'
-    )
-
-    # Fix pom name - be specific to avoid matching other name fields
-    content = re.sub(
-        r'(pom \{[^}]*?)name = ""',
-        r'\1name = "Pulumi Webflow Provider"',
+    content = replace_regex(
         content,
-        count=1
+        r'def publishRepoURL = System\.getenv\("PUBLISH_REPO_URL"\)(?![ \t]*\?:)',
+        f'def publishRepoURL = System.getenv("PUBLISH_REPO_URL") ?: "{SNAPSHOT_URL}"',
+        "publishRepoURL default",
+        done_marker='System.getenv("PUBLISH_REPO_URL") ?:',
+        count=1,
     )
 
-    # Fix URL placeholders
-    content = content.replace(
-        'url = "https://example.com"',
-        'url = "https://github.com/jdetmar/pulumi-webflow"'
+    # --- Maven coordinates and POM metadata --------------------------------
+    content = replace_literal(
+        content, 'artifactId = "webflow"', f'artifactId = "{ARTIFACT_ID}"', "artifactId"
     )
-    content = content.replace(
+    content = replace_literal(
+        content, 'inceptionYear = ""', f'inceptionYear = "{INCEPTION_YEAR}"', "inceptionYear"
+    )
+
+    # POM name - anchored on the pom block so that it does not match other name fields.
+    content = replace_regex(
+        content,
+        r'(pom \{[^}]*?)name = ""',
+        rf'\1name = "{POM_NAME}"',
+        "pom name",
+        done_marker=f'name = "{POM_NAME}"',
+        count=1,
+    )
+
+    # URL placeholders (project url + scm url share the same placeholder).
+    content = replace_literal(
+        content, 'url = "https://example.com"', f'url = "{PROJECT_URL}"', "project/scm url"
+    )
+    content = replace_literal(
+        content,
         'connection = "https://example.com"',
-        'connection = "scm:git:git://github.com/jdetmar/pulumi-webflow.git"'
+        f'connection = "{SCM_CONNECTION}"',
+        "scm connection",
     )
-    content = content.replace(
+    content = replace_literal(
+        content,
         'developerConnection = "https://example.com"',
-        'developerConnection = "scm:git:ssh://github.com:jdetmar/pulumi-webflow.git"'
+        f'developerConnection = "{SCM_DEVELOPER_CONNECTION}"',
+        "scm developerConnection",
     )
 
-    # Fix license block - need to be careful not to match the pom name
-    # First fix license name
-    content = re.sub(
+    # License block - anchored so that the pom name / developer name are not touched.
+    content = replace_regex(
+        content,
         r'(licenses \{[^}]*?license \{[^}]*?)name = ""',
-        r'\1name = "Apache-2.0"',
-        content
+        rf'\1name = "{LICENSE_NAME}"',
+        "license name",
+        done_marker=f'name = "{LICENSE_NAME}"',
     )
-    # Then fix license url
-    content = re.sub(
+    content = replace_regex(
+        content,
         r'(licenses \{[^}]*?license \{[^}]*?)url = ""',
-        r'\1url = "https://www.apache.org/licenses/LICENSE-2.0"',
-        content
+        rf'\1url = "{LICENSE_URL}"',
+        "license url",
+        done_marker=f'url = "{LICENSE_URL}"',
     )
 
-    # Fix developer block
-    content = re.sub(
+    # Developer block
+    content = replace_regex(
+        content,
         r'(developers \{[^}]*?developer \{[^}]*?)id = ""',
-        r'\1id = "jdetmar"',
-        content
+        rf'\1id = "{DEVELOPER_ID}"',
+        "developer id",
+        done_marker=f'id = "{DEVELOPER_ID}"',
     )
-    content = re.sub(
+    content = replace_regex(
+        content,
         r'(developers \{[^}]*?developer \{[^}]*?)name = ""',
-        r'\1name = "Justin Detmar"',
-        content
+        rf'\1name = "{DEVELOPER_NAME}"',
+        "developer name",
+        done_marker=f'name = "{DEVELOPER_NAME}"',
     )
-    content = re.sub(
+    content = replace_regex(
+        content,
         r'(developers \{[^}]*?developer \{[^}]*?)email = ""',
-        r'\1email = "jdetmar@users.noreply.github.com"',
-        content
+        rf'\1email = "{DEVELOPER_EMAIL}"',
+        "developer email",
+        done_marker=f'email = "{DEVELOPER_EMAIL}"',
     )
 
-    # Fix signing to use 3 parameters
-    content = content.replace(
-        'useInMemoryPgpKeys(signingKey, signingPassword)',
-        'useInMemoryPgpKeys(signingKeyId, signingKey, signingPassword)'
+    # --- Signing: use the 3-parameter form so the key id is honoured --------
+    content = replace_literal(
+        content,
+        "useInMemoryPgpKeys(signingKey, signingPassword)",
+        "useInMemoryPgpKeys(signingKeyId, signingKey, signingPassword)",
+        "useInMemoryPgpKeys",
     )
 
-    # Add nexusPublishing block if not present
-    if 'nexusPublishing {' not in content:
-        nexus_block = '''
-if (publishRepoUsername) {
-    nexusPublishing {
-        repositories {
-            sonatype {
-                nexusUrl.set(uri(publishStagingURL))
-                snapshotRepositoryUrl.set(uri(publishRepoURL))
-                username = publishRepoUsername
-                password = publishRepoPassword
-            }
-        }
-    }
-}
-'''
-        # Find the end of the publishing block and add nexusPublishing after it
-        # Look for the closing brace of the publishing block
-        publishing_match = re.search(r'(publishing \{.*?^\})\s*\n', content, re.MULTILINE | re.DOTALL)
-        if publishing_match:
-            insert_pos = publishing_match.end()
-            content = content[:insert_pos] + nexus_block + content[insert_pos:]
-        else:
-            raise PatchError(
-                "Failed to locate 'publishing { ... }' block in build.gradle; "
-                "the file format may have changed and nexusPublishing could not be added. "
-                f"File: {filepath}"
-            )
+    # --- nexusPublishing block ---------------------------------------------
+    if "nexusPublishing {" not in content:
+        # Insert after the closing brace of the top-level publishing block.
+        publishing_match = re.search(r"(publishing \{.*?^\})\s*\n", content, re.MULTILINE | re.DOTALL)
+        if not publishing_match:
+            raise _missing("nexusPublishing block", "publishing { ... }")
+        insert_pos = publishing_match.end()
+        content = content[:insert_pos] + NEXUS_BLOCK + content[insert_pos:]
 
-    # Write the patched content
+    # --- Write -------------------------------------------------------------
     try:
-        path.write_text(content, encoding='utf-8')
+        path.write_text(content, encoding="utf-8")
     except PermissionError:
         raise PermissionError(f"Cannot write to build.gradle (permission denied): {filepath}")
 
-    # Report what was done
     if content == original_content:
         print(f"No changes needed for {filepath} (already patched)")
     else:
@@ -200,23 +300,17 @@ if (publishRepoUsername) {
 
 def main() -> int:
     """Main entry point."""
-    if len(sys.argv) != 2:
+    if len(sys.argv) != 2 or sys.argv[1] in ("-h", "--help"):
         print(f"Usage: {sys.argv[0]} <build.gradle path>", file=sys.stderr)
         return 1
 
     try:
         patch_build_gradle(sys.argv[1])
         return 0
-    except FileNotFoundError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
-    except PermissionError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        return 1
-    except PatchError as e:
+    except (FileNotFoundError, PermissionError, PatchError) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())
