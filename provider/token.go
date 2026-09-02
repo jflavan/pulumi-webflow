@@ -8,11 +8,9 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"time"
 )
 
 // AuthorizedTo represents the authorization scope for a token.
@@ -55,212 +53,67 @@ type AuthorizedByResponse struct {
 	LastName  string `json:"lastName,omitempty"`
 }
 
-// getTokenIntrospectBaseURL is used internally for testing to override the API base URL.
-var getTokenIntrospectBaseURL = ""
-
-// GetTokenIntrospect retrieves token authorization information.
-// It calls GET /token/introspect endpoint.
-// Returns the parsed response or an error if the request fails.
+// GetTokenIntrospect retrieves token authorization information (GET /v2/token/introspect).
 func GetTokenIntrospect(ctx context.Context, client *http.Client) (*TokenIntrospectResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
+	var response TokenIntrospectResponse
+	if _, err := doRequest(ctx, client, http.MethodGet, apiURL("/v2/token/introspect"), nil, &response); err != nil {
+		return nil, wrapTokenError(err)
 	}
-
-	baseURL := webflowAPIBaseURL
-	if getTokenIntrospectBaseURL != "" {
-		baseURL = getTokenIntrospectBaseURL
-	}
-
-	url := baseURL + "/v2/token/introspect"
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleTokenError(resp.StatusCode, body)
-		}
-
-		var response TokenIntrospectResponse
-		if err := json.Unmarshal(body, &response); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &response, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &response, nil
 }
 
-// getAuthorizedByBaseURL is used internally for testing to override the API base URL.
-var getAuthorizedByBaseURL = ""
-
-// GetAuthorizedBy retrieves information about the user who authorized the token.
-// It calls GET /token/authorized_by endpoint.
-// Returns the parsed response or an error if the request fails.
+// GetAuthorizedBy retrieves the user who authorized the token (GET /v2/token/authorized_by).
 func GetAuthorizedBy(ctx context.Context, client *http.Client) (*AuthorizedByResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
+	var response AuthorizedByResponse
+	if _, err := doRequest(ctx, client, http.MethodGet, apiURL("/v2/token/authorized_by"), nil, &response); err != nil {
+		return nil, wrapTokenError(err)
 	}
+	return &response, nil
+}
 
-	baseURL := webflowAPIBaseURL
-	if getAuthorizedByBaseURL != "" {
-		baseURL = getAuthorizedByBaseURL
+// wrapTokenError swaps the generic APIError message for token-endpoint-specific guidance.
+// The APIError body is already truncated by doRequest.
+func wrapTokenError(err error) error {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		return handleTokenError(apiErr.StatusCode, []byte(apiErr.Body))
 	}
-
-	url := baseURL + "/v2/token/authorized_by"
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleTokenError(resp.StatusCode, body)
-		}
-
-		var response AuthorizedByResponse
-		if err := json.Unmarshal(body, &response); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &response, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return err
 }
 
 // handleTokenError converts HTTP error responses to actionable error messages for token endpoints.
 func handleTokenError(statusCode int, body []byte) error {
+	details := TruncateForLogging(string(body), maxErrorBodyLength)
 	switch statusCode {
-	case 401:
+	case http.StatusUnauthorized:
 		return fmt.Errorf("unauthorized: authentication failed (HTTP 401). "+
 			"Your Webflow API token is invalid or has expired. "+
 			"To fix this: 1) Verify your token in the Webflow dashboard (Settings > Integrations > API Access), "+
 			"2) Ensure the token is valid and not expired, "+
 			"3) Update your Pulumi config with: 'pulumi config set webflow:apiToken <your-token> --secret'. "+
-			"Details: %s", string(body))
-	case 403:
+			"Details: %s", details)
+	case http.StatusForbidden:
 		return fmt.Errorf("forbidden: access denied (HTTP 403). "+
 			"Your API token does not have the required permissions. "+
 			"To fix this: Ensure your API token has the 'authorized_user:read' scope "+
-			"for the authorized_by endpoint. Details: %s", string(body))
-	case 404:
+			"for the authorized_by endpoint. Details: %s", details)
+	case http.StatusNotFound:
 		return fmt.Errorf("not found: the requested endpoint does not exist (HTTP 404). "+
-			"This may indicate an API version mismatch. Details: %s", string(body))
-	case 500:
-		return fmt.Errorf("server error: Webflow API encountered an internal error (HTTP 500). "+
+			"This may indicate an API version mismatch. Details: %s", details)
+	case http.StatusTooManyRequests:
+		return errors.New("rate limited: too many requests to the Webflow API (HTTP 429). " +
+			"The provider retried with exponential backoff and the limit was still exceeded. " +
+			"Please wait a few minutes before trying again")
+	case http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return fmt.Errorf("server error: Webflow API encountered an internal error (HTTP %d). "+
 			"This is a temporary issue on Webflow's side. "+
 			"Please wait a few minutes and try again. "+
 			"If the problem persists, check Webflow's status page or contact Webflow support. "+
-			"Details: %s", string(body))
+			"Details: %s", statusCode, details)
 	default:
 		return fmt.Errorf("unexpected error (HTTP %d): %s. "+
 			"This is an unexpected response from the Webflow API. "+
 			"Please check Webflow's status page or contact Webflow support if this error persists",
-			statusCode, string(body))
+			statusCode, details)
 	}
 }

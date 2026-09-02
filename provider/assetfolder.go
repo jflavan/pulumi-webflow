@@ -7,15 +7,11 @@
 package provider
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
-	"time"
 )
 
 // AssetFolderResponse represents a Webflow asset folder from the API.
@@ -89,283 +85,39 @@ func ExtractIDsFromAssetFolderResourceID(resourceID string) (siteID, assetFolder
 	return siteID, assetFolderID, nil
 }
 
-// listAssetFoldersBaseURL is used internally for testing to override the API base URL.
-var listAssetFoldersBaseURL = ""
-
 // ListAssetFolders retrieves all asset folders for a Webflow site.
 // It calls GET /v2/sites/{site_id}/asset_folders endpoint.
-// Returns the parsed response or an error if the request fails.
 func ListAssetFolders(ctx context.Context, client *http.Client, siteID string) (*AssetFolderListResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
+	var response AssetFolderListResponse
+	_, err := doRequest(ctx, client, http.MethodGet, apiURL("/v2/sites/%s/asset_folders", siteID), nil, &response)
+	if err != nil {
+		return nil, err
 	}
-
-	baseURL := webflowAPIBaseURL
-	if listAssetFoldersBaseURL != "" {
-		baseURL = listAssetFoldersBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s/asset_folders", baseURL, siteID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var response AssetFolderListResponse
-		if err := json.Unmarshal(body, &response); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &response, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &response, nil
 }
-
-// getAssetFolderBaseURL is used internally for testing to override the API base URL.
-var getAssetFolderBaseURL = ""
 
 // GetAssetFolder retrieves a single asset folder by ID from Webflow.
 // It calls GET /v2/asset_folders/{asset_folder_id} endpoint.
-// Returns the parsed response or an error if the request fails.
 func GetAssetFolder(ctx context.Context, client *http.Client, assetFolderID string) (*AssetFolderResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
+	var folder AssetFolderResponse
+	_, err := doRequest(ctx, client, http.MethodGet, apiURL("/v2/asset_folders/%s", assetFolderID), nil, &folder)
+	if err != nil {
+		return nil, err
 	}
-
-	baseURL := webflowAPIBaseURL
-	if getAssetFolderBaseURL != "" {
-		baseURL = getAssetFolderBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/asset_folders/%s", baseURL, assetFolderID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var folder AssetFolderResponse
-		if err := json.Unmarshal(body, &folder); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &folder, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &folder, nil
 }
-
-// postAssetFolderBaseURL is used internally for testing to override the API base URL.
-var postAssetFolderBaseURL = ""
 
 // PostAssetFolder creates a new asset folder in a Webflow site.
 // It calls POST /v2/sites/{site_id}/asset_folders endpoint.
-// Returns the created asset folder or an error if the request fails.
 func PostAssetFolder(
 	ctx context.Context, client *http.Client,
 	siteID, displayName, parentFolder string,
 ) (*AssetFolderResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
-	}
-
-	baseURL := webflowAPIBaseURL
-	if postAssetFolderBaseURL != "" {
-		baseURL = postAssetFolderBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s/asset_folders", baseURL, siteID)
-
-	requestBody := AssetFolderCreateRequest{
-		DisplayName:  displayName,
-		ParentFolder: parentFolder,
-	}
-
-	bodyBytes, err := json.Marshal(requestBody)
+	body := AssetFolderCreateRequest{DisplayName: displayName, ParentFolder: parentFolder}
+	var folder AssetFolderResponse
+	_, err := doRequest(ctx, client, http.MethodPost, apiURL("/v2/sites/%s/asset_folders", siteID), body, &folder)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+		return nil, err
 	}
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyBytes))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses (accept both 200 and 201 as success)
-		if resp.StatusCode != 200 && resp.StatusCode != 201 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var folder AssetFolderResponse
-		if err := json.Unmarshal(body, &folder); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &folder, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &folder, nil
 }

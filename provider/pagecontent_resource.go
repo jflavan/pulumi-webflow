@@ -10,8 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
-	"time"
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
@@ -26,362 +24,269 @@ type PageContent struct{}
 type NodeContentUpdate struct {
 	// NodeID is the unique identifier for the DOM node to update (required).
 	NodeID string `pulumi:"nodeId"`
-	// Text is the new text content for the node (required for text nodes).
+	// Text is the new text content for the node. An empty string clears the node.
 	Text string `pulumi:"text"`
 }
 
 // PageContentArgs defines the input properties for the PageContent resource.
 type PageContentArgs struct {
 	// PageID is the Webflow page ID to update (24-character lowercase hexadecimal string).
-	// Example: "5f0c8c9e1c9d440000e8d8c4"
 	PageID string `pulumi:"pageId"`
+	// LocaleID optionally targets a secondary locale. When omitted Webflow updates the primary locale.
+	LocaleID string `pulumi:"localeId,optional"`
 	// Nodes is the list of node content updates to apply.
-	// Each node update specifies the nodeId and the new text content.
 	Nodes []NodeContentUpdate `pulumi:"nodes"`
 }
 
 // PageContentState defines the output properties for the PageContent resource.
-// It embeds PageContentArgs to include input properties in the output.
 type PageContentState struct {
 	PageContentArgs
-	// LastUpdated is the timestamp when the content was last updated (read-only).
-	LastUpdated string `pulumi:"lastUpdated,optional"`
 }
 
 // Annotate adds descriptions and constraints to the PageContent resource.
 func (r *PageContent) Annotate(a infer.Annotator) {
 	a.SetToken("index", "PageContent")
-	a.Describe(r, "Manages static content (text) for a Webflow page. "+
-		"This resource allows you to update text content within existing DOM nodes on a page. "+
-		"It does NOT manage page structure or layout - only content within existing nodes. "+
-		"To find node IDs, you must first retrieve the page DOM structure using the Webflow API. "+
-		"\n\n**IMPORTANT LIMITATION:** This resource does NOT support drift detection for content changes. "+
-		"If content is modified outside of Pulumi (via Webflow UI or API), those changes will NOT be detected "+
-		"during 'pulumi refresh' or 'pulumi up'. The resource only verifies that the page still exists. "+
-		"This is due to the complexity of extracting and comparing specific node text from the full DOM structure.")
+	a.Describe(r, "Manages static text content of a Webflow page (POST /v2/pages/{page_id}/dom). "+
+		"This resource updates text within existing DOM nodes; it does NOT manage page structure or layout. "+
+		"Find node IDs by fetching the page DOM (GET /v2/pages/{page_id}/dom). "+
+		"Set localeId to update a secondary locale; when omitted, Webflow targets the primary locale. "+
+		"Webflow reports per-node failures in the response; the update fails if any node was rejected. "+
+		"\n\n**IMPORTANT LIMITATION:** This resource does NOT detect drift for content changed outside of Pulumi; "+
+		"refresh only verifies that the page still exists. Destroying the resource leaves the content in place.")
 }
 
 // Annotate adds descriptions to the PageContentArgs fields.
 func (args *PageContentArgs) Annotate(a infer.Annotator) {
 	a.Describe(&args.PageID,
 		"The Webflow page ID (24-character lowercase hexadecimal string, "+
-			"e.g., '5f0c8c9e1c9d440000e8d8c4'). "+
-			"You can find page IDs using the Pages API list endpoint or in the Webflow designer. "+
-			"This field will be validated before making any API calls.")
+			"e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs.")
+
+	a.Describe(&args.LocaleID,
+		"Optional locale ID to update a secondary locale. When omitted the localeId query parameter "+
+			"is not sent and Webflow updates the primary locale.")
 
 	a.Describe(&args.Nodes,
-		"List of node content updates to apply. "+
-			"Each update specifies the nodeId (from the page's DOM structure) and the new text content. "+
-			"Node IDs can be retrieved by fetching the page DOM using GET /pages/{page_id}/dom. "+
-			"Only text content in existing nodes can be updated via this resource.")
+		"List of node content updates to apply. Each entry names a nodeId from the page's DOM "+
+			"and the new text (HTML allowed). Node IDs must be unique within the list.")
 }
 
 // Annotate adds descriptions to NodeContentUpdate fields.
 func (ncu *NodeContentUpdate) Annotate(a infer.Annotator) {
 	a.Describe(&ncu.NodeID,
 		"The unique identifier for the DOM node to update. "+
-			"This ID comes from the page's DOM structure and must exist on the page. "+
-			"Retrieve node IDs using GET /pages/{page_id}/dom endpoint.")
+			"Retrieve node IDs using GET /pages/{page_id}/dom.")
 
 	a.Describe(&ncu.Text,
-		"The new text content for the node. "+
-			"This will replace the existing text content in the specified node. "+
-			"Only applicable to text nodes or elements containing text.")
+		"The new text content for the node (HTML is allowed). "+
+			"An empty string clears the node's text.")
 }
 
-// Annotate adds descriptions to the PageContentState fields.
-func (state *PageContentState) Annotate(a infer.Annotator) {
-	a.Describe(&state.LastUpdated,
-		"The timestamp when the page content was last updated (RFC3339 format). "+
-			"This is automatically set when content is updated and is read-only.")
+// findDuplicateNodeID returns the first nodeId that appears more than once, or "".
+func findDuplicateNodeID(nodes []NodeContentUpdate) string {
+	seen := make(map[string]struct{}, len(nodes))
+	for _, node := range nodes {
+		if node.NodeID == "" {
+			continue
+		}
+		if _, dup := seen[node.NodeID]; dup {
+			return node.NodeID
+		}
+		seen[node.NodeID] = struct{}{}
+	}
+	return ""
+}
+
+// validatePageContentArgs validates fully-resolved inputs at apply time.
+func validatePageContentArgs(args PageContentArgs) error {
+	if err := ValidatePageID(args.PageID); err != nil {
+		return fmt.Errorf("validation failed for PageContent resource: %w", err)
+	}
+	if err := ValidateLocaleID(args.LocaleID); err != nil {
+		return fmt.Errorf("validation failed for PageContent resource: %w", err)
+	}
+	if len(args.Nodes) == 0 {
+		return errors.New("validation failed for PageContent resource: " +
+			"at least one node update is required. " +
+			"Please provide a list of nodes with nodeId and text fields. " +
+			"Node IDs can be retrieved using GET /pages/{page_id}/dom endpoint")
+	}
+	for i, node := range args.Nodes {
+		if err := ValidateNodeID(node.NodeID); err != nil {
+			return fmt.Errorf("validation failed for PageContent resource, node[%d]: %w", i, err)
+		}
+	}
+	if dup := findDuplicateNodeID(args.Nodes); dup != "" {
+		return fmt.Errorf("validation failed for PageContent resource: nodeId '%s' appears more than once. "+
+			"Each node may only be listed once", dup)
+	}
+	return nil
+}
+
+// Check rejects duplicate node IDs early, at preview time, in addition to the default checks.
+func (r *PageContent) Check(
+	ctx context.Context, req infer.CheckRequest,
+) (infer.CheckResponse[PageContentArgs], error) {
+	inputs, failures, err := infer.DefaultCheck[PageContentArgs](ctx, req.NewInputs)
+	if err != nil {
+		return infer.CheckResponse[PageContentArgs]{Inputs: inputs, Failures: failures}, err
+	}
+	if dup := findDuplicateNodeID(inputs.Nodes); dup != "" {
+		failures = append(failures, p.CheckFailure{
+			Property: "nodes",
+			Reason:   fmt.Sprintf("nodeId '%s' appears more than once; each node may only be listed once", dup),
+		})
+	}
+	return infer.CheckResponse[PageContentArgs]{Inputs: inputs, Failures: failures}, nil
 }
 
 // Diff determines what changes need to be made to the page content resource.
-// PageID changes trigger replacement (different page).
-// Nodes changes trigger in-place update.
+// pageId and localeId changes trigger replacement (a different target); nodes changes update in place.
 func (r *PageContent) Diff(
 	ctx context.Context, req infer.DiffRequest[PageContentArgs, PageContentState],
 ) (infer.DiffResponse, error) {
-	diff := infer.DiffResponse{}
-
-	// Check for pageId change (requires replacement - different page)
 	if req.State.PageID != req.Inputs.PageID {
-		diff.DeleteBeforeReplace = true
-		diff.HasChanges = true
-		diff.DetailedDiff = map[string]p.PropertyDiff{
-			"pageId": {Kind: p.UpdateReplace},
-		}
-		return diff, nil
+		return infer.DiffResponse{
+			HasChanges:   true,
+			DetailedDiff: map[string]p.PropertyDiff{"pageId": {Kind: p.UpdateReplace}},
+		}, nil
 	}
-
-	// Check for nodes changes (in-place update)
-	// Compare node counts first
-	if len(req.State.Nodes) != len(req.Inputs.Nodes) {
-		diff.HasChanges = true
-		diff.DetailedDiff = map[string]p.PropertyDiff{
-			"nodes": {Kind: p.Update},
-		}
-		return diff, nil
-	}
-
-	// Compare individual nodes
-	// Create maps for easier comparison
-	stateNodes := make(map[string]string)
-	for _, node := range req.State.Nodes {
-		stateNodes[node.NodeID] = node.Text
-	}
-
-	inputNodes := make(map[string]string)
-	for _, node := range req.Inputs.Nodes {
-		inputNodes[node.NodeID] = node.Text
-	}
-
-	// Check if any nodes changed
-	for nodeID, inputText := range inputNodes {
-		stateText, exists := stateNodes[nodeID]
-		if !exists || stateText != inputText {
-			diff.HasChanges = true
-			diff.DetailedDiff = map[string]p.PropertyDiff{
-				"nodes": {Kind: p.Update},
-			}
-			return diff, nil
-		}
-	}
-
-	// Check if any nodes were removed
-	for nodeID := range stateNodes {
-		if _, exists := inputNodes[nodeID]; !exists {
-			diff.HasChanges = true
-			diff.DetailedDiff = map[string]p.PropertyDiff{
-				"nodes": {Kind: p.Update},
-			}
-			return diff, nil
-		}
-	}
-
-	return diff, nil
-}
-
-// Create updates page content by applying the specified node updates.
-// Note: PageContent is a configuration resource - "create" means "apply this configuration".
-func (r *PageContent) Create(
-	ctx context.Context, req infer.CreateRequest[PageContentArgs],
-) (infer.CreateResponse[PageContentState], error) {
-	// Validate inputs BEFORE generating resource ID
-	if err := ValidatePageID(req.Inputs.PageID); err != nil {
-		return infer.CreateResponse[PageContentState]{}, fmt.Errorf("validation failed for PageContent resource: %w", err)
-	}
-
-	// Validate nodes
-	if len(req.Inputs.Nodes) == 0 {
-		return infer.CreateResponse[PageContentState]{}, errors.New(
-			"validation failed for PageContent resource: " +
-				"at least one node update is required. " +
-				"Please provide a list of nodes with nodeId and text fields. " +
-				"Node IDs can be retrieved using GET /pages/{page_id}/dom endpoint")
-	}
-
-	for i, node := range req.Inputs.Nodes {
-		if err := ValidateNodeID(node.NodeID); err != nil {
-			return infer.CreateResponse[PageContentState]{}, fmt.Errorf(
-				"validation failed for PageContent resource, node[%d]: %w", i, err)
-		}
-		if node.Text == "" {
-			return infer.CreateResponse[PageContentState]{}, fmt.Errorf("validation failed for PageContent resource, node[%d]: "+
-				"text is required but was not provided. "+
-				"Please provide the new text content for nodeId '%s'", i, node.NodeID)
-		}
-	}
-
-	state := PageContentState{
-		PageContentArgs: req.Inputs,
-		LastUpdated:     "", // Will be populated after update
-	}
-
-	// During preview, return expected state without making API calls
-	if req.DryRun {
-		// Set a preview timestamp
-		state.LastUpdated = time.Now().Format(time.RFC3339)
-		// Generate resource ID
-		resourceID := GeneratePageContentResourceID(req.Inputs.PageID)
-		return infer.CreateResponse[PageContentState]{
-			ID:     resourceID,
-			Output: state,
+	if req.State.LocaleID != req.Inputs.LocaleID {
+		return infer.DiffResponse{
+			HasChanges:   true,
+			DetailedDiff: map[string]p.PropertyDiff{"localeId": {Kind: p.UpdateReplace}},
 		}, nil
 	}
 
-	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
-	if err != nil {
-		return infer.CreateResponse[PageContentState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
+	if !pageContentNodesEqual(req.State.Nodes, req.Inputs.Nodes) {
+		return infer.DiffResponse{
+			HasChanges:   true,
+			DetailedDiff: map[string]p.PropertyDiff{"nodes": {Kind: p.Update}},
+		}, nil
 	}
 
-	// Convert nodes to API format
-	nodeUpdates := make([]DOMNodeUpdate, len(req.Inputs.Nodes))
-	for i, node := range req.Inputs.Nodes {
-		nodeUpdates[i] = DOMNodeUpdate{
-			NodeID: node.NodeID,
-			Text:   &node.Text,
-		}
-	}
-
-	// Call Webflow API to update page content
-	_, err = PutPageContent(ctx, client, req.Inputs.PageID, nodeUpdates)
-	if err != nil {
-		return infer.CreateResponse[PageContentState]{}, fmt.Errorf("failed to update page content: %w", err)
-	}
-
-	// Set update timestamp
-	state.LastUpdated = time.Now().Format(time.RFC3339)
-
-	resourceID := GeneratePageContentResourceID(req.Inputs.PageID)
-
-	return infer.CreateResponse[PageContentState]{
-		ID:     resourceID,
-		Output: state,
-	}, nil
+	return infer.DiffResponse{}, nil
 }
 
-// Read retrieves the current state of page content from Webflow.
-// Used for drift detection and refresh operations.
+// pageContentNodesEqual compares node lists ignoring order.
+func pageContentNodesEqual(a, b []NodeContentUpdate) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	am := make(map[string]string, len(a))
+	for _, n := range a {
+		am[n.NodeID] = n.Text
+	}
+	for _, n := range b {
+		text, ok := am[n.NodeID]
+		if !ok || text != n.Text {
+			return false
+		}
+	}
+	return true
+}
+
+// toDOMNodeUpdates converts inputs to the API request shape. Text is always sent, so an
+// empty string clears the node instead of being dropped.
+func toDOMNodeUpdates(nodes []NodeContentUpdate) []DOMNodeUpdate {
+	updates := make([]DOMNodeUpdate, len(nodes))
+	for i := range nodes {
+		text := nodes[i].Text
+		updates[i] = DOMNodeUpdate{NodeID: nodes[i].NodeID, Text: &text}
+	}
+	return updates
+}
+
+// applyPageContent validates and posts the node updates.
+func applyPageContent(ctx context.Context, args PageContentArgs) error {
+	if err := validatePageContentArgs(args); err != nil {
+		return err
+	}
+	client, err := GetHTTPClient(ctx, providerVersion)
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP client: %w", err)
+	}
+	if _, err := PostPageContent(ctx, client, args.PageID, args.LocaleID, toDOMNodeUpdates(args.Nodes)); err != nil {
+		return fmt.Errorf("failed to update page content: %w", err)
+	}
+	return nil
+}
+
+// Create applies the configured node updates to the page.
+func (r *PageContent) Create(
+	ctx context.Context, req infer.CreateRequest[PageContentArgs],
+) (infer.CreateResponse[PageContentState], error) {
+	state := PageContentState{PageContentArgs: req.Inputs}
+	id := GeneratePageContentResourceID(req.Inputs.PageID)
+
+	// During preview, return the inputs without calling the API. Inputs may be unknown, so
+	// validation is deferred to apply time.
+	if req.DryRun {
+		return infer.CreateResponse[PageContentState]{ID: id, Output: state}, nil
+	}
+
+	if err := applyPageContent(ctx, req.Inputs); err != nil {
+		return infer.CreateResponse[PageContentState]{}, err
+	}
+	return infer.CreateResponse[PageContentState]{ID: id, Output: state}, nil
+}
+
+// Read verifies the page still exists. The configured nodes are preserved from state because
+// mapping the full DOM back onto the managed text values is not attempted (see resource docs).
 func (r *PageContent) Read(
 	ctx context.Context, req infer.ReadRequest[PageContentArgs, PageContentState],
 ) (infer.ReadResponse[PageContentArgs, PageContentState], error) {
-	// Extract pageID from resource ID
 	pageID, err := ExtractPageIDFromPageContentResourceID(req.ID)
 	if err != nil {
 		return infer.ReadResponse[PageContentArgs, PageContentState]{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
+	if err := ValidatePageID(pageID); err != nil {
+		return infer.ReadResponse[PageContentArgs, PageContentState]{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
+	if err := ValidateLocaleID(req.State.LocaleID); err != nil {
+		return infer.ReadResponse[PageContentArgs, PageContentState]{}, fmt.Errorf("invalid state: %w", err)
+	}
 
-	// Get HTTP client
 	client, err := GetHTTPClient(ctx, providerVersion)
 	if err != nil {
 		return infer.ReadResponse[PageContentArgs, PageContentState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API to get current page content
-	response, err := GetPageContent(ctx, client, pageID)
-	if err != nil {
-		// Resource not found - return empty ID to signal deletion
-		if strings.Contains(err.Error(), "not found") {
-			return infer.ReadResponse[PageContentArgs, PageContentState]{
-				ID: "",
-			}, nil
+	if _, err := GetPageContent(ctx, client, pageID, req.State.LocaleID); err != nil {
+		if IsNotFound(err) {
+			return infer.ReadResponse[PageContentArgs, PageContentState]{ID: ""}, nil
 		}
 		return infer.ReadResponse[PageContentArgs, PageContentState]{}, fmt.Errorf("failed to read page content: %w", err)
 	}
 
-	// Build current state
-	// DRIFT DETECTION LIMITATION:
-	// We preserve the configured nodes from state instead of extracting them from the API response.
-	// This means drift detection does NOT work for content changes made outside of Pulumi.
-	// Extracting and comparing specific node text from the full DOM structure would require:
-	// 1. Complex recursive traversal of the entire DOM tree
-	// 2. Matching node IDs to their current text values
-	// 3. Handling edge cases (deleted nodes, moved nodes, nested structures)
-	// For now, we only verify that the page itself still exists (basic drift check).
 	currentInputs := PageContentArgs{
-		PageID: pageID,
-		Nodes:  req.State.Nodes, // Preserve configured nodes (NOT read from API)
+		PageID:   pageID,
+		LocaleID: req.State.LocaleID,
+		Nodes:    req.State.Nodes, // Preserved from state (NOT read from the API)
 	}
-	currentState := PageContentState{
-		PageContentArgs: currentInputs,
-		LastUpdated:     req.State.LastUpdated, // Preserve timestamp
-	}
-
-	// Verify the page still exists (basic check)
-	if response.PageID == "" {
-		return infer.ReadResponse[PageContentArgs, PageContentState]{
-			ID: "",
-		}, nil
-	}
-
 	return infer.ReadResponse[PageContentArgs, PageContentState]{
 		ID:     req.ID,
 		Inputs: currentInputs,
-		State:  currentState,
+		State:  PageContentState{PageContentArgs: currentInputs},
 	}, nil
 }
 
-// Update modifies existing page content.
+// Update re-applies the configured node updates.
 func (r *PageContent) Update(
 	ctx context.Context, req infer.UpdateRequest[PageContentArgs, PageContentState],
 ) (infer.UpdateResponse[PageContentState], error) {
-	// Validate inputs BEFORE making API calls
-	if err := ValidatePageID(req.Inputs.PageID); err != nil {
-		return infer.UpdateResponse[PageContentState]{}, fmt.Errorf("validation failed for PageContent resource: %w", err)
-	}
-
-	// Validate nodes
-	if len(req.Inputs.Nodes) == 0 {
-		return infer.UpdateResponse[PageContentState]{}, errors.New(
-			"validation failed for PageContent resource: " +
-				"at least one node update is required. " +
-				"Please provide a list of nodes with nodeId and text fields")
-	}
-
-	for i, node := range req.Inputs.Nodes {
-		if err := ValidateNodeID(node.NodeID); err != nil {
-			return infer.UpdateResponse[PageContentState]{}, fmt.Errorf(
-				"validation failed for PageContent resource, node[%d]: %w", i, err)
-		}
-		if node.Text == "" {
-			return infer.UpdateResponse[PageContentState]{}, fmt.Errorf("validation failed for PageContent resource, node[%d]: "+
-				"text is required but was not provided. "+
-				"Please provide the new text content for nodeId '%s'", i, node.NodeID)
-		}
-	}
-
-	state := PageContentState{
-		PageContentArgs: req.Inputs,
-		LastUpdated:     "", // Will be updated after API call
-	}
-
-	// During preview, return expected state without making API calls
+	state := PageContentState{PageContentArgs: req.Inputs}
 	if req.DryRun {
-		state.LastUpdated = time.Now().Format(time.RFC3339)
-		return infer.UpdateResponse[PageContentState]{
-			Output: state,
-		}, nil
+		return infer.UpdateResponse[PageContentState]{Output: state}, nil
 	}
-
-	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
-	if err != nil {
-		return infer.UpdateResponse[PageContentState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
+	if err := applyPageContent(ctx, req.Inputs); err != nil {
+		return infer.UpdateResponse[PageContentState]{}, err
 	}
-
-	// Convert nodes to API format
-	nodeUpdates := make([]DOMNodeUpdate, len(req.Inputs.Nodes))
-	for i, node := range req.Inputs.Nodes {
-		nodeUpdates[i] = DOMNodeUpdate{
-			NodeID: node.NodeID,
-			Text:   &node.Text,
-		}
-	}
-
-	// Call Webflow API to update page content
-	_, err = PutPageContent(ctx, client, req.Inputs.PageID, nodeUpdates)
-	if err != nil {
-		return infer.UpdateResponse[PageContentState]{}, fmt.Errorf("failed to update page content: %w", err)
-	}
-
-	// Set update timestamp
-	state.LastUpdated = time.Now().Format(time.RFC3339)
-
-	return infer.UpdateResponse[PageContentState]{
-		Output: state,
-	}, nil
+	return infer.UpdateResponse[PageContentState]{Output: state}, nil
 }
 
-// Delete removes the page content configuration.
-// Note: For PageContent, delete is a no-op since we don't actually delete content from the page.
-// The content remains on the page - we just stop managing it via Pulumi.
+// Delete is a no-op: the content stays on the page; Pulumi simply stops managing it.
 func (r *PageContent) Delete(
 	ctx context.Context, req infer.DeleteRequest[PageContentState],
 ) (infer.DeleteResponse, error) {
-	// PageContent is a configuration resource - deleting it just means we stop managing it.
-	// We don't actually delete content from the page (that would break the page).
-	// This is idempotent and always succeeds.
 	return infer.DeleteResponse{}, nil
 }
