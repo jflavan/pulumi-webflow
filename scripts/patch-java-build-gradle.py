@@ -213,21 +213,41 @@ def patch_build_gradle(filepath: str) -> None:
         count=1,
     )
 
-    # URL placeholders (project url + scm url share the same placeholder).
-    content = replace_literal(
-        content, 'url = "https://example.com"', f'url = "{PROJECT_URL}"', "project/scm url"
-    )
-    content = replace_literal(
+    # Project and SCM URLs. Older pulumi-java-gen emitted "https://example.com"
+    # placeholders; newer versions fill these from the schema's repository URL, so
+    # accept any quoted value and normalise it to the Maven Central form.
+    content = replace_regex(
         content,
-        'connection = "https://example.com"',
-        f'connection = "{SCM_CONNECTION}"',
+        r'(pom \{[^}]*?)url = "[^"]*"',
+        rf'\1url = "{PROJECT_URL}"',
+        "project url",
+        done_marker=f'url = "{PROJECT_URL}"',
+        count=1,
+        flags=re.DOTALL,
+    )
+    content = replace_regex(
+        content,
+        r'(scm \{[^}]*?)connection = "[^"]*"',
+        rf'\1connection = "{SCM_CONNECTION}"',
         "scm connection",
+        done_marker=f'connection = "{SCM_CONNECTION}"',
+        count=1,
     )
-    content = replace_literal(
+    content = replace_regex(
         content,
-        'developerConnection = "https://example.com"',
-        f'developerConnection = "{SCM_DEVELOPER_CONNECTION}"',
+        r'(scm \{[^}]*?)developerConnection = "[^"]*"',
+        rf'\1developerConnection = "{SCM_DEVELOPER_CONNECTION}"',
         "scm developerConnection",
+        done_marker=f'developerConnection = "{SCM_DEVELOPER_CONNECTION}"',
+        count=1,
+    )
+    content = replace_regex(
+        content,
+        r'(scm \{[^}]*?developerConnection = "[^"]*"\s*)url = "[^"]*"',
+        rf'\1url = "{PROJECT_URL}"',
+        "scm url",
+        done_marker=f'url = "{PROJECT_URL}"',
+        count=1,
     )
 
     # License block - anchored so that the pom name / developer name are not touched.
