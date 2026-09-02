@@ -8,8 +8,7 @@ This directory contains examples demonstrating how to create and manage webhooks
 - Monitor form submissions, site publishes, and content changes
 - Track e-commerce orders and inventory updates
 - Receive alerts for collection item changes
-- Monitor membership user account events
-- Use filters to receive only specific webhook events
+- Use the `form_submission` filter to receive submissions of a single form only
 
 ## What Are Webhooks?
 
@@ -20,7 +19,22 @@ Webhooks allow your application to receive real-time notifications when events o
 - Trigger CI/CD pipelines when a site is published
 - Update external databases when collection items change
 - Process orders in your e-commerce backend
-- Sync user accounts with external systems
+- React to new comments on the site
+
+## Required Token
+
+Webhooks can only be managed with a **Data Client (OAuth app) token**; site API tokens cannot call
+the webhook endpoints. The token needs `sites:write` plus the read scope of the event family you
+subscribe to:
+
+| Trigger types | Additional scope |
+|---------------|------------------|
+| `form_submission` | `forms:read` |
+| `site_publish` | `sites:read` |
+| `page_created`, `page_metadata_updated`, `page_deleted` | `pages:read` |
+| `collection_item_*` | `cms:read` |
+| `ecomm_*` | `ecommerce:read` |
+| `comment_created` | `comments:read` |
 
 ## Available Languages
 
@@ -99,16 +113,14 @@ url: "https://your-api.example.com/webhooks/webflow/orders"
 
 **Use Case:** Process payments, update inventory systems, send order confirmations, notify fulfillment.
 
-### 4. Collection Item Webhook with Filter
+### 4. Collection Item Webhook
 
-Monitor changes to specific collection items. This example shows using a filter to receive events only for specific collections.
+Monitor newly created CMS items. Webflow fires collection item events for every collection of the
+site; the API has no per-collection filter, so route by the `collectionId` in the payload instead.
 
 ```typescript
 triggerType: "collection_item_created"
 url: "https://your-api.example.com/webhooks/webflow/collection"
-filter: {
-  collectionIds: ["your-collection-id-here"]
-}
 ```
 
 **Use Case:** Sync blog posts to external platforms, trigger social media posts, update search indexes.
@@ -124,24 +136,29 @@ url: "https://your-api.example.com/webhooks/webflow/pages"
 
 **Use Case:** Update sitemaps, invalidate CDN cache, trigger SEO audits.
 
-### 6. Membership User Account Webhook
+### 6. Filtered Form Submission Webhook
 
-Monitor user account creation in Webflow Memberships.
+Receive submissions of a single form only. `filter` is accepted **only** for `form_submission`
+and has exactly one field, `name`, which must match the form's name in the Designer.
 
 ```typescript
-triggerType: "memberships_user_account_added"
-url: "https://your-api.example.com/webhooks/webflow/members"
+triggerType: "form_submission"
+url: "https://your-api.example.com/webhooks/webflow/contact"
+filter: {
+  name: "Contact Form"
+}
 ```
 
-**Use Case:** Send welcome emails, create user profiles in external systems, trigger onboarding workflows.
+**Use Case:** Route contact-form submissions to the CRM while a separate, unfiltered webhook handles
+everything else.
 
 ## Available Trigger Types
 
-The examples demonstrate these trigger types:
+The provider accepts the 14 trigger types documented by Webflow:
 
 | Trigger Type | Description |
 |--------------|-------------|
-| `form_submission` | Form is submitted on your site |
+| `form_submission` | Form is submitted on your site (supports `filter: { name }`) |
 | `site_publish` | Site is published (full or partial) |
 | `page_created` | New page is created |
 | `page_metadata_updated` | Page metadata (title, description, etc.) is updated |
@@ -149,16 +166,15 @@ The examples demonstrate these trigger types:
 | `ecomm_new_order` | New order is placed |
 | `ecomm_order_changed` | Order status or details change |
 | `ecomm_inventory_changed` | Product inventory is updated |
-| `memberships_user_account_added` | New user account is created |
-| `memberships_user_account_updated` | User account is updated |
-| `memberships_user_account_deleted` | User account is deleted |
 | `collection_item_created` | Collection item is created |
 | `collection_item_changed` | Collection item is updated |
 | `collection_item_deleted` | Collection item is deleted |
+| `collection_item_published` | Collection item is published |
 | `collection_item_unpublished` | Collection item is unpublished |
 | `comment_created` | A comment is created on the site |
 
-All trigger types documented by Webflow are accepted, including `comment_created` for site comments.
+The former `memberships_user_account_added` / `_updated` / `_deleted` trigger types were removed by
+Webflow together with the Memberships product and are no longer accepted.
 
 ## Configuration
 
@@ -181,15 +197,18 @@ After successful deployment, you'll see exports like:
 
 ```
 Outputs:
-    deployedSiteId           : "abc123..."
-    formWebhookId            : "webhook_abc..."
+    deployedSiteId           : [secret]
+    formWebhookId            : "6543a1b2c3d4e5f6a7b8c9d0"
     formWebhookCreated       : "2025-01-06T12:34:56Z"
-    publishWebhookId         : "webhook_def..."
-    ecommWebhookId           : "webhook_ghi..."
-    collectionWebhookId      : "webhook_jkl..."
-    pageMetadataWebhookId    : "webhook_mno..."
-    membershipWebhookId      : "webhook_pqr..."
+    publishWebhookId         : "6543a1b2c3d4e5f6a7b8c9d1"
+    ecommWebhookId           : "6543a1b2c3d4e5f6a7b8c9d2"
+    collectionWebhookId      : "6543a1b2c3d4e5f6a7b8c9d3"
+    pageMetadataWebhookId    : "6543a1b2c3d4e5f6a7b8c9d4"
+    contactFormWebhookId     : "6543a1b2c3d4e5f6a7b8c9d5"
 ```
+
+IDs and timestamps are only known after the webhook is created; `pulumi preview` shows them as
+`output<string>` rather than inventing placeholder values.
 
 ## Webhook Payload Example
 
@@ -290,9 +309,20 @@ pulumi stack rm dev
 
 ### "Invalid trigger type" Error
 
-- Ensure `triggerType` matches one of the supported values exactly
+- Ensure `triggerType` matches one of the 14 supported values exactly
 - Check for typos (e.g., `form_submissions` instead of `form_submission`)
+- `memberships_user_account_*` types no longer exist; remove those webhooks
 - Refer to the Available Trigger Types table above
+
+### "filter is only supported for form_submission" Error
+
+`filter` is rejected on every other trigger type, and the only accepted key is `name`. Remove the
+filter (or move it to a `form_submission` webhook).
+
+### 401 / 403 When Creating a Webhook
+
+The token is a site API token or lacks a scope. Use a Data Client (OAuth) token that has
+`sites:write` and the read scope of the event family (see [Required Token](#required-token)).
 
 ## Related Resources
 

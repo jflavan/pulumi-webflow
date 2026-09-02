@@ -25,7 +25,9 @@ This directory contains examples demonstrating how to create and manage Webflow 
 ## Prerequisites
 
 - Site creation through the Webflow API requires an **Enterprise workspace**
-- An API token with the `sites:read` and `sites:write` scopes, set via `pulumi config set webflow:apiToken --secret` or `WEBFLOW_API_TOKEN`
+- An API token set via `pulumi config set webflow:apiToken --secret` or `WEBFLOW_API_TOKEN` with:
+  - `workspace:write` to **create** sites (the create endpoint is a workspace operation)
+  - `sites:read` and `sites:write` to read, update, publish and delete them
 
 ## Quick Start
 
@@ -144,8 +146,9 @@ export const publishScope = configuredSite.publishScope;
 - **Single-page publishing:** set `publishPageId` to publish only that page instead of the whole
   site - handy when a `PageMetadata` or `PageContent` change should go live without republishing
   everything.
-- The read-only `publishScope` output reports what the last provider-initiated publish targeted,
-  and `lastPublished` when it happened.
+- The read-only `publishScope` output reports what the last provider-initiated publish targeted
+  (`site` for a full publish, `page` when `publishPageId` was used), and `lastPublished` when it
+  happened. Both are empty until the provider has published.
 
 ## Configuration
 
@@ -176,9 +179,12 @@ Outputs:
     basicSiteTimeZone     : "America/New_York"
     environmentSiteIds    : ["def456...", "ghi789...", "jkl012..."]
     configuredSiteId      : "mno345..."
-    configuredSitePublishScope : "webflow-subdomain"   # only after a publish
+    configuredSitePublishScope : "site"   # "site" or "page"; only after a publish
     configuredSiteLastPublished: "2026-05-01T12:00:00Z"
 ```
+
+Webflow assigns IDs, short names and timestamps on creation, so `pulumi preview` shows them as
+`output<string>` rather than placeholder values.
 
 ## Cleanup
 

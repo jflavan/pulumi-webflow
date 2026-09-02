@@ -242,9 +242,16 @@ Error: failed to import site: Forbidden - access denied to this resource
    ```bash
    echo $WEBFLOW_API_TOKEN
    ```
-2. Check that your API token has the required scopes:
-   - `site_config:read` - Read site configuration
-   - `site_config:write` - Write site configuration (needed for future updates)
+2. Check that your API token has the required scopes for the resource you import (see the
+   [README scope table](../README.md#authentication)):
+   - `Site`: `sites:read` (and `sites:write` for future updates; `workspace:write` is only needed
+     to *create* sites)
+   - `Redirect`: `sites:read` / `sites:write` **and** `site_config:read` / `site_config:write`
+   - `RobotsTxt`: `site_config:read` / `site_config:write`
+   - `Webhook`, `RegisteredScript`, `InlineScript`, `SiteCustomCode`, `PageCustomCode` and
+     `getTokenInfo`: a **Data Client (OAuth app) token** - site API tokens cannot call these
+     endpoints. Webhooks need `sites:write` plus the event family's read scope; custom code needs
+     `custom_code:read` / `custom_code:write`
 3. Ensure your token belongs to a workspace that has access to the site
 4. Regenerate your API token if needed at https://webflow.com/dashboard/integrations/applications
 

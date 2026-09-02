@@ -7,7 +7,7 @@ This directory contains examples demonstrating how to create and manage CMS coll
 - Create CMS collections for structured content (blog posts, products, team members, etc.)
 - Use required properties: `siteId`, `displayName`, `singularName`
 - Control URL slugs with the optional `slug` property
-- Understand collection lifecycle (collections require replacement for any changes)
+- Understand the collection lifecycle (names and slug update in place; moving to another site replaces)
 - Access read-only timestamps: `createdOn`, `lastUpdated`
 
 ## Available Languages
@@ -155,25 +155,27 @@ Outputs:
 
 ## Important Notes
 
-### Collections Do Not Support Updates
+### In-Place Updates
 
-**CRITICAL**: Webflow's API does not provide an update endpoint for collections. Any changes to collection properties (`displayName`, `singularName`, `slug`, or `siteId`) will trigger a replacement (delete + recreate).
+`displayName`, `singularName` and `slug` are updated in place with `PATCH /collections/{id}`;
+existing collection items and fields are kept:
 
-This means:
-- Changing a collection's name will delete and recreate it
-- All collection items (blog posts, products, etc.) will be lost
-- Plan carefully before creating collections in production
+```bash
+~ webflow:index:Collection: (update)
+    [urn=urn:pulumi:dev::example::webflow:index/collection:Collection::blog-posts-collection]
+  ~ displayName: "Blog Posts" => "Articles"
+```
 
 ### Replacement Behavior
 
-When you modify any collection property:
+Only `siteId` forces a replacement (delete + recreate), because a collection cannot be moved
+between sites. **All items in the collection are lost** when it is replaced, so treat a `siteId`
+change as a migration and export your content first.
 
 ```bash
 ~ webflow:index:Collection: (replace)
     [urn=urn:pulumi:dev::example::webflow:index/collection:Collection::blog-posts-collection]
-    [id=site_abc123:collection_def456]
-  - displayName: "Blog Posts"
-  + displayName: "Articles"  # This change triggers replacement
+  ~ siteId: "..." => "..."  # This change triggers replacement
 ```
 
 ### Collection Items

@@ -175,10 +175,21 @@ Each stack has its own secrets.
 
 ### What permissions does the API token need?
 
-The token needs the scopes for the resource families you manage: `sites:*` (Site, Webhook),
-`site_config:*` (Redirect, RobotsTxt), `pages:*`, `cms:*`, `assets:*`, `custom_code:*`,
-`ecommerce:read` and `authorized_user:read` for the token/user functions. See the scope table in the
-[README](../README.md#authentication).
+The token needs the scopes for the resource families you manage:
+
+- `Site`: `sites:read` / `sites:write`, plus `workspace:write` to **create** sites
+- `Redirect`: `sites:read` / `sites:write` **and** `site_config:read` / `site_config:write` (Webflow's
+  endpoint reference and scopes page disagree; grant both)
+- `RobotsTxt`: `site_config:read` / `site_config:write`
+- `Webhook`: a **Data Client (OAuth app) token** with `sites:write` plus the read scope of the event
+  family (`forms:read`, `sites:read`, `pages:read`, `cms:read`, `ecommerce:read` or `comments:read`)
+- Pages, CMS, assets, Google tags, e-commerce: `pages:*`, `cms:*`, `assets:*`, `sites:*`, `ecommerce:read`
+- `RegisteredScript`, `InlineScript`, `SiteCustomCode`, `PageCustomCode`: a **Data Client token**
+  with `custom_code:read` / `custom_code:write` (site API tokens cannot call the custom code
+  endpoints), plus `sites:write` / `pages:write` to remove applied code on destroy
+- `getTokenInfo`: Data Client token only; `getAuthorizedUser`: `authorized_user:read`
+
+See the scope table in the [README](../README.md#authentication).
 
 Tokens can be restricted to specific sites. Use the Webflow Dashboard to configure granular permissions.
 
@@ -492,18 +503,21 @@ import pulumi
 import pulumi_webflow as webflow
 
 redirect = webflow.Redirect("old-to-new",
-    site_id="507f1f77bcf86cd799439011",  # Required
-    source="/old-page",                   # Required
-    target="/new-page"                    # Required
+    site_id="507f1f77bcf86cd799439011",   # Required
+    source_path="/old-page",              # Required
+    destination_path="/new-page",         # Required
 )
 
-# Redirect with permanent status (301)
-redirect_301 = webflow.Redirect("old-domain",
+# Redirect to an external domain
+external_redirect = webflow.Redirect("old-domain",
     site_id="507f1f77bcf86cd799439011",
-    source="/",
-    target="https://new-domain.com"
+    source_path="/",
+    destination_path="https://new-domain.com",
 )
 ```
+
+Webflow redirects are always permanent (HTTP 301); the `status_code` input is deprecated and
+ignored. Changing `destination_path` updates the redirect in place, changing `source_path` replaces it.
 
 ### How do I manage robots.txt?
 
@@ -538,7 +552,6 @@ redirect = webflow.Redirect("my-redirect",
     site_id=site.id,  # Use output from site
     source_path="/old",
     destination_path="/new",
-    status_code=301,
 )
 
 # Export for later use

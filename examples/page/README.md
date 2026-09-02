@@ -117,8 +117,19 @@ export const homePageTitle = homePage.title;
 export const homePageSeoTitle = homePage.seo.title;
 ```
 
-Both functions accept an optional `localeId`; `getPage` also accepts `translatable: true` to return
-a secondary locale's own translation instead of content inherited from the primary locale.
+Both functions accept an optional `localeId`. `getPage` also accepts `translatable`, a **secondary
+locale ID** (string): when set, the function reads that locale's own translation instead of content
+inherited from the primary locale.
+
+```typescript
+const frenchAbout = webflow.getPageOutput({
+  pageId: "5f0c8c9e1c9d440000e8d8c4",
+  translatable: "653fd9af6a07fc9cfd7a5e57", // secondary locale ID
+});
+```
+
+Webflow returns `400` when `translatable` names the primary locale and `403` when translation
+exclusions are disabled for the site.
 
 ### 3. Reference Pages in Other Resources
 

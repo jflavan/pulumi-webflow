@@ -16,34 +16,34 @@ public class App {
             var config = ctx.config();
             var siteId = config.requireSecret("siteId");
 
-            // Example 1: Permanent Redirect (301) - Best for content moves
-            // Use 301 redirects when content has permanently moved to preserve SEO value
+            // Webflow redirects are always permanent (HTTP 301). The deprecated
+            // statusCode input is ignored by the provider, so it is simply omitted here.
+
+            // Example 1: Content Move Redirect - Best for content moves
+            // Permanent redirects preserve SEO value when content has moved
             var permanentRedirect = new Redirect("old-blog-to-new-blog",
                 RedirectArgs.builder()
                     .siteId(siteId)
                     .sourcePath("/blog/old-article")
                     .destinationPath("/blog/articles/updated-article")
-                    .statusCode(301)
                     .build());
 
-            // Example 2: Temporary Redirect (302) - Use for temporary changes
-            // Use 302 redirects for seasonal content or A/B testing
-            var temporaryRedirect = new Redirect("temporary-landing-page",
+            // Example 2: Campaign Redirect - Point a short path at the current campaign page
+            // Changing destinationPath later updates the redirect in place
+            var campaignRedirect = new Redirect("campaign-landing-page",
                 RedirectArgs.builder()
                     .siteId(siteId)
                     .sourcePath("/old-campaign")
                     .destinationPath("/new-campaign-2025")
-                    .statusCode(302)
                     .build());
 
-            // Example 3: External Redirect (301) - Redirect to another domain
+            // Example 3: External Redirect - Redirect to another domain
             // Useful for partner links or moved subdomains
             var externalRedirect = new Redirect("external-partner-link",
                 RedirectArgs.builder()
                     .siteId(siteId)
                     .sourcePath("/partner")
                     .destinationPath("https://partner-site.com")
-                    .statusCode(301)
                     .build());
 
             // Example 4: Bulk Redirects using Loop
@@ -62,7 +62,6 @@ public class App {
                         .siteId(siteId)
                         .sourcePath(mapping[0])
                         .destinationPath(mapping[1])
-                        .statusCode(301)
                         .build());
                 bulkRedirects.add(redirect);
             }
@@ -70,7 +69,7 @@ public class App {
             // Export values for reference
             ctx.export("deployedSiteId", siteId);
             ctx.export("permanentRedirectId", permanentRedirect.id());
-            ctx.export("temporaryRedirectId", temporaryRedirect.id());
+            ctx.export("campaignRedirectId", campaignRedirect.id());
             ctx.export("externalRedirectId", externalRedirect.id());
             ctx.export("bulkRedirectIds", Output.all(bulkRedirects.stream()
                 .map(Redirect::id)

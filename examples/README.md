@@ -168,7 +168,7 @@ examples/robotstxt/
 
 ### Redirect Resource
 
-Manage URL redirects (301 permanent, 302 temporary, external).
+Manage URL redirects (permanent 301 redirects, including to external domains; Webflow has no 302 redirects).
 
 ```
 examples/redirect/
@@ -180,8 +180,8 @@ examples/redirect/
 ```
 
 **What's Included:**
-- Permanent redirects (301)
-- Temporary redirects (302)
+- Permanent redirects (301 - the only kind Webflow supports)
+- Campaign redirects whose destination is updated in place
 - External domain redirects
 - Bulk redirect patterns
 - Redirect management

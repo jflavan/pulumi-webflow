@@ -82,8 +82,9 @@ const updatedPage = webflow.getPageOutput({ pageId: pageSettings.pageId }, { dep
 export const seoTitle = updatedPage.seo.title;
 ```
 
-`getPage` also accepts `localeId` and `translatable: true` (returns the secondary locale's own
-translation instead of content inherited from the primary locale).
+`getPage` also accepts `localeId` and `translatable` - a secondary locale ID string; when set, the
+function returns that locale's own translation instead of content inherited from the primary locale
+(the API answers 400 for the primary locale and 403 when translation exclusions are disabled).
 
 ## Configuration
 

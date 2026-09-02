@@ -70,7 +70,6 @@ Allow: /
 						SiteId:          site.ID(),
 						SourcePath:      pulumi.String("/old-domain"),
 						DestinationPath: pulumi.String("/"),
-						StatusCode:      pulumi.Int(301),
 					})
 				if err != nil {
 					return fmt.Errorf("failed to create redirect for %s: %w",

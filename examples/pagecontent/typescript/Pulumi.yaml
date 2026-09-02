@@ -6,6 +6,8 @@ config:
   pageId:
     description: The Webflow page ID (24-character hex string)
     secret: true
+  localeId:
+    description: A secondary locale ID of the site (primary-locale content cannot be edited via the API)
   environment:
     description: Deployment environment (development, staging, production)
     default: development

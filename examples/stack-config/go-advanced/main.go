@@ -21,11 +21,11 @@ type SiteConfig struct {
 	Redirects     []RedirectConfig `json:"redirects,omitempty"`
 }
 
-// RedirectConfig represents a redirect rule for a site
+// RedirectConfig represents a redirect rule for a site.
+// Webflow redirects are always 301; there is no status code to configure.
 type RedirectConfig struct {
 	SourcePath      string `json:"sourcePath"`
 	DestinationPath string `json:"destinationPath"`
-	StatusCode      int    `json:"statusCode"`
 }
 
 func main() {
@@ -112,7 +112,6 @@ func main() {
 						SiteId:          site.ID(),
 						SourcePath:      pulumi.String(redirect.SourcePath),
 						DestinationPath: pulumi.String(redirect.DestinationPath),
-						StatusCode:      pulumi.Int(redirect.StatusCode),
 					})
 				if err != nil {
 					return fmt.Errorf("failed to create redirect %s for site %s: %w",

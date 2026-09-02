@@ -18,7 +18,6 @@ config:
       redirects:
         - sourcePath: "/old-pricing"
           destinationPath: "/pricing"
-          statusCode: 301
 
     docs:
       displayName: "Documentation (Staging)"
@@ -26,7 +25,6 @@ config:
       redirects:
         - sourcePath: "/v1"
           destinationPath: "/docs/v1"
-          statusCode: 301
 
     blog:
       displayName: "Engineering Blog (Staging)"

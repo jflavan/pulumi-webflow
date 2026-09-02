@@ -10,17 +10,14 @@ sites:
     redirects:
       - sourcePath: "/old-campaign"
         destinationPath: "/new-campaign"
-        statusCode: 301
       - sourcePath: "/promo"
         destinationPath: "/special-offer"
-        statusCode: 301
 
   - name: "product-landing"
     displayName: "Product Landing Page"
     redirects:
       - sourcePath: "/beta"
         destinationPath: "/launch"
-        statusCode: 301
 
   - name: "partner-portal"
     displayName: "Partner Portal"
@@ -34,7 +31,6 @@ sites:
     redirects:
       - sourcePath: "/posts"
         destinationPath: "/articles"
-        statusCode: 301
 
   - name: "knowledge-base"
     displayName: "Knowledge Base"
@@ -58,7 +54,6 @@ sites:
     redirects:
       - sourcePath: "/about-us"
         destinationPath: "/company"
-        statusCode: 301
 
   - name: "investor-relations"
     displayName: "Investor Relations"
@@ -75,7 +70,6 @@ sites:
     redirects:
       - sourcePath: "/join"
         destinationPath: "/beta-signup"
-        statusCode: 302
 
   - name: "webinar-series"
     displayName: "Webinar Series"

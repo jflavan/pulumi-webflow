@@ -12,34 +12,35 @@ const siteId = config.requireSecret("siteId");
  *
  * This example demonstrates how to manage URL redirects for your Webflow sites.
  * Redirects are useful for:
- * - Moving content to new URLs (SEO-friendly 301 redirects)
- * - Temporary redirects (302 redirects)
+ * - Moving content to new URLs (SEO-friendly permanent redirects)
+ * - Short campaign paths that point at the current landing page
  * - External site redirects
  * - Handling URL pattern changes
+ *
+ * Webflow redirects are always permanent (HTTP 301). The deprecated `statusCode`
+ * input is ignored by the provider, so it is simply omitted here.
  */
 
-// Example 1: Permanent Redirect (301) - Best for content moves
+// Example 1: Content Move Redirect - Best for content moves
 const permanentRedirect = new webflow.Redirect("old-blog-to-new-blog", {
   siteId: siteId,
   sourcePath: "/blog/old-article",
   destinationPath: "/blog/articles/updated-article",
-  statusCode: 301,
 });
 
-// Example 2: Temporary Redirect (302) - Use for temporary changes
-const temporaryRedirect = new webflow.Redirect("temporary-landing-page", {
+// Example 2: Campaign Redirect - Point a short path at the current campaign page.
+// Changing `destinationPath` later updates the redirect in place.
+const campaignRedirect = new webflow.Redirect("campaign-landing-page", {
   siteId: siteId,
   sourcePath: "/old-campaign",
   destinationPath: "/new-campaign-2025",
-  statusCode: 302,
 });
 
-// Example 3: External Redirect (301) - Redirect to another domain
+// Example 3: External Redirect - Redirect to another domain
 const externalRedirect = new webflow.Redirect("external-partner-link", {
   siteId: siteId,
   sourcePath: "/partner",
   destinationPath: "https://partner-site.com",
-  statusCode: 301,
 });
 
 // Example 4: Bulk Redirects using Loop
@@ -55,7 +56,6 @@ redirectMappings.forEach((mapping, index) => {
     siteId: siteId,
     sourcePath: mapping.old,
     destinationPath: mapping.new,
-    statusCode: 301,
   });
   bulkRedirects.push(redirect);
 });
@@ -63,7 +63,7 @@ redirectMappings.forEach((mapping, index) => {
 // Export the redirect resources for reference
 export const deployedSiteId = siteId;
 export const permanentRedirectId = permanentRedirect.id;
-export const temporaryRedirectId = temporaryRedirect.id;
+export const campaignRedirectId = campaignRedirect.id;
 export const externalRedirectId = externalRedirect.id;
 export const bulkRedirectIds = bulkRedirects.map((r) => r.id);
 

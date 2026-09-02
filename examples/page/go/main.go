@@ -35,7 +35,8 @@ func main() {
 			page := webflow.GetPageOutput(ctx, webflow.GetPageOutputArgs{
 				PageId: pulumi.String(pageID),
 				// LocaleId:     pulumi.String("your-locale-id"), // optional secondary locale
-				// Translatable: pulumi.Bool(true),               // return the locale's own translation
+				// Translatable: pulumi.String("your-locale-id"), // secondary locale ID: return its own translation
+				//                                                // (400 for the primary locale, 403 if exclusions are disabled)
 			})
 			specificPage = &page
 		}

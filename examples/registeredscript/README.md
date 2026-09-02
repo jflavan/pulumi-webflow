@@ -15,6 +15,12 @@ This directory contains examples demonstrating how to register and manage custom
 |------------|--------------|----------------|---------------------|
 | TypeScript | `typescript/`| `index.ts`     | `package.json`      |
 
+## Required Token
+
+The script registry endpoints are only available to **Data Client (OAuth app) tokens** with the
+`custom_code:read` and `custom_code:write` scopes; site API tokens receive `401`/`403`. Pass the
+app's access token as `webflow:apiToken` (or `WEBFLOW_API_TOKEN`).
+
 ## Quick Start
 
 ### TypeScript
@@ -26,6 +32,17 @@ pulumi stack init dev
 pulumi config set siteId your-site-id --secret
 pulumi up
 ```
+
+## Registry Lifecycle
+
+Webflow's registry is append-only: there is **no unregister endpoint**.
+
+- `pulumi destroy` removes the resource from Pulumi state without calling the API; the
+  registration stays in Webflow. A site can hold at most **800** registered scripts.
+- `displayName` and `scriptVersion` identify a registration. Changing either registers a **new**
+  script and leaves the previous one in place (Pulumi reports a replacement; nothing is deleted).
+- `scriptVersion` is required. Register a new version whenever the hosted file changes so
+  `SiteCustomCode` / `PageCustomCode` can pin the version they load.
 
 ## Examples Included
 
@@ -151,6 +168,7 @@ console.log(`sha384-${hash}`);
 - Hash must match the hosted script exactly
 
 ### Version
+- Required
 - Must follow Semantic Versioning (SemVer): `major.minor.patch`
 - Examples: `1.0.0`, `2.3.1`, `0.1.0`
 - Invalid: `v1.0`, `1.0`, `1.0.0-beta`
@@ -166,14 +184,17 @@ See the `sitecustomcode` and `pagecustomcode` examples for usage.
 
 ## Cleanup
 
-To remove all registered scripts:
+To stop managing the registered scripts:
 
 ```bash
 pulumi destroy
 pulumi stack rm dev
 ```
 
-**Note:** Deleting a registered script will remove it from any pages or site-wide configurations where it's applied.
+**Note:** `pulumi destroy` does not call the Webflow API - the registry has no unregister
+endpoint, so the scripts remain registered (and still count toward the 800-per-site limit). Pages
+and site-wide configurations that reference the script keep working; remove those references with
+`SiteCustomCode` / `PageCustomCode` if the script should stop loading.
 
 ## Troubleshooting
 
@@ -192,11 +213,22 @@ sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 sha512-...
 ```
 
-### "Invalid scriptVersion" Error
+### "Invalid scriptVersion" / "scriptVersion is required" Error
 
-Version must be valid SemVer:
+`scriptVersion` is required and must be valid SemVer:
 - Valid: `1.0.0`, `2.3.1`
 - Invalid: `v1.0.0`, `1.0`, `1.0.0-beta`
+
+### 401 / 403 From the Registry Endpoints
+
+The token is a site API token or lacks `custom_code:write`. Use a Data Client (OAuth app) token
+with `custom_code:read` and `custom_code:write`.
+
+### "Too many registered scripts"
+
+The site has reached the 800-script limit. Because scripts cannot be unregistered through the
+API, reuse existing registrations (same `displayName` + `scriptVersion`) instead of creating new
+ones, or remove unused scripts in the Webflow dashboard.
 
 ### Script Not Loading on Page
 

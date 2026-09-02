@@ -38,8 +38,9 @@ let specificPage: pulumi.Output<webflow.GetPageResult> | undefined;
 if (pageId) {
   specificPage = webflow.getPageOutput({
     pageId: pageId,
-    // localeId: "your-locale-id", // optional secondary locale
-    // translatable: true,         // return the locale's own translation, not inherited content
+    // localeId: "your-locale-id",     // optional secondary locale
+    // translatable: "your-locale-id", // secondary locale ID: return its own translation, not inherited content
+    //                                 // (400 for the primary locale, 403 if translation exclusions are disabled)
   });
 }
 

@@ -106,7 +106,6 @@ sites:
     redirects:
       - sourcePath: "/old-campaign"
         destinationPath: "/new-campaign"
-        statusCode: 301
 ```
 
 **Benefits:**
