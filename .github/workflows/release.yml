@@ -261,7 +261,7 @@ jobs:
         run: npm install -g npm@11
 
       # The package is published from sdk/nodejs/bin, where `make build_nodejs` has emitted the
-      # compiled JavaScript and .d.ts files and copied package.json/README/LICENSE/.npmignore.
+      # compiled JavaScript and .d.ts files, copied package.json/README/LICENSE, and generated .npmignore.
       # Publishing from sdk/nodejs itself would ship only the TypeScript sources.
       - name: Publish Node.js SDK
         run: |

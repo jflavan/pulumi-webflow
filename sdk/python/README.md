@@ -247,31 +247,37 @@ existing site, page or collection ID.
 
 | Resource | What it manages | Example |
 |----------|-----------------|---------|
-| `Site` | Webflow sites (create/update/delete). Inputs: `workspaceId`, `displayName`, optional `parentFolderId`, `templateName`, `publish`. `shortName` and `timeZone` are read-only outputs. | [examples/site](./examples/site/) |
+| `Site` | Webflow sites (create/update/delete). Inputs: `workspaceId`, `displayName`, optional `parentFolderId`, `templateName`, and `publish` with `publishToWebflowSubdomain`, `publishCustomDomains` or `publishPageId` (single page). `shortName`, `timeZone` and `publishScope` are read-only outputs. | [examples/site](./examples/site/) |
 | `Redirect` | 301/302 URL redirects for a site | [examples/redirect](./examples/redirect/) |
 | `RobotsTxt` | The site's `robots.txt` | [examples/robotstxt](./examples/robotstxt/) |
 | `Collection` | CMS collections (changes require replacement) | [examples/collection](./examples/collection/) |
 | `CollectionField` | Fields of a CMS collection | [examples/collectionfield](./examples/collectionfield/) |
 | `CollectionItem` | CMS items with dynamic field data | [examples/collectionitem](./examples/collectionitem/) |
-| `PageData` | Reads metadata of pages created in the Designer (pages cannot be created via the API) | [examples/page](./examples/page/) |
-| `PageContent` | Text content inside existing DOM nodes of a page | [examples/pagecontent](./examples/pagecontent/) |
-| `Webhook` | Event webhooks (form submissions, publishes, e-commerce events, ...) | [examples/webhook](./examples/webhook/) |
-| `Asset` | Uploaded files and images (immutable; changes replace the asset) | [examples/asset](./examples/asset/) |
+| `PageMetadata` | Title, slug, SEO and Open Graph settings of a page created in the Designer (pages cannot be created via the API), per locale | [examples/pagemetadata](./examples/pagemetadata/) |
+| `PageContent` | Text content inside existing DOM nodes of a page, optionally per locale | [examples/pagecontent](./examples/pagecontent/) |
+| `PageSchemaMarkup` | JSON-LD schema markup of a page (beta API) | [examples/pageschemamarkup](./examples/pageschemamarkup/) |
+| `Webhook` | Event webhooks (form submissions, publishes, e-commerce events, comments, ...) | [examples/webhook](./examples/webhook/) |
+| `Asset` | Files and images uploaded from a local path or URL (`fileSource`); content changes replace the asset | [examples/asset](./examples/asset/) |
 | `AssetFolder` | Asset folders (the API cannot delete them) | [examples/assetfolder](./examples/assetfolder/) |
 | `RegisteredScript` | Externally hosted scripts in the script registry, with `scriptVersion` and integrity hash | [examples/registeredscript](./examples/registeredscript/) |
 | `InlineScript` | Inline JavaScript (up to 2000 characters) in the script registry, with `scriptVersion` | [examples/inlinescript](./examples/inlinescript/) |
 | `SiteCustomCode` | Applies registered scripts site-wide (header/footer) | [examples/sitecustomcode](./examples/sitecustomcode/) |
 | `PageCustomCode` | Applies registered scripts to a single page | [examples/pagecustomcode](./examples/pagecustomcode/) |
+| `GoogleTag` | A Google Tag ID (GA4, Google Tag, Google Ads, Campaign Manager) on a site | [examples/googletag](./examples/googletag/) |
 | `EcommerceSettings` | Read-only import of a site's e-commerce settings | [examples/ecommerce-settings](./examples/ecommerce-settings/) |
 
 | Function | What it returns | Example |
 |----------|-----------------|---------|
 | `getTokenInfo` | Scopes, rate limits and authorized resources of the configured API token | [examples/token](./examples/token/) |
 | `getAuthorizedUser` | The user who authorized the API token | [examples/token](./examples/token/) |
+| `getPages` | All pages of a site with their metadata (the way to find page IDs) | [examples/page](./examples/page/) |
+| `getPage` | The metadata of a single page, optionally for a locale | [examples/page](./examples/page/) |
+| `getPageSchemaMarkup` | The JSON-LD schema markup of a page (beta API) | [examples/pageschemamarkup](./examples/pageschemamarkup/) |
+| `getAnalyticsTraffic`, `getAnalyticsTopPages`, `getAnalyticsTopDimensions`, `getAnalyticsTopEvents`, `getAnalyticsTimeOnPage` | Site analytics reports from the Analyze API (beta; requires the Analyze add-on) | [examples/analytics](./examples/analytics/) |
 
-**New in this release:** the `GoogleTag`, `PageSchemaMarkup` and `PageMetadata` resources and the `getPage`,
-`getPages`, `getPageSchemaMarkup` and `getAnalytics*` functions are landing with this release line; see the
-[CHANGELOG](./CHANGELOG.md) for the exact version and the generated `schema.json` for their properties.
+**Available from the next release:** the `GoogleTag`, `PageSchemaMarkup` and `PageMetadata` resources and the
+`getPage`, `getPages`, `getPageSchemaMarkup` and `getAnalytics*` functions ship with the next release line, which
+also removes the `PageData` resource (use `getPages`/`getPage` instead); see the [CHANGELOG](./CHANGELOG.md).
 
 ---
 
@@ -291,13 +297,14 @@ existing site, page or collection ID.
    |-----------------|-----------------------|--------|
    | Sites | `Site`, `Webhook` | `sites:read`, `sites:write` |
    | Site configuration | `Redirect`, `RobotsTxt` | `site_config:read`, `site_config:write` |
-   | Pages | `PageData`, `PageContent` (and the upcoming `PageMetadata`, `PageSchemaMarkup`, `getPage*`) | `pages:read`, `pages:write` |
+   | Pages | `PageMetadata`, `PageContent`, `PageSchemaMarkup`, `getPages`, `getPage`, `getPageSchemaMarkup` | `pages:read`, `pages:write` |
    | CMS | `Collection`, `CollectionField`, `CollectionItem` | `cms:read`, `cms:write` |
    | Assets | `Asset`, `AssetFolder` | `assets:read`, `assets:write` |
-   | Custom code | `RegisteredScript`, `InlineScript`, `SiteCustomCode`, `PageCustomCode` (and the upcoming `GoogleTag`) | `custom_code:read`, `custom_code:write` |
+   | Custom code | `RegisteredScript`, `InlineScript`, `SiteCustomCode`, `PageCustomCode` | `custom_code:read`, `custom_code:write` |
+   | Google tags | `GoogleTag` | `sites:read`, `sites:write` |
    | E-commerce | `EcommerceSettings` | `ecommerce:read` |
    | Token and user info | `getTokenInfo`, `getAuthorizedUser` | `authorized_user:read` |
-   | Analytics (upcoming) | `getAnalytics*` | the analytics scope listed in the [Webflow scope reference](https://developers.webflow.com/data/reference/scopes) |
+   | Analytics (beta API) | `getAnalytics*` | `sites:read`, plus a workspace with the Analyze add-on |
 
    Read-only scopes are enough for `pulumi preview`, `pulumi refresh` and the functions; `pulumi up` needs the write scopes.
 7. Click **Create Token**

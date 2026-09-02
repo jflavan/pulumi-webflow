@@ -145,14 +145,19 @@ dotnet_sdk: sdk/dotnet
 go_sdk:	sdk/go
 
 # The Node.js package is published from ${PACKDIR}/nodejs/bin (where tsc emits the
-# JavaScript and .d.ts files), so package.json, README, LICENSE and .npmignore are
-# copied there. bin/package.json is patched to point at the compiled entry points.
+# JavaScript and .d.ts files), so package.json, README and LICENSE are copied there
+# and an .npmignore is generated. bin/package.json is patched to point at the compiled
+# entry points.
 .PHONY: nodejs_sdk
 nodejs_sdk: sdk/nodejs
 	cd ${PACKDIR}/nodejs/ && \
 		yarn install && \
 		yarn run tsc
-	cp README.md LICENSE ${PACKDIR}/nodejs/package.json ${PACKDIR}/nodejs/yarn.lock ${PACKDIR}/nodejs/.npmignore ${PACKDIR}/nodejs/bin/
+	cp README.md LICENSE ${PACKDIR}/nodejs/package.json ${PACKDIR}/nodejs/yarn.lock ${PACKDIR}/nodejs/bin/
+	# The package is published from bin/. Without an .npmignore npm falls back to
+	# .gitignore, which excludes bin/ and would publish a tarball with no JavaScript.
+	# sdk/nodejs is wiped by codegen, so the file is generated here rather than committed.
+	printf '%s\n' 'node_modules/' 'tsconfig.json' 'yarn.lock' '*.ts' '!*.d.ts' > ${PACKDIR}/nodejs/bin/.npmignore
 	cd ${PACKDIR}/nodejs/bin && \
 		jq '. + {main: (.main // "index.js"), types: (.types // "index.d.ts")}' package.json > package.json.tmp && \
 		mv package.json.tmp package.json
