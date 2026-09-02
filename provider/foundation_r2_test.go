@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/blang/semver"
+
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/integration"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
@@ -32,7 +33,8 @@ func TestRetryTransport_DoesNotRetryPostOnGatewayError(t *testing.T) {
 	defer server.Close()
 	client := useMockAPI(t, server)
 
-	_, err := doRequest(context.Background(), client, http.MethodPost, server.URL+"/v2/sites", map[string]string{"a": "b"}, nil)
+	_, err := doRequest(context.Background(), client, http.MethodPost, server.URL+"/v2/sites",
+		map[string]string{"a": "b"}, nil)
 	if err == nil {
 		t.Fatal("expected an error from the 502")
 	}
@@ -84,7 +86,8 @@ func TestRetryTransport_StillRetriesPostOnRateLimit(t *testing.T) {
 	}))
 	defer server.Close()
 	client := useMockAPI(t, server)
-	if _, err := doRequest(context.Background(), client, http.MethodPost, server.URL+"/v2/x", map[string]int{"n": 1}, nil); err != nil {
+	_, err := doRequest(context.Background(), client, http.MethodPost, server.URL+"/v2/x", map[string]int{"n": 1}, nil)
+	if err != nil {
 		t.Fatalf("POST after 429 should be retried: %v", err)
 	}
 	if calls != 2 {
