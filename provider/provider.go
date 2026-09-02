@@ -59,12 +59,20 @@ func Provider() p.Provider {
 			infer.Resource(&InlineScript{}),
 			infer.Resource(&PageCustomCode{}),
 			infer.Resource(&EcommerceSettings{}),
+			infer.Resource(&GoogleTag{}),
+			infer.Resource(&PageSchemaMarkup{}),
 		).
 		WithFunctions(
 			infer.Function(&GetTokenInfo{}),
 			infer.Function(&GetAuthorizedUser{}),
 			infer.Function(&GetPage{}),
 			infer.Function(&GetPages{}),
+			infer.Function(&GetPageSchemaMarkup{}),
+			infer.Function(&GetAnalyticsTraffic{}),
+			infer.Function(&GetAnalyticsTopPages{}),
+			infer.Function(&GetAnalyticsTopDimensions{}),
+			infer.Function(&GetAnalyticsTopEvents{}),
+			infer.Function(&GetAnalyticsTimeOnPage{}),
 		).
 		WithModuleMap(map[tokens.ModuleName]tokens.ModuleName{
 			"provider": "index",

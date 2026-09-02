@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 )
 
@@ -24,9 +23,6 @@ const webflowBetaPathPrefix = "/beta"
 
 // maxSchemaMarkupBytes is the documented raw input limit for a single schema markup entry (60KB).
 const maxSchemaMarkupBytes = 60 * 1024
-
-// localeIDPattern matches Webflow locale IDs (24-character lowercase hexadecimal strings).
-var localeIDPattern = regexp.MustCompile(`^[a-f0-9]{24}$`)
 
 // PageSchemaMarkupResponse is the response body of the page schema markup endpoints
 // (GET and PUT /beta/pages/{page_id}/schema-markup).
@@ -56,21 +52,6 @@ type PageSchemaMarkupResponse struct {
 type PageSchemaMarkupRequest struct {
 	// JSONLDSchema is the JSON-LD object to store, or null to clear.
 	JSONLDSchema json.RawMessage `json:"jsonLdSchema"`
-}
-
-// ValidateLocaleID validates an optional Webflow locale ID.
-// An empty value targets the primary locale and is always valid.
-func ValidateLocaleID(localeID string) error {
-	if localeID == "" {
-		return nil
-	}
-	if !localeIDPattern.MatchString(localeID) {
-		return fmt.Errorf("localeId has invalid format: got '%s'. "+
-			"Expected a 24-character lowercase hexadecimal string (e.g., '653fd9af6a07fc9cfd7a5e57'). "+
-			"Locale IDs are listed under 'locales' in the Get Site API response. "+
-			"Omit localeId to target the primary locale", localeID)
-	}
-	return nil
 }
 
 // NormalizeSchemaMarkup validates that markup is a JSON object and returns its canonical

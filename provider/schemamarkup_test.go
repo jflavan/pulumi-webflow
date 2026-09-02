@@ -99,18 +99,6 @@ func TestNormalizeSchemaMarkup(t *testing.T) {
 	}
 }
 
-func TestValidateLocaleID(t *testing.T) {
-	if err := ValidateLocaleID(""); err != nil {
-		t.Errorf("empty locale should be valid: %v", err)
-	}
-	if err := ValidateLocaleID(testSchemaLocaleID); err != nil {
-		t.Errorf("valid locale rejected: %v", err)
-	}
-	if err := ValidateLocaleID("EN-US"); err == nil {
-		t.Error("expected error for non-hex locale")
-	}
-}
-
 func TestPageSchemaMarkupResourceID(t *testing.T) {
 	if got := GeneratePageSchemaMarkupResourceID(testSchemaPageID, ""); got != testSchemaPageID+"/schema-markup" {
 		t.Errorf("unexpected ID %q", got)
