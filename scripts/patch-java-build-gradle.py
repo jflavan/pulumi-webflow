@@ -105,6 +105,28 @@ def replace_regex(
     raise _missing(what, pattern)
 
 
+def replace_in_block(content: str, block_pattern: str, pattern: str, repl: str, what: str) -> str:
+    """
+    Replace the first match of `pattern` inside the first match of `block_pattern`.
+
+    Unlike replace_regex there is no file-wide done-marker: the patch is a no-op
+    when the block already contains `repl`, and a PatchError is raised when the
+    block is missing or contains no line matching `pattern`. This keeps the
+    "already patched" check scoped to the block, so an identical value elsewhere
+    in the file cannot mask a missing anchor.
+    """
+    block_match = re.search(block_pattern, content)
+    if not block_match:
+        raise _missing(what, block_pattern)
+    block = block_match.group(0)
+    if repl in block:
+        return content
+    new_block, n = re.subn(pattern, repl, block, count=1)
+    if not n:
+        raise _missing(what, f"{pattern} inside {block_pattern}")
+    return content[: block_match.start()] + new_block + content[block_match.end() :]
+
+
 def insert_after_anchor(content: str, anchor: str, addition: str, what: str, done_marker: str) -> str:
     """Insert `addition` right after `anchor` unless `done_marker` is already present."""
     if done_marker in content:
@@ -241,13 +263,17 @@ def patch_build_gradle(filepath: str) -> None:
         done_marker=f'developerConnection = "{SCM_DEVELOPER_CONNECTION}"',
         count=1,
     )
-    content = replace_regex(
+    # SCM url. This is deliberately not a replace_regex call: its done-marker
+    # would have to be `url = "<PROJECT_URL>"`, which the project url patch
+    # above has already inserted into the pom block, so a file-wide marker
+    # would mask a missing scm url instead of raising. Scope the search to the
+    # scm block itself; the url line may appear anywhere within it.
+    content = replace_in_block(
         content,
-        r'(scm \{[^}]*?developerConnection = "[^"]*"\s*)url = "[^"]*"',
-        rf'\1url = "{PROJECT_URL}"',
+        r"\bscm \{[^}]*\}",
+        r'url = "[^"]*"',
+        f'url = "{PROJECT_URL}"',
         "scm url",
-        done_marker=f'url = "{PROJECT_URL}"',
-        count=1,
     )
 
     # License block - anchored so that the pom name / developer name are not touched.
