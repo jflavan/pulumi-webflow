@@ -1,3 +1,5 @@
+version: 2
+
 project_name: pulumi-webflow
 
 builds:
@@ -26,7 +28,7 @@ archives:
     id: archive
 
 snapshot:
-  name_template: "{{ .Tag }}-SNAPSHOT"
+  version_template: "{{ .Tag }}-SNAPSHOT"
 
 # Generate checksums for all artifacts
 checksum:

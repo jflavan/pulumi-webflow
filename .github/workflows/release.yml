@@ -8,7 +8,6 @@ on:
 env:
   PROVIDER: webflow
   PULUMI_LOCAL_NUGET: ${{ github.workspace }}/nuget
-  GOVERSION: "1.21.x"
   NODEVERSION: "20.x"
   PYTHONVERSION: "3.11.8"
   DOTNETVERSION: "8.0.x"
@@ -18,15 +17,17 @@ jobs:
   prerequisites:
     runs-on: ubuntu-latest
     name: prerequisites
+    permissions:
+      contents: read
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           lfs: true
 
       - id: version
         name: Set Provider Version
-        uses: pulumi/provider-version-action@v1
+        uses: pulumi/provider-version-action@3a647064cf4697c7c6352b9a1d9e554450cbe957 # v1.6.1
         with:
           set-env: PROVIDER_VERSION
         env:
@@ -48,7 +49,7 @@ jobs:
         run: make provider
 
       - name: Check worktree clean
-        uses: pulumi/git-status-check-action@v1
+        uses: pulumi/git-status-check-action@54000b91124a8dd9fd6a872cb41f5dd246a46e7c # v1.1.1
         with:
           allowed-changes: |
             sdk/**/pulumi-plugin.json
@@ -64,7 +65,7 @@ jobs:
         run: tar -zcf ${{ github.workspace }}/bin/provider.tar.gz -C ${{ github.workspace }}/bin/ pulumi-resource-${{ env.PROVIDER }} pulumi-gen-${{ env.PROVIDER }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: pulumi-${{ env.PROVIDER }}-provider.tar.gz
           path: ${{ github.workspace }}/bin/provider.tar.gz
@@ -74,9 +75,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Test Provider Integration (tests/)
+        run: make test_integration
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build_sdks:
     needs: prerequisites
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       fail-fast: true
       matrix:
@@ -89,13 +97,13 @@ jobs:
     name: build_sdks
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           lfs: true
 
       - id: version
         name: Set Provider Version
-        uses: pulumi/provider-version-action@v1
+        uses: pulumi/provider-version-action@3a647064cf4697c7c6352b9a1d9e554450cbe957 # v1.6.1
         with:
           set-env: PROVIDER_VERSION
         env:
@@ -116,7 +124,7 @@ jobs:
         run: make build_${{ matrix.language }}
 
       - name: Check worktree clean
-        uses: pulumi/git-status-check-action@v1
+        uses: pulumi/git-status-check-action@54000b91124a8dd9fd6a872cb41f5dd246a46e7c # v1.1.1
         with:
           allowed-changes: |
             sdk/**/pulumi-plugin.json
@@ -132,7 +140,7 @@ jobs:
         run: tar -zcf sdk/${{ matrix.language }}.tar.gz -C sdk/${{ matrix.language }} .
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ matrix.language }}-sdk.tar.gz
           path: ${{ github.workspace }}/sdk/${{ matrix.language }}.tar.gz
@@ -147,13 +155,13 @@ jobs:
       attestations: write    # Required for actions/attest-build-provenance
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           lfs: true
 
       - id: version
         name: Set Provider Version
-        uses: pulumi/provider-version-action@v1
+        uses: pulumi/provider-version-action@3a647064cf4697c7c6352b9a1d9e554450cbe957 # v1.6.1
         with:
           set-env: PROVIDER_VERSION
         env:
@@ -165,21 +173,23 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Syft (for SBOM generation)
-        uses: anchore/sbom-action/download-syft@v0
+        uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v5
+        uses: goreleaser/goreleaser-action@5742e2a039330cbb23ebf35f046f814d4c6ff811 # v5.1.0
         env:
           GORELEASER_CURRENT_TAG: v${{ steps.version.outputs.version }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: -p 3 release --clean --timeout 60m0s
-          version: latest
+          version: '~> v2'
 
+      # Attest every archive listed in checksums.txt (not the checksums file itself) so that
+      # `gh attestation verify <archive> --owner JDetmar` (see .goreleaser.yml release notes) works.
       - name: Generate SLSA Provenance for Go Binaries
-        uses: actions/attest-build-provenance@v3
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f # v3.2.0
         with:
-          subject-path: 'dist/checksums.txt'
+          subject-checksums: 'dist/checksums.txt'
 
   publish_sdks:
     runs-on: ubuntu-latest
@@ -190,13 +200,13 @@ jobs:
       contents: read
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           lfs: true
 
       - id: version
         name: Set Provider Version
-        uses: pulumi/provider-version-action@v1
+        uses: pulumi/provider-version-action@3a647064cf4697c7c6352b9a1d9e554450cbe957 # v1.6.1
         with:
           set-env: PROVIDER_VERSION
         env:
@@ -208,7 +218,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download python SDK
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: python-sdk.tar.gz
           path: ${{ github.workspace }}/sdk/
@@ -217,7 +227,7 @@ jobs:
         run: tar -zxf ${{ github.workspace }}/sdk/python.tar.gz -C ${{ github.workspace }}/sdk/python
 
       - name: Download dotnet SDK
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: dotnet-sdk.tar.gz
           path: ${{ github.workspace }}/sdk/
@@ -226,7 +236,7 @@ jobs:
         run: tar -zxf ${{ github.workspace }}/sdk/dotnet.tar.gz -C ${{ github.workspace }}/sdk/dotnet
 
       - name: Download nodejs SDK
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: nodejs-sdk.tar.gz
           path: ${{ github.workspace }}/sdk/
@@ -242,7 +252,7 @@ jobs:
       # - npm 11.5+ for OIDC support
       # See: https://docs.npmjs.com/trusted-publishers/
       - name: Setup Node for npm publishing
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
@@ -250,9 +260,13 @@ jobs:
       - name: Upgrade npm for Trusted Publishing
         run: npm install -g npm@11
 
+      # The package is published from sdk/nodejs/bin, where `make build_nodejs` has emitted the
+      # compiled JavaScript and .d.ts files and copied package.json/README/LICENSE/.npmignore.
+      # Publishing from sdk/nodejs itself would ship only the TypeScript sources.
       - name: Publish Node.js SDK
         run: |
-          cd sdk/nodejs
+          cd sdk/nodejs/bin
+          test -f index.js || { echo "sdk/nodejs/bin/index.js missing: the Node.js SDK was not built" >&2; exit 1; }
           # Determine npm tag based on version (prerelease versions need explicit tag)
           if [[ "$PROVIDER_VERSION" == *"-alpha"* ]]; then
             NPM_TAG="alpha"
@@ -264,73 +278,65 @@ jobs:
             NPM_TAG="latest"
           fi
           npm publish --access public --tag "$NPM_TAG" --provenance
-        continue-on-error: true
 
       # Publish Python SDK to PyPI using Trusted Publishing (OIDC)
       # No API token needed - uses GitHub's OIDC identity
       # Automatically generates Sigstore attestations
       # See: https://docs.pypi.org/trusted-publishers/
       - name: Publish Python SDK
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
         with:
           packages-dir: sdk/python/bin/dist/
           skip-existing: true  # Don't fail if version exists
-        continue-on-error: true
 
       # Publish .NET SDK to NuGet using Trusted Publishing (OIDC)
       # No long-lived API key needed - uses GitHub's OIDC identity
       # See: https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing
       - name: NuGet Login (OIDC)
-        uses: nuget/login@v1
+        uses: nuget/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
         id: nuget-login
         with:
           user: ${{ secrets.NUGET_USERNAME }}
-        continue-on-error: true
 
       - name: Publish .NET SDK
-        if: steps.nuget-login.outcome == 'success'
         run: |
           cd sdk/dotnet
           dotnet nuget push $(find . -maxdepth 5 -name '*.nupkg' -print) --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
-        continue-on-error: true
 
   publish_java_sdk:
     runs-on: ubuntu-latest
     needs: publish
     name: publish_java_sdk
-    continue-on-error: true
+    permissions:
+      contents: read
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           lfs: true
 
       - id: version
         name: Set Provider Version
-        uses: pulumi/provider-version-action@v1
+        uses: pulumi/provider-version-action@3a647064cf4697c7c6352b9a1d9e554450cbe957 # v1.6.1
         with:
           set-env: PROVIDER_VERSION
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Installs Gradle (pinned in .config/mise.toml, the same version used to build the SDK).
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download java SDK
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: java-sdk.tar.gz
           path: ${{ github.workspace }}/sdk/
 
       - name: Uncompress java SDK
         run: tar -zxf ${{ github.workspace }}/sdk/java.tar.gz -C ${{ github.workspace }}/sdk/java
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@4d9f0ba0025fe599b4ebab900eb7f3a1d93ef4c2 # v5.0.0
-        with:
-          gradle-version: "7.6"
 
       # Publish to Maven Central using gradle-nexus-publish-plugin v2.0.0
       # Tasks must be in same invocation: publishToSonatype followed by closeAndReleaseSonatypeStagingRepository
@@ -354,20 +360,20 @@ jobs:
       contents: write
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           lfs: true
 
       - id: version
         name: Set Provider Version
-        uses: pulumi/provider-version-action@v1
+        uses: pulumi/provider-version-action@3a647064cf4697c7c6352b9a1d9e554450cbe957 # v1.6.1
         with:
           set-env: PROVIDER_VERSION
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download go SDK
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: go-sdk.tar.gz
           path: ${{ github.workspace }}/sdk/
@@ -376,7 +382,7 @@ jobs:
         run: tar -zxf ${{ github.workspace }}/sdk/go.tar.gz -C ${{ github.workspace }}/sdk/go
 
       - name: Publish Go SDK
-        uses: pulumi/publish-go-sdk-action@v1
+        uses: pulumi/publish-go-sdk-action@0a153fa3c54227a3c0f7c97a57033ecfe94ab3c2 # v1.2.0
         with:
           repository: ${{ github.repository }}
           base-ref: ${{ github.sha }}

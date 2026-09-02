@@ -18,7 +18,9 @@ pulumi = "{{ get_env(name='PULUMI_VERSION_MISE', default='latest') }}"
 "github:pulumi/pulumictl" = '0.0.50'
 "github:pulumi/schema-tools" = "0.6.0"
 "aqua:gradle/gradle-distributions" = '7.6.6'
-golangci-lint = "2.7.2" # Upgraded to v2 for modern features and configuration format
+# golangci-lint v2 (config format in .golangci.yml). 2.13.x is built with Go 1.26 and can
+# parse the Go version declared in go.mod; older 2.x releases cannot.
+golangci-lint = "2.13.2"
 "npm:yarn" = "1.22.22"
 
 [settings]

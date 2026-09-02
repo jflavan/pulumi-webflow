@@ -11,7 +11,6 @@ on:
 env:
   PROVIDER: webflow
   PULUMI_LOCAL_NUGET: ${{ github.workspace }}/nuget
-  GOVERSION: "1.21.x"
   NODEVERSION: "20.x"
   PYTHONVERSION: "3.11.8"
   DOTNETVERSION: "8.0.x"
@@ -43,14 +42,14 @@ jobs:
       pull-requests: write # For schema check comment.
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           lfs: true
           ref: ${{ env.PR_COMMIT_SHA || github.ref }}
 
       - id: version
         name: Set Provider Version
-        uses: pulumi/provider-version-action@v1
+        uses: pulumi/provider-version-action@3a647064cf4697c7c6352b9a1d9e554450cbe957 # v1.6.1
         with:
           set-env: PROVIDER_VERSION
         env:
@@ -87,7 +86,7 @@ jobs:
 
       - if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
         name: Comment on PR with Details of Schema Check
-        uses: thollander/actions-comment-pull-request@v3
+        uses: thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b # v3.0.1
         with:
           message: |
             ${{ env.SCHEMA_CHANGES }}
@@ -98,7 +97,7 @@ jobs:
         run: make provider
 
       - name: Check worktree clean
-        uses: pulumi/git-status-check-action@v1
+        uses: pulumi/git-status-check-action@54000b91124a8dd9fd6a872cb41f5dd246a46e7c # v1.1.1
         with:
           allowed-changes: |
             sdk/**/pulumi-plugin.json
@@ -114,7 +113,7 @@ jobs:
         run: tar -zcf ${{ github.workspace }}/bin/provider.tar.gz -C ${{ github.workspace }}/bin/ pulumi-resource-${{ env.PROVIDER }} pulumi-gen-${{ env.PROVIDER }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: pulumi-${{ env.PROVIDER }}-provider.tar.gz
           path: ${{ github.workspace }}/bin/provider.tar.gz
@@ -124,8 +123,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Test Provider Integration (tests/)
+        run: make test_integration
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
         continue-on-error: true
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -145,14 +149,14 @@ jobs:
     name: build_sdks
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           lfs: true
           ref: ${{ env.PR_COMMIT_SHA || github.ref }}
 
       - id: version
         name: Set Provider Version
-        uses: pulumi/provider-version-action@v1
+        uses: pulumi/provider-version-action@3a647064cf4697c7c6352b9a1d9e554450cbe957 # v1.6.1
         with:
           set-env: PROVIDER_VERSION
         env:
@@ -173,7 +177,7 @@ jobs:
         run: make build_${{ matrix.language }}
 
       - name: Check worktree clean
-        uses: pulumi/git-status-check-action@v1
+        uses: pulumi/git-status-check-action@54000b91124a8dd9fd6a872cb41f5dd246a46e7c # v1.1.1
         with:
           allowed-changes: |
             sdk/**/pulumi-plugin.json
@@ -189,18 +193,44 @@ jobs:
         run: tar -zcf sdk/${{ matrix.language }}.tar.gz -C sdk/${{ matrix.language }} .
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ matrix.language }}-sdk.tar.gz
           path: ${{ github.workspace }}/sdk/${{ matrix.language }}.tar.gz
           retention-days: 30
+
+  check_examples:
+    needs: build_sdks
+    runs-on: ubuntu-latest
+    name: check_examples
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          lfs: true
+          ref: ${{ env.PR_COMMIT_SHA || github.ref }}
+
+      - name: Setup Tools
+        uses: ./.github/actions/setup-tools
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download nodejs SDK
+        uses: ./.github/actions/download-sdk
+        with:
+          language: nodejs
+
+      - name: Type-check TypeScript examples against the built SDK
+        run: make check_examples
 
   lint:
     runs-on: ubuntu-latest
     name: lint
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           lfs: true
           ref: ${{ env.PR_COMMIT_SHA || github.ref }}
@@ -224,6 +254,7 @@ jobs:
     name: sentinel
     needs:
       - build_sdks
+      - check_examples
       - prerequisites
       - lint
     steps:

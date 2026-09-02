@@ -19,6 +19,9 @@ sdk/java/build/
 sdk/java/build.gradle
 sdk/python/venv
 
+# Build output of the webflow-auth helper tool (built with `npm run build`)
+tools/webflow-auth/dist/
+
 # Local development/testing
 /dev/
 coverage.txt
