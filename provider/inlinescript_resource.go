@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	p "github.com/pulumi/pulumi-go-provider"
@@ -148,19 +147,22 @@ func (r *InlineScript) Diff(
 		detailedDiff["displayName"] = p.PropertyDiff{Kind: p.UpdateReplace}
 	}
 
-	if req.State.IntegrityHash != req.Inputs.IntegrityHash {
+	// integrityHash is optional: an omitted input means "don't care", so only an
+	// explicitly configured hash that differs from the registered one forces a replace.
+	if req.Inputs.IntegrityHash != "" && req.State.IntegrityHash != req.Inputs.IntegrityHash {
 		detailedDiff["integrityHash"] = p.PropertyDiff{Kind: p.UpdateReplace}
 	}
 
-	// Compare version - only if state has a non-empty version.
-	// If state version is empty (from old state before field was required),
-	// check if the current state outputs have version set.
+	// Compare version only when both sides have one: state written before scriptVersion
+	// existed has no version, and that must not force a replace.
 	stateVersion := req.State.Version
 	inputVersion := req.Inputs.Version
 	if stateVersion != "" && inputVersion != "" && stateVersion != inputVersion {
 		detailedDiff["scriptVersion"] = p.PropertyDiff{Kind: p.UpdateReplace}
 	}
 
+	// canCopy defaults to false in Webflow, so an omitted input (false) matches a freshly
+	// registered script; a difference means it was configured explicitly or changed out of band.
 	if req.State.CanCopy != req.Inputs.CanCopy {
 		detailedDiff["canCopy"] = p.PropertyDiff{Kind: p.UpdateReplace}
 	}
@@ -179,7 +181,30 @@ func (r *InlineScript) Diff(
 func (r *InlineScript) Create(
 	ctx context.Context, req infer.CreateRequest[InlineScriptArgs],
 ) (infer.CreateResponse[InlineScriptState], error) {
-	// Validate inputs BEFORE generating resource ID
+	state := InlineScriptState{
+		InlineScriptArgs: req.Inputs,
+		CreatedOn:        "", // Will be populated after creation
+		LastUpdated:      "", // Will be populated after creation
+	}
+
+	// During preview, return expected state without making API calls.
+	// Validation is deferred to apply-time because inputs may contain Pulumi unknowns
+	// (e.g., siteId from a Site output) which the infer framework deserializes as zero values.
+	if req.DryRun {
+		// Set a preview timestamp
+		now := time.Now().Format(time.RFC3339)
+		state.CreatedOn = now
+		state.LastUpdated = now
+		// Generate a predictable ID for dry-run
+		previewID := fmt.Sprintf("preview-%d", time.Now().Unix())
+		state.ScriptID = previewID
+		return infer.CreateResponse[InlineScriptState]{
+			ID:     GenerateInlineScriptResourceID(req.Inputs.SiteID, previewID),
+			Output: state,
+		}, nil
+	}
+
+	// Validate inputs BEFORE making API calls (all values are resolved at apply-time)
 	if err := ValidateSiteID(req.Inputs.SiteID); err != nil {
 		return infer.CreateResponse[InlineScriptState]{},
 			fmt.Errorf("validation failed for InlineScript resource: %w", err)
@@ -204,27 +229,6 @@ func (r *InlineScript) Create(
 		}
 	}
 
-	state := InlineScriptState{
-		InlineScriptArgs: req.Inputs,
-		CreatedOn:        "", // Will be populated after creation
-		LastUpdated:      "", // Will be populated after creation
-	}
-
-	// During preview, return expected state without making API calls
-	if req.DryRun {
-		// Set a preview timestamp
-		now := time.Now().Format(time.RFC3339)
-		state.CreatedOn = now
-		state.LastUpdated = now
-		// Generate a predictable ID for dry-run
-		previewID := fmt.Sprintf("preview-%d", time.Now().Unix())
-		state.ScriptID = previewID
-		return infer.CreateResponse[InlineScriptState]{
-			ID:     GenerateInlineScriptResourceID(req.Inputs.SiteID, previewID),
-			Output: state,
-		}, nil
-	}
-
 	// Get HTTP client
 	client, err := GetHTTPClient(ctx, providerVersion)
 	if err != nil {
@@ -232,11 +236,13 @@ func (r *InlineScript) Create(
 	}
 
 	// Call Webflow API
-	response, err := PostInlineScript(
-		ctx, client, req.Inputs.SiteID,
-		req.Inputs.SourceCode, req.Inputs.Version, req.Inputs.DisplayName,
-		req.Inputs.CanCopy, req.Inputs.IntegrityHash,
-	)
+	response, err := PostInlineScript(ctx, client, req.Inputs.SiteID, InlineScriptRequest{
+		SourceCode:    req.Inputs.SourceCode,
+		Version:       req.Inputs.Version,
+		DisplayName:   req.Inputs.DisplayName,
+		CanCopy:       req.Inputs.CanCopy,
+		IntegrityHash: req.Inputs.IntegrityHash,
+	})
 	if err != nil {
 		return infer.CreateResponse[InlineScriptState]{},
 			fmt.Errorf("failed to create inline script: %w", err)
@@ -249,9 +255,13 @@ func (r *InlineScript) Create(
 				"this is unexpected and may indicate an API issue")
 	}
 
-	// Update state with values from API response
+	// Update state with values from API response. The integrity hash Webflow reports
+	// is recorded in state (Diff ignores it unless the user configured one explicitly).
 	state.ScriptID = response.ID
 	state.HostedLocation = response.HostedLocation
+	if response.IntegrityHash != "" {
+		state.IntegrityHash = response.IntegrityHash
+	}
 	state.CreatedOn = response.CreatedOn
 	state.LastUpdated = response.LastUpdated
 
@@ -275,6 +285,10 @@ func (r *InlineScript) Read(
 		return infer.ReadResponse[InlineScriptArgs, InlineScriptState]{},
 			fmt.Errorf("invalid resource ID: %w", err)
 	}
+	if err := validateScriptResourceIDs(siteID, scriptID); err != nil {
+		return infer.ReadResponse[InlineScriptArgs, InlineScriptState]{},
+			fmt.Errorf("invalid resource ID: %w", err)
+	}
 
 	// Get HTTP client
 	client, err := GetHTTPClient(ctx, providerVersion)
@@ -283,34 +297,17 @@ func (r *InlineScript) Read(
 			fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API to get all scripts for this site
-	// The list endpoint is shared between hosted and inline scripts
-	response, err := GetRegisteredScripts(ctx, client, siteID)
+	// Locate the script in the site's registered scripts (the list endpoint is shared
+	// between hosted and inline scripts), following pagination.
+	foundScript, err := FindRegisteredScript(ctx, client, siteID, scriptID)
 	if err != nil {
-		// Resource not found - return empty ID to signal deletion
-		if strings.Contains(err.Error(), "not found") {
-			return infer.ReadResponse[InlineScriptArgs, InlineScriptState]{
-				ID: "",
-			}, nil
+		// Only "not found" (site or script gone) signals deletion; every other failure
+		// (network, auth, rate limiting, 5xx) is propagated.
+		if IsNotFound(err) {
+			return infer.ReadResponse[InlineScriptArgs, InlineScriptState]{ID: ""}, nil
 		}
 		return infer.ReadResponse[InlineScriptArgs, InlineScriptState]{},
-			fmt.Errorf("failed to read registered scripts: %w", err)
-	}
-
-	// Find the specific script in the list
-	var foundScript *RegisteredScript
-	for i, script := range response.RegisteredScripts {
-		if script.ID == scriptID {
-			foundScript = &response.RegisteredScripts[i]
-			break
-		}
-	}
-
-	// If script not found, return empty ID to signal deletion
-	if foundScript == nil {
-		return infer.ReadResponse[InlineScriptArgs, InlineScriptState]{
-			ID: "",
-		}, nil
+			fmt.Errorf("failed to read inline script: %w", err)
 	}
 
 	// Build current state from API response
@@ -340,13 +337,26 @@ func (r *InlineScript) Read(
 		sourceCode = req.State.SourceCode
 	}
 
+	// The registered hash goes into state so drift is visible; the list endpoint may omit
+	// it, in which case the previously recorded value is kept. Inputs only carry the hash
+	// when the user configured one — an omitted integrityHash stays omitted so that Read
+	// never turns a "don't care" input into a managed value.
+	stateHash := foundScript.IntegrityHash
+	if stateHash == "" {
+		stateHash = req.State.IntegrityHash
+	}
+	inputHash := req.Inputs.IntegrityHash
+	if inputHash != "" {
+		inputHash = stateHash
+	}
+
 	currentInputs := InlineScriptArgs{
 		SiteID:        siteID,
 		SourceCode:    sourceCode,
 		Version:       version,
 		DisplayName:   foundScript.DisplayName,
 		CanCopy:       foundScript.CanCopy,
-		IntegrityHash: foundScript.IntegrityHash,
+		IntegrityHash: inputHash,
 	}
 	currentState := InlineScriptState{
 		InlineScriptArgs: currentInputs,
@@ -355,6 +365,7 @@ func (r *InlineScript) Read(
 		CreatedOn:        foundScript.CreatedOn,
 		LastUpdated:      foundScript.LastUpdated,
 	}
+	currentState.IntegrityHash = stateHash
 
 	return infer.ReadResponse[InlineScriptArgs, InlineScriptState]{
 		ID:     req.ID,
@@ -384,6 +395,9 @@ func (r *InlineScript) Delete(
 	// Extract siteID and scriptID from resource ID
 	siteID, scriptID, err := ExtractIDsFromInlineScriptResourceID(req.ID)
 	if err != nil {
+		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
+	if err := validateScriptResourceIDs(siteID, scriptID); err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
 

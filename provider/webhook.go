@@ -7,16 +7,12 @@
 package provider
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"strings"
-	"time"
 )
 
 // WebhookResponse represents a webhook configuration in Webflow.
@@ -33,6 +29,7 @@ type WebhookResponse struct {
 }
 
 // WebhooksListResponse represents the Webflow API response for listing webhooks.
+// The list endpoint is not paginated.
 type WebhooksListResponse struct {
 	Webhooks []WebhookResponse `json:"webhooks"` // List of webhooks
 }
@@ -48,24 +45,33 @@ type WebhookRequest struct {
 // Webhook IDs are 24-character lowercase hexadecimal strings (same format as site IDs).
 var webhookIDPattern = regexp.MustCompile(`^[a-f0-9]{24}$`)
 
-// Valid trigger types from Webflow API documentation
-var validTriggerTypes = map[string]bool{
-	"form_submission":                  true,
-	"site_publish":                     true,
-	"page_created":                     true,
-	"page_metadata_updated":            true,
-	"page_deleted":                     true,
-	"ecomm_new_order":                  true,
-	"ecomm_order_changed":              true,
-	"ecomm_inventory_changed":          true,
-	"memberships_user_account_added":   true,
-	"memberships_user_account_updated": true,
-	"memberships_user_account_deleted": true,
-	"collection_item_created":          true,
-	"collection_item_changed":          true,
-	"collection_item_deleted":          true,
-	"collection_item_unpublished":      true,
+// validTriggerTypeList is the set of webhook trigger types documented by Webflow
+// (Data API v2 webhook `triggerType` enum, see https://developers.webflow.com/data/reference/all-events).
+var validTriggerTypeList = []string{
+	"form_submission",
+	"site_publish",
+	"page_created",
+	"page_metadata_updated",
+	"page_deleted",
+	"ecomm_new_order",
+	"ecomm_order_changed",
+	"ecomm_inventory_changed",
+	"collection_item_created",
+	"collection_item_changed",
+	"collection_item_deleted",
+	"collection_item_published",
+	"collection_item_unpublished",
+	"comment_created",
 }
+
+// validTriggerTypes indexes validTriggerTypeList for O(1) lookup.
+var validTriggerTypes = func() map[string]bool {
+	m := make(map[string]bool, len(validTriggerTypeList))
+	for _, t := range validTriggerTypeList {
+		m[t] = true
+	}
+	return m
+}()
 
 // ValidateWebhookID validates that a webhookID matches the Webflow webhook ID format.
 // Webhook IDs are 24-character lowercase hexadecimal strings.
@@ -115,23 +121,18 @@ func ValidateWebhookURL(url string) error {
 // ValidateTriggerType validates that a triggerType is a recognized Webflow event.
 // Returns actionable error messages listing all valid trigger types.
 func ValidateTriggerType(triggerType string) error {
+	valid := strings.Join(validTriggerTypeList, ", ")
 	if triggerType == "" {
-		return errors.New("triggerType is required but was not provided, " +
-			"please specify which Webflow event should trigger this webhook, " +
-			"valid trigger types: form_submission, site_publish, page_created, page_metadata_updated, " +
-			"page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, " +
-			"memberships_user_account_added, memberships_user_account_updated, memberships_user_account_deleted, " +
-			"collection_item_created, collection_item_changed, collection_item_deleted, collection_item_unpublished, " +
-			"example: 'form_submission' for form submissions, 'site_publish' for site publishes")
+		return fmt.Errorf("triggerType is required but was not provided, "+
+			"please specify which Webflow event should trigger this webhook, "+
+			"valid trigger types: %s, "+
+			"example: 'form_submission' for form submissions, 'site_publish' for site publishes", valid)
 	}
 	if !validTriggerTypes[triggerType] {
 		return fmt.Errorf("triggerType '%s' is not a valid Webflow event type, "+
-			"valid trigger types are: form_submission, site_publish, page_created, page_metadata_updated, "+
-			"page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, "+
-			"memberships_user_account_added, memberships_user_account_updated, memberships_user_account_deleted, "+
-			"collection_item_created, collection_item_changed, collection_item_deleted, collection_item_unpublished, "+
+			"valid trigger types are: %s, "+
 			"please use one of these valid trigger types, "+
-			"example: 'form_submission' for form submissions, 'site_publish' for site publishes", triggerType)
+			"example: 'form_submission' for form submissions, 'site_publish' for site publishes", triggerType, valid)
 	}
 	return nil
 }
@@ -143,390 +144,61 @@ func GenerateWebhookResourceID(siteID, webhookID string) string {
 }
 
 // ExtractIDsFromWebhookResourceID extracts the siteID and webhookID from a Webhook resource ID.
-// Expected format: {siteID}/webhooks/{webhookID}
+// Expected format: {siteID}/webhooks/{webhookID}. Both IDs must be non-empty.
 func ExtractIDsFromWebhookResourceID(resourceID string) (siteID, webhookID string, err error) {
 	if resourceID == "" {
 		return "", "", errors.New("resourceId cannot be empty")
 	}
 
-	parts := strings.Split(resourceID, "/")
-	if len(parts) < 3 || parts[1] != "webhooks" {
+	parts := strings.SplitN(resourceID, "/", 3)
+	if len(parts) != 3 || parts[1] != "webhooks" || parts[0] == "" || parts[2] == "" {
 		return "", "", fmt.Errorf("invalid resource ID format: expected {siteId}/webhooks/{webhookId}, got: %s", resourceID)
 	}
 
-	siteID = parts[0]
-	webhookID = strings.Join(parts[2:], "/") // Handle webhookID that might contain slashes
-
-	return siteID, webhookID, nil
+	return parts[0], parts[2], nil
 }
 
-// getWebhooksBaseURL is used internally for testing to override the API base URL.
-var getWebhooksBaseURL = ""
-
-// GetWebhooks retrieves all webhooks for a Webflow site.
-// It calls GET /v2/sites/{site_id}/webhooks endpoint.
-// Returns the parsed response or an error if the request fails.
+// GetWebhooks retrieves all App-created webhooks for a Webflow site.
+// It calls GET /v2/sites/{site_id}/webhooks.
 func GetWebhooks(ctx context.Context, client *http.Client, siteID string) (*WebhooksListResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
+	var out WebhooksListResponse
+	if _, err := doRequest(ctx, client, http.MethodGet, apiURL("/v2/sites/%s/webhooks", siteID), nil, &out); err != nil {
+		return nil, err
 	}
-
-	baseURL := webflowAPIBaseURL
-	if getWebhooksBaseURL != "" {
-		baseURL = getWebhooksBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s/webhooks", baseURL, siteID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			// Check for Retry-After header from previous response, or use exponential backoff
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			// Enhanced rate limiting error message with clear delay information
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			// Check for Retry-After header for the next retry
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var response WebhooksListResponse
-		if err := json.Unmarshal(body, &response); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &response, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &out, nil
 }
 
-// getWebhookBaseURL is used internally for testing to override the API base URL.
-var getWebhookBaseURL = ""
-
-// GetWebhook retrieves a single webhook by ID from Webflow.
-// It calls GET /v2/webhooks/{webhook_id} endpoint.
-// Returns the webhook or an error if the request fails.
-func GetWebhook(ctx context.Context, client *http.Client, webhookID string) (*WebhookResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
+// FindWebhook lists the site's webhooks and returns the one with webhookID.
+// When it does not exist the returned error satisfies IsNotFound.
+func FindWebhook(ctx context.Context, client *http.Client, siteID, webhookID string) (*WebhookResponse, error) {
+	response, err := GetWebhooks(ctx, client, siteID)
+	if err != nil {
+		return nil, err
 	}
-
-	baseURL := webflowAPIBaseURL
-	if getWebhookBaseURL != "" {
-		baseURL = getWebhookBaseURL
+	for i := range response.Webhooks {
+		if response.Webhooks[i].ID == webhookID {
+			webhook := response.Webhooks[i]
+			return &webhook, nil
+		}
 	}
-
-	url := fmt.Sprintf("%s/v2/webhooks/%s", baseURL, webhookID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var webhook WebhookResponse
-		if err := json.Unmarshal(body, &webhook); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &webhook, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return nil, fmt.Errorf("webhook '%s' on site '%s': %w", webhookID, siteID, ErrNotFound)
 }
-
-// postWebhookBaseURL is used internally for testing to override the API base URL.
-var postWebhookBaseURL = ""
 
 // PostWebhook creates a new webhook for a Webflow site.
-// It calls POST /v2/sites/{site_id}/webhooks endpoint.
-// Returns the created webhook or an error if the request fails.
+// It calls POST /v2/sites/{site_id}/webhooks.
 func PostWebhook(
-	ctx context.Context, client *http.Client,
-	siteID, triggerType, url string, filter map[string]interface{},
+	ctx context.Context, client *http.Client, siteID string, request WebhookRequest,
 ) (*WebhookResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
+	var out WebhookResponse
+	if _, err := doRequest(ctx, client, http.MethodPost,
+		apiURL("/v2/sites/%s/webhooks", siteID), request, &out); err != nil {
+		return nil, err
 	}
-
-	baseURL := webflowAPIBaseURL
-	if postWebhookBaseURL != "" {
-		baseURL = postWebhookBaseURL
-	}
-
-	apiURL := fmt.Sprintf("%s/v2/sites/%s/webhooks", baseURL, siteID)
-
-	requestBody := WebhookRequest{
-		TriggerType: triggerType,
-		URL:         url,
-		Filter:      filter,
-	}
-
-	bodyBytes, err := json.Marshal(requestBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request body: %w", err)
-	}
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "POST", apiURL, bytes.NewReader(bodyBytes))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Accept both 200 and 201 as success
-		if resp.StatusCode != 200 && resp.StatusCode != 201 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var webhook WebhookResponse
-		if err := json.Unmarshal(body, &webhook); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &webhook, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &out, nil
 }
 
-// deleteWebhookBaseURL is used internally for testing to override the API base URL.
-var deleteWebhookBaseURL = ""
-
 // DeleteWebhook removes a webhook from Webflow.
-// It calls DELETE /v2/webhooks/{webhook_id} endpoint.
-// Returns nil on success (including 404 for idempotency) or an error if the request fails.
+// It calls DELETE /v2/webhooks/{webhook_id}; 404 is treated as success (idempotent).
 func DeleteWebhook(ctx context.Context, client *http.Client, webhookID string) error {
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("context cancelled: %w", err)
-	}
-
-	baseURL := webflowAPIBaseURL
-	if deleteWebhookBaseURL != "" {
-		baseURL = deleteWebhookBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/webhooks/%s", baseURL, webhookID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "DELETE", url, http.NoBody)
-		if err != nil {
-			return fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// 204 No Content is success
-		// 404 Not Found is also success (idempotent delete)
-		if resp.StatusCode == 204 || resp.StatusCode == 404 {
-			return nil
-		}
-
-		// Handle other error responses
-		return handleWebflowError(resp.StatusCode, body)
-	}
-
-	return fmt.Errorf("max retries exceeded: %w", lastErr)
+	return doDelete(ctx, client, apiURL("/v2/webhooks/%s", webhookID), nil)
 }
