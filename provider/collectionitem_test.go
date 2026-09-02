@@ -15,6 +15,7 @@ import (
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
 )
 
 // TestValidateFieldData tests the ValidateFieldData function.
@@ -37,6 +38,20 @@ func TestValidateFieldData(t *testing.T) {
 				t.Errorf("ValidateFieldData() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// TestValidateCmsLocaleID tests the optional locale ID format check.
+func TestValidateCmsLocaleID(t *testing.T) {
+	for _, ok := range []string{"", testLocaleID} {
+		if err := ValidateCmsLocaleID(ok); err != nil {
+			t.Errorf("ValidateCmsLocaleID(%q) unexpected error: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"locale-1", "653FD9AF6A07FC9CFD7A5E57", "abc", "a/b"} {
+		if err := ValidateCmsLocaleID(bad); err == nil || !strings.Contains(err.Error(), "cmsLocaleId") {
+			t.Errorf("ValidateCmsLocaleID(%q) expected cmsLocaleId error, got %v", bad, err)
+		}
 	}
 }
 
@@ -227,7 +242,7 @@ func TestCollectionItemResource_Create_LiveWithLocale(t *testing.T) {
 
 	resp, err := (&CollectionItemResource{}).Create(context.Background(), infer.CreateRequest[CollectionItemArgs]{
 		Inputs: CollectionItemArgs{
-			CollectionID: testCollectionID, CmsLocaleID: "locale-1", Live: true,
+			CollectionID: testCollectionID, CmsLocaleID: testLocaleID, Live: true,
 			FieldData: map[string]interface{}{"name": "Test Item", "slug": "test-item"},
 		},
 	})
@@ -248,11 +263,11 @@ func TestCollectionItemResource_Create_LiveWithLocale(t *testing.T) {
 	}
 	target, _ := items[0].(map[string]interface{})
 	locales, _ := target["cmsLocaleIds"].([]interface{})
-	if target["id"] != testItemID || len(locales) != 1 || locales[0] != "locale-1" {
+	if target["id"] != testItemID || len(locales) != 1 || locales[0] != testLocaleID {
 		t.Errorf("unexpected publish target: %v", target)
 	}
 	live := mock.callsTo(http.MethodGet, itemLivePath)
-	if len(live) != 1 || live[0].Query.Get("cmsLocaleId") != "locale-1" {
+	if len(live) != 1 || live[0].Query.Get("cmsLocaleId") != testLocaleID {
 		t.Errorf("live read must pass cmsLocaleId as a query parameter, got %+v", live)
 	}
 }
@@ -290,9 +305,114 @@ func TestCollectionItemResource_Create_DryRunSkipsValidationAndAPI(t *testing.T)
 	if len(mock.requests()) != 0 {
 		t.Errorf("dry run must not call the API")
 	}
+	if resp.ID != "" {
+		t.Errorf("dry run must return an empty ID so dependents see it as unknown, got %q", resp.ID)
+	}
 	if resp.Output.ItemID != "" || resp.Output.CreatedOn != "" || resp.Output.LastUpdated != "" {
 		t.Errorf("dry run must not fabricate server-assigned outputs: %+v", resp.Output)
 	}
+}
+
+// =============================================================================
+// CollectionItem resource: Check
+// =============================================================================
+
+func TestCollectionItemResource_Check(t *testing.T) {
+	check := func(t *testing.T, inputs map[string]property.Value) infer.CheckResponse[CollectionItemArgs] {
+		t.Helper()
+		resp, err := (&CollectionItemResource{}).Check(
+			context.Background(), infer.CheckRequest{NewInputs: property.NewMap(inputs)},
+		)
+		if err != nil {
+			t.Fatalf("Check() error = %v", err)
+		}
+		return resp
+	}
+	fieldData := property.New[map[string]property.Value]
+	reasons := func(resp infer.CheckResponse[CollectionItemArgs]) string {
+		parts := make([]string, 0, len(resp.Failures))
+		for _, f := range resp.Failures {
+			parts = append(parts, f.Property+": "+f.Reason)
+		}
+		return strings.Join(parts, " | ")
+	}
+
+	t.Run("valid inputs pass", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{
+			"collectionId": property.New(testCollectionID),
+			"cmsLocaleId":  property.New(testLocaleID),
+			"fieldData": fieldData(map[string]property.Value{
+				"name": property.New("Test Item"), "slug": property.New("test-item"), "views": property.New(3.0),
+			}),
+		})
+		if len(resp.Failures) != 0 {
+			t.Errorf("unexpected failures: %+v", resp.Failures)
+		}
+		if resp.Inputs.CollectionID != testCollectionID || resp.Inputs.FieldData["name"] != "Test Item" {
+			t.Errorf("inputs not decoded: %+v", resp.Inputs)
+		}
+	})
+
+	t.Run("malformed collectionId and cmsLocaleId fail", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{
+			"collectionId": property.New("bad"), "cmsLocaleId": property.New("locale-1"),
+			"fieldData": fieldData(map[string]property.Value{
+				"name": property.New("Test Item"), "slug": property.New("test-item"),
+			}),
+		})
+		got := reasons(resp)
+		if len(resp.Failures) != 2 || !strings.Contains(got, "collectionId:") || !strings.Contains(got, "cmsLocaleId:") {
+			t.Errorf("expected collectionId and cmsLocaleId failures, got %s", got)
+		}
+	})
+
+	t.Run("fieldData without name and slug fails", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{
+			"collectionId": property.New(testCollectionID),
+			"fieldData":    fieldData(map[string]property.Value{"body": property.New("text")}),
+		})
+		got := reasons(resp)
+		if len(resp.Failures) != 2 || !strings.Contains(got, "fieldData.name") || !strings.Contains(got, "fieldData.slug") {
+			t.Errorf("expected name and slug failures, got %s", got)
+		}
+		for _, f := range resp.Failures {
+			if f.Property != "fieldData" {
+				t.Errorf("failure property = %q, want fieldData", f.Property)
+			}
+		}
+	})
+
+	t.Run("empty name fails", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{
+			"collectionId": property.New(testCollectionID),
+			"fieldData":    fieldData(map[string]property.Value{"name": property.New(""), "slug": property.New("s")}),
+		})
+		if got := reasons(resp); len(resp.Failures) != 1 || !strings.Contains(got, "fieldData.name") {
+			t.Errorf("expected an empty-name failure, got %s", got)
+		}
+	})
+
+	t.Run("unknown values are skipped", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{
+			"collectionId": property.New(property.Computed), "cmsLocaleId": property.New(property.Computed),
+			"fieldData": property.New(property.Computed),
+		})
+		if len(resp.Failures) != 0 {
+			t.Errorf("computed inputs must not fail: %+v", resp.Failures)
+		}
+	})
+
+	t.Run("unknown fieldData values are accepted when the keys are present", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{
+			"collectionId": property.New(testCollectionID),
+			"fieldData": fieldData(map[string]property.Value{
+				"name": property.New(property.Computed), "slug": property.New(property.Computed),
+			}),
+		})
+		if len(resp.Failures) != 0 {
+			t.Errorf("computed name/slug must not fail: %+v", resp.Failures)
+		}
+	})
 }
 
 func TestCollectionItemResource_Create_ValidationErrors(t *testing.T) {
@@ -308,6 +428,14 @@ func TestCollectionItemResource_Create_ValidationErrors(t *testing.T) {
 			"collectionId",
 		},
 		{"empty fieldData", CollectionItemArgs{CollectionID: testCollectionID}, "fieldData is required"},
+		{
+			"invalid cmsLocaleId",
+			CollectionItemArgs{
+				CollectionID: testCollectionID, CmsLocaleID: "locale-1",
+				FieldData: map[string]interface{}{"name": "x", "slug": "x"},
+			},
+			"cmsLocaleId",
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := (&CollectionItemResource{}).Create(
@@ -734,6 +862,44 @@ func TestCollectionItemResource_Delete(t *testing.T) {
 			calls[0].Method != http.MethodDelete || calls[1].Method != http.MethodDelete {
 			t.Errorf("expected DELETE live then DELETE staged, got %+v", calls)
 		}
+		for _, c := range calls {
+			if c.Query.Has("cmsLocaleId") {
+				t.Errorf("no cmsLocaleId query expected without a locale, got %+v", c)
+			}
+		}
+	})
+
+	t.Run("cmsLocaleId is passed to both delete calls", func(t *testing.T) {
+		mock := newCMSMock(t)
+		mock.handle(
+			http.MethodDelete,
+			itemLivePath,
+			func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) },
+		)
+		mock.handle(
+			http.MethodDelete,
+			itemPath,
+			func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) },
+		)
+		_, err := (&CollectionItemResource{}).Delete(context.Background(), infer.DeleteRequest[CollectionItemState]{
+			ID: itemResourceID,
+			State: CollectionItemState{
+				CollectionItemArgs: CollectionItemArgs{Live: true, CmsLocaleID: testLocaleID},
+			},
+		})
+		if err != nil {
+			t.Fatalf("Delete() error = %v", err)
+		}
+		calls := mock.requests()
+		if len(calls) != 2 || calls[0].Path != itemLivePath || calls[1].Path != itemPath {
+			t.Fatalf("expected DELETE live then DELETE staged, got %+v", calls)
+		}
+		for _, c := range calls {
+			if c.Query.Get("cmsLocaleId") != testLocaleID {
+				t.Errorf("DELETE %s must carry cmsLocaleId=%s (Webflow only deletes the primary locale otherwise), got %v",
+					c.Path, testLocaleID, c.Query)
+			}
+		}
 	})
 
 	t.Run("invalid resource ID", func(t *testing.T) {
@@ -874,9 +1040,11 @@ func TestCollectionItemDiff(t *testing.T) {
 				if d, ok := resp.DetailedDiff[key]; !ok || d.Kind != kind {
 					t.Errorf("DetailedDiff[%q] = %+v, want kind %v", key, d, kind)
 				}
-				if (kind == p.UpdateReplace) != resp.DeleteBeforeReplace {
-					t.Errorf("DeleteBeforeReplace = %v for %q", resp.DeleteBeforeReplace, key)
-				}
+			}
+			// A different collection cannot conflict with the old item, so the replacement
+			// creates the new item before deleting the old one.
+			if resp.DeleteBeforeReplace {
+				t.Errorf("DeleteBeforeReplace must not be set: %+v", resp)
 			}
 		})
 	}

@@ -35,6 +35,34 @@ type CollectionRequest struct {
 	Slug         string `json:"slug,omitempty"` // Optional URL slug
 }
 
+// CollectionUpdateRequest represents the request body for PATCH /v2/collections/{collection_id}.
+// Every property is optional; only the ones set are changed.
+type CollectionUpdateRequest struct {
+	DisplayName  string `json:"displayName,omitempty"`
+	SingularName string `json:"singularName,omitempty"`
+	Slug         string `json:"slug,omitempty"`
+}
+
+// collectionSlugPattern matches URL-friendly collection slugs.
+var collectionSlugPattern = regexp.MustCompile(`^[a-z0-9_-]+$`)
+
+// ValidateCollectionSlug validates an explicit collection slug. An empty slug is valid and
+// lets Webflow generate one from displayName.
+func ValidateCollectionSlug(slug string) error {
+	if slug == "" {
+		return nil
+	}
+	if len(slug) > 255 {
+		return fmt.Errorf("slug is too long: '%s' exceeds maximum length of 255 characters", slug)
+	}
+	if !collectionSlugPattern.MatchString(slug) {
+		return fmt.Errorf("slug has invalid format: got '%s'. "+
+			"Expected a URL-friendly slug containing only lowercase letters, digits, hyphens and underscores "+
+			"(e.g., 'blog-posts'), or omit it to let Webflow generate one from displayName", slug)
+	}
+	return nil
+}
+
 // pathIDPattern matches identifiers that are safe to embed as a single URL path segment.
 // Webflow field and item IDs are 24-character hex strings, but the pattern is deliberately
 // a little looser so that imports of unusual IDs still work; it only guards against
@@ -160,6 +188,21 @@ func PostCollection(
 	if _, err := doRequest(ctx, client, http.MethodPost,
 		apiURL("/v2/sites/%s/collections", siteID), body, &collection,
 		http.StatusOK, http.StatusCreated, http.StatusAccepted); err != nil {
+		return nil, err
+	}
+	return &collection, nil
+}
+
+// PatchCollection updates the display name, singular name and/or slug of a collection.
+// It calls PATCH /v2/collections/{collection_id} (scope cms:write); every body property is
+// optional and only the ones set are changed. The API answers 200 with the updated collection.
+func PatchCollection(
+	ctx context.Context, client *http.Client, collectionID string, body CollectionUpdateRequest,
+) (*Collection, error) {
+	var collection Collection
+	if _, err := doRequest(ctx, client, http.MethodPatch,
+		apiURL("/v2/collections/%s", collectionID), body, &collection,
+		http.StatusOK, http.StatusAccepted); err != nil {
 		return nil, err
 	}
 	return &collection, nil

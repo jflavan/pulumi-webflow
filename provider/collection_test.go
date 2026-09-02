@@ -14,12 +14,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
 )
 
 // Shared fixtures for the collection, collection field and collection item resource tests.
@@ -348,9 +350,202 @@ func TestCollectionResource_Create_DryRunSkipsValidationAndAPI(t *testing.T) {
 	if len(mock.requests()) != 0 {
 		t.Errorf("dry run must not call the API, got %d calls", len(mock.requests()))
 	}
+	if resp.ID != "" {
+		t.Errorf("dry run must return an empty ID so dependents see it as unknown, got %q", resp.ID)
+	}
 	if resp.Output.CreatedOn != "" || resp.Output.LastUpdated != "" || resp.Output.CollectionID != "" {
 		t.Errorf("dry run must not fabricate server-assigned outputs: %+v", resp.Output)
 	}
+}
+
+// =============================================================================
+// Collection resource: Check
+// =============================================================================
+
+func TestCollectionResource_Check(t *testing.T) {
+	check := func(t *testing.T, inputs map[string]property.Value) infer.CheckResponse[CollectionArgs] {
+		t.Helper()
+		resp, err := (&CollectionResource{}).Check(
+			context.Background(), infer.CheckRequest{NewInputs: property.NewMap(inputs)},
+		)
+		if err != nil {
+			t.Fatalf("Check() error = %v", err)
+		}
+		return resp
+	}
+	failed := func(resp infer.CheckResponse[CollectionArgs]) []string {
+		props := make([]string, 0, len(resp.Failures))
+		for _, f := range resp.Failures {
+			props = append(props, f.Property)
+		}
+		sort.Strings(props)
+		return props
+	}
+
+	t.Run("valid inputs pass", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{
+			"siteId": property.New(testSiteID), "displayName": property.New("Blog Posts"),
+			"singularName": property.New("Blog Post"), "slug": property.New("blog-posts"),
+		})
+		if len(resp.Failures) != 0 {
+			t.Errorf("unexpected failures: %+v", resp.Failures)
+		}
+		if resp.Inputs.SiteID != testSiteID || resp.Inputs.Slug != "blog-posts" {
+			t.Errorf("inputs not decoded: %+v", resp.Inputs)
+		}
+	})
+
+	t.Run("malformed known values fail per property", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{
+			"siteId": property.New("not-a-site"), "displayName": property.New(""),
+			"singularName": property.New(strings.Repeat("x", 256)), "slug": property.New("Not A Slug"),
+		})
+		if got := failed(resp); strings.Join(got, ",") != "displayName,singularName,siteId,slug" {
+			t.Errorf("failures = %v, want displayName,singularName,siteId,slug: %+v", got, resp.Failures)
+		}
+	})
+
+	t.Run("unknown values are skipped", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{
+			"siteId": property.New(property.Computed), "displayName": property.New(property.Computed),
+			"singularName": property.New(property.Computed), "slug": property.New(property.Computed),
+		})
+		if len(resp.Failures) != 0 {
+			t.Errorf("computed inputs must not fail: %+v", resp.Failures)
+		}
+	})
+}
+
+// =============================================================================
+// Collection resource: Update
+// =============================================================================
+
+func TestCollectionResource_Update_PatchesInPlace(t *testing.T) {
+	mock := newCMSMock(t)
+	path := "/v2/collections/" + testCollectionID
+	mock.handle(http.MethodPatch, path, func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusOK, Collection{
+			ID: testCollectionID, DisplayName: "Articles", SingularName: "Article", Slug: "articles",
+			CreatedOn: "2024-01-01T00:00:00Z", LastUpdated: "2024-03-01T00:00:00Z",
+		})
+	})
+
+	resp, err := (&CollectionResource{}).Update(context.Background(), infer.UpdateRequest[CollectionArgs, CollectionState]{
+		ID: testSiteID + "/collections/" + testCollectionID,
+		State: CollectionState{
+			CollectionArgs: CollectionArgs{
+				SiteID: testSiteID, DisplayName: "Blog Posts", SingularName: "Blog Post", Slug: "blog-posts",
+			},
+			CollectionID: testCollectionID, CreatedOn: "2024-01-01T00:00:00Z", LastUpdated: "2024-01-01T00:00:00Z",
+		},
+		Inputs: CollectionArgs{SiteID: testSiteID, DisplayName: "Articles", SingularName: "Article", Slug: "articles"},
+	})
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+
+	calls := mock.requests()
+	if len(calls) != 1 || calls[0].Method != http.MethodPatch || calls[0].Path != path {
+		t.Fatalf("expected exactly one PATCH %s, got %+v", path, calls)
+	}
+	body := calls[0].Body
+	if body["displayName"] != "Articles" || body["singularName"] != "Article" || body["slug"] != "articles" {
+		t.Errorf("unexpected PATCH body: %v", body)
+	}
+	out := resp.Output
+	if out.CollectionID != testCollectionID || out.DisplayName != "Articles" || out.Slug != "articles" {
+		t.Errorf("unexpected output: %+v", out)
+	}
+	if out.LastUpdated != "2024-03-01T00:00:00Z" || out.CreatedOn != "2024-01-01T00:00:00Z" {
+		t.Errorf("timestamps should be refreshed from the PATCH response: %+v", out)
+	}
+}
+
+func TestCollectionResource_Update_OmittedSlugIsNotSent(t *testing.T) {
+	mock := newCMSMock(t)
+	path := "/v2/collections/" + testCollectionID
+	mock.handle(http.MethodPatch, path, func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusOK, Collection{
+			ID: testCollectionID, DisplayName: "Articles", SingularName: "Article", Slug: "blog-posts",
+		})
+	})
+
+	resp, err := (&CollectionResource{}).Update(context.Background(), infer.UpdateRequest[CollectionArgs, CollectionState]{
+		ID: testSiteID + "/collections/" + testCollectionID,
+		State: CollectionState{
+			CollectionArgs: CollectionArgs{
+				SiteID: testSiteID, DisplayName: "Blog Posts", SingularName: "Blog Post", Slug: "blog-posts",
+			},
+			CollectionID: testCollectionID,
+		},
+		Inputs: CollectionArgs{SiteID: testSiteID, DisplayName: "Articles", SingularName: "Article"},
+	})
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	body := mock.callsTo(http.MethodPatch, path)[0].Body
+	if _, ok := body["slug"]; ok {
+		t.Errorf("omitted slug must not be sent, got body %v", body)
+	}
+	if resp.Output.Slug != "blog-posts" {
+		t.Errorf("state must keep the Webflow-assigned slug, got %q", resp.Output.Slug)
+	}
+}
+
+func TestCollectionResource_Update_DryRunAndErrors(t *testing.T) {
+	t.Run("dry run keeps state without calling the API", func(t *testing.T) {
+		mock := newCMSMock(t)
+		resp, err := (&CollectionResource{}).Update(
+			context.Background(),
+			infer.UpdateRequest[CollectionArgs, CollectionState]{
+				ID: testSiteID + "/collections/" + testCollectionID,
+				State: CollectionState{
+					CollectionArgs: CollectionArgs{Slug: "blog-posts"},
+					CollectionID:   testCollectionID, CreatedOn: "2024-01-01T00:00:00Z",
+				},
+				Inputs: CollectionArgs{SiteID: testSiteID, DisplayName: "Articles", SingularName: "Article"},
+				DryRun: true,
+			},
+		)
+		if err != nil {
+			t.Fatalf("Update(DryRun) error = %v", err)
+		}
+		if len(mock.requests()) != 0 {
+			t.Errorf("dry run must not call the API")
+		}
+		if resp.Output.CollectionID != testCollectionID || resp.Output.Slug != "blog-posts" ||
+			resp.Output.CreatedOn != "2024-01-01T00:00:00Z" || resp.Output.DisplayName != "Articles" {
+			t.Errorf("dry run should carry over server-owned state: %+v", resp.Output)
+		}
+	})
+
+	t.Run("validation error", func(t *testing.T) {
+		mock := newCMSMock(t)
+		_, err := (&CollectionResource{}).Update(context.Background(), infer.UpdateRequest[CollectionArgs, CollectionState]{
+			ID:     testSiteID + "/collections/" + testCollectionID,
+			Inputs: CollectionArgs{SiteID: testSiteID, DisplayName: "", SingularName: "Article"},
+		})
+		if err == nil || !strings.Contains(err.Error(), "validation failed") {
+			t.Fatalf("expected validation error, got %v", err)
+		}
+		if len(mock.requests()) != 0 {
+			t.Errorf("validation failure must not call the API")
+		}
+	})
+
+	t.Run("API error", func(t *testing.T) {
+		mock := newCMSMock(t)
+		mock.handle(http.MethodPatch, "/v2/collections/"+testCollectionID, func(w http.ResponseWriter, r *http.Request) {
+			writeCMSJSON(w, http.StatusConflict, map[string]string{"message": "slug already in use"})
+		})
+		_, err := (&CollectionResource{}).Update(context.Background(), infer.UpdateRequest[CollectionArgs, CollectionState]{
+			ID:     testSiteID + "/collections/" + testCollectionID,
+			Inputs: CollectionArgs{SiteID: testSiteID, DisplayName: "Articles", SingularName: "Article", Slug: "taken"},
+		})
+		if err == nil || !strings.Contains(err.Error(), "failed to update collection") {
+			t.Fatalf("expected update error, got %v", err)
+		}
+	})
 }
 
 func TestCollectionResource_Create_ValidationError(t *testing.T) {
@@ -582,7 +777,7 @@ func TestCollectionDiff_OmittedSlugAfterRefreshDoesNotReplace(t *testing.T) {
 	}
 }
 
-func TestCollectionDiff_ExplicitSlugChangeReplaces(t *testing.T) {
+func TestCollectionDiff_ExplicitSlugChangeUpdatesInPlace(t *testing.T) {
 	state := CollectionState{
 		CollectionArgs: CollectionArgs{
 			SiteID:       testSiteID,
@@ -599,51 +794,54 @@ func TestCollectionDiff_ExplicitSlugChangeReplaces(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Diff() error = %v", err)
 	}
-	if d, ok := resp.DetailedDiff["slug"]; !ok || d.Kind != p.UpdateReplace || !resp.DeleteBeforeReplace {
-		t.Errorf("explicit slug change must replace: %+v", resp)
+	if d, ok := resp.DetailedDiff["slug"]; !ok || d.Kind != p.Update || resp.DeleteBeforeReplace {
+		t.Errorf("explicit slug change must update in place (PATCH): %+v", resp)
 	}
 }
 
-// TestCollectionDiff_MultipleChanges tests that Diff accumulates all changes in DetailedDiff
+// TestCollectionDiff_MultipleChanges tests that Diff accumulates all changes in DetailedDiff:
+// only siteId replaces, the other properties are patched in place.
 func TestCollectionDiff_MultipleChanges(t *testing.T) {
 	resource := &CollectionResource{}
 	ctx := context.Background()
 
 	tests := []struct {
-		name         string
-		oldState     CollectionState
-		newInputs    CollectionArgs
-		expectedKeys []string
+		name      string
+		oldState  CollectionState
+		newInputs CollectionArgs
+		wantKinds map[string]p.DiffKind
 	}{
 		{
 			name: "all fields changed",
 			oldState: CollectionState{CollectionArgs: CollectionArgs{
-				SiteID: "oldsite123456789012345678", DisplayName: "Old Name", SingularName: "Old Singular", Slug: "old-slug",
+				SiteID: "0ld51te123456789012345678", DisplayName: "Old Name", SingularName: "Old Singular", Slug: "old-slug",
 			}},
 			newInputs: CollectionArgs{
-				SiteID: "newsite123456789012345678", DisplayName: "New Name", SingularName: "New Singular", Slug: "new-slug",
+				SiteID: "aaaaaaaaaaaaaaaaaaaaaaaa", DisplayName: "New Name", SingularName: "New Singular", Slug: "new-slug",
 			},
-			expectedKeys: []string{"siteId", "displayName", "singularName", "slug"},
+			wantKinds: map[string]p.DiffKind{
+				"siteId": p.UpdateReplace, "displayName": p.Update, "singularName": p.Update, "slug": p.Update,
+			},
 		},
 		{
 			name: "two fields changed",
 			oldState: CollectionState{CollectionArgs: CollectionArgs{
-				SiteID: "site123456789012345678901", DisplayName: "Old Name", SingularName: "Old Singular", Slug: "same-slug",
+				SiteID: testSiteID, DisplayName: "Old Name", SingularName: "Old Singular", Slug: "same-slug",
 			}},
 			newInputs: CollectionArgs{
-				SiteID: "site123456789012345678901", DisplayName: "New Name", SingularName: "New Singular", Slug: "same-slug",
+				SiteID: testSiteID, DisplayName: "New Name", SingularName: "New Singular", Slug: "same-slug",
 			},
-			expectedKeys: []string{"displayName", "singularName"},
+			wantKinds: map[string]p.DiffKind{"displayName": p.Update, "singularName": p.Update},
 		},
 		{
 			name: "no changes",
 			oldState: CollectionState{CollectionArgs: CollectionArgs{
-				SiteID: "site123456789012345678901", DisplayName: "Same Name", SingularName: "Same Singular", Slug: "same-slug",
+				SiteID: testSiteID, DisplayName: "Same Name", SingularName: "Same Singular", Slug: "same-slug",
 			}},
 			newInputs: CollectionArgs{
-				SiteID: "site123456789012345678901", DisplayName: "Same Name", SingularName: "Same Singular", Slug: "same-slug",
+				SiteID: testSiteID, DisplayName: "Same Name", SingularName: "Same Singular", Slug: "same-slug",
 			},
-			expectedKeys: []string{},
+			wantKinds: map[string]p.DiffKind{},
 		},
 	}
 
@@ -655,25 +853,24 @@ func TestCollectionDiff_MultipleChanges(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Diff() error = %v, want nil", err)
 			}
-			if len(result.DetailedDiff) != len(tt.expectedKeys) {
-				t.Errorf(
-					"Expected %d changes in DetailedDiff, got %d: %v",
-					len(tt.expectedKeys),
-					len(result.DetailedDiff),
-					result.DetailedDiff,
-				)
+			if len(result.DetailedDiff) != len(tt.wantKinds) {
+				t.Errorf("Expected %d changes in DetailedDiff, got %d: %v",
+					len(tt.wantKinds), len(result.DetailedDiff), result.DetailedDiff)
 			}
-			if len(tt.expectedKeys) > 0 {
-				if !result.HasChanges || !result.DeleteBeforeReplace {
-					t.Error("Expected HasChanges and DeleteBeforeReplace when changes detected")
-				}
-			} else if result.HasChanges {
-				t.Error("Expected HasChanges=false when no changes")
+			if result.HasChanges != (len(tt.wantKinds) > 0) {
+				t.Errorf("HasChanges = %v, want %v", result.HasChanges, len(tt.wantKinds) > 0)
 			}
-			for _, key := range tt.expectedKeys {
-				if d, found := result.DetailedDiff[key]; !found || d.Kind != p.UpdateReplace {
-					t.Errorf("Expected key %q with UpdateReplace in DetailedDiff, got %+v", key, result.DetailedDiff)
+			wantReplace := false
+			for key, kind := range tt.wantKinds {
+				if d, found := result.DetailedDiff[key]; !found || d.Kind != kind {
+					t.Errorf("Expected key %q with kind %v in DetailedDiff, got %+v", key, kind, result.DetailedDiff)
 				}
+				if kind == p.UpdateReplace {
+					wantReplace = true
+				}
+			}
+			if result.DeleteBeforeReplace != wantReplace {
+				t.Errorf("DeleteBeforeReplace = %v, want %v", result.DeleteBeforeReplace, wantReplace)
 			}
 		})
 	}
