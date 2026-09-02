@@ -21,7 +21,7 @@ npm install
 
 This installs:
 - `@pulumi/pulumi` - Pulumi SDK
-- `pulumi-webflow` - Webflow provider
+- `@jdetmar/pulumi-webflow` - Webflow provider
 
 ### Step 2: Configure Your Credentials (2 minutes)
 
@@ -103,7 +103,7 @@ The main program is in `index.ts`:
 
 ```typescript
 import * as pulumi from "@pulumi/pulumi";
-import * as webflow from "pulumi-webflow";
+import * as webflow from "@jdetmar/pulumi-webflow";
 
 const config = new pulumi.Config();
 const siteId = config.requireSecret("siteId");
@@ -194,7 +194,7 @@ Error: Plugin webflow not found
 
 **Solution:**
 ```bash
-pulumi plugin install resource webflow
+pulumi plugin install resource webflow --server github://api.github.com/JDetmar/pulumi-webflow
 ```
 
 ## Next Steps

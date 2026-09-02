@@ -66,7 +66,7 @@ git push origin vX.Y.Z
 ```bash
 npm install @jdetmar/pulumi-webflow@X.Y.Z
 pip install pulumi-webflow==X.Y.Z
-dotnet add package Pulumi.Webflow --version X.Y.Z
+dotnet add package Community.Pulumi.Webflow --version X.Y.Z
 ```
 
 ---

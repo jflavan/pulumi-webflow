@@ -15,14 +15,13 @@ config:
   webflow:apiToken:
     secure: # Run: pulumi config set webflow:apiToken <token> --secret
   environmentName: prod
+  workspaceId: "YOUR_WORKSPACE_ID"  # Enterprise workspace ID (Account Settings > Workspace)
   prodDeploymentConfirmed: "no"  # Change to "yes" to allow production deployments
 
   # Production: real sites with indexing and all redirects
   sites:
     marketing:
       displayName: "Acme Corp - Marketing"
-      shortName: "acme-marketing"
-      timeZone: "America/New_York"
       allowIndexing: true
       redirects:
         - sourcePath: "/old-pricing"
@@ -34,8 +33,6 @@ config:
 
     docs:
       displayName: "Acme Corp - Documentation"
-      shortName: "acme-docs"
-      timeZone: "America/New_York"
       allowIndexing: true
       redirects:
         - sourcePath: "/v1"
@@ -47,8 +44,6 @@ config:
 
     blog:
       displayName: "Acme Corp - Engineering Blog"
-      shortName: "acme-blog"
-      timeZone: "America/Los_Angeles"
       allowIndexing: true
       redirects:
         - sourcePath: "/feed"

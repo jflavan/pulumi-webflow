@@ -21,16 +21,16 @@ Quick answers to common questions about the Webflow Pulumi Provider.
 
 The Webflow Pulumi Provider enables you to manage your Webflow sites and resources using Infrastructure as Code with Pulumi. You can define your Webflow resources in code (TypeScript, Python, Go, .NET, or Java), version control them, and deploy with `pulumi up`.
 
-**Resources managed:**
-- **Sites** - Create, update, and delete Webflow sites
-- **Redirects** - Manage URL redirects
-- **RobotsTxt** - Manage robots.txt files
+**Resources managed:** sites, redirects, robots.txt, CMS collections/fields/items, page metadata and
+content, webhooks, assets and asset folders, custom-code scripts (registered and inline, applied
+site-wide or per page), e-commerce settings, plus the `getTokenInfo` / `getAuthorizedUser` functions.
+See the [resource catalog](../README.md#resources-and-functions) in the README for the full list.
 
 ### How do I get started?
 
 1. **Install the provider:**
    ```bash
-   pulumi plugin install resource webflow v0.1.0
+   pulumi plugin install resource webflow v0.10.1 --server github://api.github.com/JDetmar/pulumi-webflow
    ```
 
 2. **Create a new Pulumi project:**
@@ -49,13 +49,14 @@ The Webflow Pulumi Provider enables you to manage your Webflow sites and resourc
    pulumi config set webflow:apiToken --secret
    ```
 
-5. **Create your first resource:**
+5. **Create your first resource** (a robots.txt for an existing site):
    ```python
    import pulumi
    import pulumi_webflow as webflow
 
-   site = webflow.Site("my-site",
-       site_id="your_site_id_here"
+   robots = webflow.RobotsTxt("my-robots",
+       site_id="your_site_id_here",
+       content="User-agent: *\nAllow: /",
    )
    ```
 
@@ -70,7 +71,7 @@ The provider supports:
 - **TypeScript/JavaScript** - Native support via @jdetmar/pulumi-webflow
 - **Python** - Via pulumi-webflow package
 - **Go** - Via pulumi-webflow Go SDK
-- **.NET** - Via Pulumi.Webflow package
+- **.NET** - Via Community.Pulumi.Webflow package
 - **Java** - Via pulumi-webflow Maven package
 
 All languages have the same capabilities; choose what's most comfortable for you.
@@ -87,10 +88,11 @@ The provider includes:
 ### Is there an example project I can start from?
 
 Yes! Check the `examples/` directory in the GitHub repository:
-- `examples/basic-site/` - Simple site management
+- `examples/quickstart/` - Deploy your first resource (TypeScript, Python, Go)
+- `examples/<resource>/` - One directory per resource (`site/`, `redirect/`, `robotstxt/`, `collection/`, `webhook/`, ...)
 - `examples/multi-site/` - Managing multiple sites
-- `examples/with-redirects/` - Site with URL redirects
-- `examples/multi-environment/` - Dev, staging, production stacks
+- `examples/stack-config/` - Dev, staging, production stacks
+- `examples/ci-cd/` - GitHub Actions and GitLab CI templates
 - `examples/troubleshooting-logs/` - Logging and debugging examples
 
 Each example includes a README with setup instructions.
@@ -173,9 +175,10 @@ Each stack has its own secrets.
 
 ### What permissions does the API token need?
 
-The token needs access to:
-- **Sites** - View and manage your sites
-- **Collections** - If managing collections (for future features)
+The token needs the scopes for the resource families you manage: `sites:*` (Site, Webhook),
+`site_config:*` (Redirect, RobotsTxt), `pages:*`, `cms:*`, `assets:*`, `custom_code:*`,
+`ecommerce:read` and `authorized_user:read` for the token/user functions. See the scope table in the
+[README](../README.md#authentication).
 
 Tokens can be restricted to specific sites. Use the Webflow Dashboard to configure granular permissions.
 
@@ -216,7 +219,9 @@ A **site ID** is the unique identifier for your Webflow site. It's a 24-characte
 
 ### Do I need a site ID for each resource?
 
-Yes. Each resource (Site, Redirect, RobotsTxt) is associated with a site ID.
+Every resource except `Site` is scoped to an existing site (`site_id`), page (`page_id`) or
+collection (`collection_id`). `Site` itself is created from a `workspace_id` and a `display_name`;
+its ID becomes the `site_id` for the other resources.
 
 ```python
 # Redirect for a specific site
@@ -290,13 +295,13 @@ Use descriptive names for your Pulumi resources:
 
 ```python
 # Good
-site = webflow.Site("production-site", site_id="...")
-redirect = webflow.Redirect("old-domain-redirect", site_id="...")
-robots = webflow.RobotsTxt("disallow-bots", site_id="...")
+site = webflow.Site("production-site", workspace_id="...", display_name="Production")
+redirect = webflow.Redirect("old-domain-redirect", site_id=site.id, ...)
+robots = webflow.RobotsTxt("disallow-bots", site_id=site.id, ...)
 
 # Avoid
-site1 = webflow.Site("s1", site_id="...")
-r = webflow.Redirect("r", site_id="...")
+site1 = webflow.Site("s1", workspace_id="...", display_name="S1")
+r = webflow.Redirect("r", site_id=site1.id, ...)
 ```
 
 Names should be:
@@ -378,11 +383,12 @@ pulumi import webflow:index:Site my-imported-site site-id-123abc
 pulumi import webflow:index:Redirect my-redirect redirect-id-456def
 ```
 
-Then add the resource to your code:
+Then add the resource to your code with its input properties (see [IMPORTING.md](./IMPORTING.md)):
 
 ```python
 site = webflow.Site("my-imported-site",
-    site_id="507f1f77bcf86cd799439011"
+    workspace_id="workspace-123",
+    display_name="My Existing Site",
 )
 ```
 
@@ -424,10 +430,10 @@ If you delete resources directly in Webflow Dashboard:
 **Simple rename in code:**
 ```python
 # Before
-site = webflow.Site("old-name", site_id="...")
+site = webflow.Site("old-name", workspace_id="...", display_name="...")
 
 # After
-site = webflow.Site("new-name", site_id="...")
+site = webflow.Site("new-name", workspace_id="...", display_name="...")
 ```
 
 Then:
@@ -450,26 +456,30 @@ pulumi state mv urn:pulumi:...:old-name urn:pulumi:...:new-name
 
 ### What resource types are available?
 
-Currently supported:
-- **Site** - Webflow site management
-- **Redirect** - URL redirects
-- **RobotsTxt** - robots.txt management
-
-More resources coming in future versions.
+Sixteen resources and two functions (see the [catalog](../README.md#resources-and-functions)):
+`Site`, `Redirect`, `RobotsTxt`, `Collection`, `CollectionField`, `CollectionItem`, `PageData`,
+`PageContent`, `Webhook`, `Asset`, `AssetFolder`, `RegisteredScript`, `InlineScript`,
+`SiteCustomCode`, `PageCustomCode`, `EcommerceSettings`, plus `getTokenInfo` and `getAuthorizedUser`.
+`GoogleTag`, `PageSchemaMarkup`, `PageMetadata` and the `getPage*` / `getAnalytics*` functions are
+new in the current release line; see the [CHANGELOG](../CHANGELOG.md).
 
 ### How do I create a Site resource?
+
+Site creation requires an Enterprise workspace. `short_name` and `time_zone` are generated by
+Webflow and exposed as read-only outputs.
 
 ```python
 import pulumi
 import pulumi_webflow as webflow
 
 site = webflow.Site("my-site",
-    site_id="507f1f77bcf86cd799439011",  # Required
-    display_name="My Webflow Site"        # Optional
+    workspace_id="507f1f77bcf86cd799439011",  # Required
+    display_name="My Webflow Site",           # Required
 )
 
 # Export outputs
-pulumi.export("site_id", site.site_id)
+pulumi.export("site_id", site.id)
+pulumi.export("short_name", site.short_name)
 ```
 
 ### How do I create a Redirect resource?
@@ -516,18 +526,20 @@ import pulumi
 import pulumi_webflow as webflow
 
 site = webflow.Site("my-site",
-    site_id="507f1f77bcf86cd799439011"
+    workspace_id="507f1f77bcf86cd799439011",
+    display_name="My Site",
 )
 
 # Use site ID in redirect
 redirect = webflow.Redirect("my-redirect",
-    site_id=site.site_id,  # Use output from site
-    source="/old",
-    target="/new"
+    site_id=site.id,  # Use output from site
+    source_path="/old",
+    destination_path="/new",
+    status_code=301,
 )
 
 # Export for later use
-pulumi.export("site_id", site.site_id)
+pulumi.export("site_id", site.id)
 ```
 
 ### How do I reference resources from other projects?
@@ -557,9 +569,9 @@ redirect = webflow.Redirect("my-redirect",
 
 **Option 1: Multiple resources in one stack:**
 ```python
-site1 = webflow.Site("site-1", site_id="id-1")
-site2 = webflow.Site("site-2", site_id="id-2")
-site3 = webflow.Site("site-3", site_id="id-3")
+site1 = webflow.Site("site-1", workspace_id=ws, display_name="Site 1")
+site2 = webflow.Site("site-2", workspace_id=ws, display_name="Site 2")
+site3 = webflow.Site("site-3", workspace_id=ws, display_name="Site 3")
 ```
 
 **Option 2: Separate stacks per site:**
@@ -585,18 +597,20 @@ For 10+ sites, structure like:
 1. **Shared configuration:**
    ```python
    # config.py
+   WORKSPACE_ID = "507f1f77bcf86cd799439000"
    SITES = {
-       "client-a": "507f1f77bcf86cd799439011",
-       "client-b": "507f1f77bcf86cd799439012",
-       "client-c": "507f1f77bcf86cd799439013",
+       "client-a": "Client A",
+       "client-b": "Client B",
+       "client-c": "Client C",
    }
    ```
 
 2. **Loop through sites:**
    ```python
-   for client_name, site_id in SITES.items():
+   for client_name, display_name in SITES.items():
        site = webflow.Site(f"site-{client_name}",
-           site_id=site_id
+           workspace_id=WORKSPACE_ID,
+           display_name=display_name,
        )
    ```
 
@@ -612,12 +626,12 @@ Use clear, descriptive names:
 
 ```python
 # Good: Clear what each site is
-site_client_a_production = webflow.Site("client-a-prod", site_id="...")
-site_client_b_staging = webflow.Site("client-b-staging", site_id="...")
+site_client_a_production = webflow.Site("client-a-prod", workspace_id=ws, display_name="Client A (prod)")
+site_client_b_staging = webflow.Site("client-b-staging", workspace_id=ws, display_name="Client B (staging)")
 
 # Avoid: Ambiguous
-site1 = webflow.Site("site-1", site_id="...")
-site2 = webflow.Site("site-2", site_id="...")
+site1 = webflow.Site("site-1", workspace_id=ws, display_name="Site 1")
+site2 = webflow.Site("site-2", workspace_id=ws, display_name="Site 2")
 ```
 
 Document mappings:
@@ -1040,15 +1054,17 @@ See [Troubleshooting Guide](./troubleshooting.md#authentication--credentials) fo
 
 1. **Check this FAQ** - Most questions answered here
 2. **See Troubleshooting Guide** - For error-specific help (docs/troubleshooting.md)
-3. **GitHub Issues** - https://github.com/jdetmar/pulumi-webflow/issues
-4. **GitHub Discussions** - https://github.com/jdetmar/pulumi-webflow/discussions
+3. **GitHub Issues** - https://github.com/JDetmar/pulumi-webflow/issues
+4. **GitHub Discussions** - https://github.com/JDetmar/pulumi-webflow/discussions
 5. **Webflow Support** - For Webflow-specific issues
 
 ### How do I enable verbose logging?
 
 ```bash
-pulumi up --debug 2>&1 | tee deployment.log
+pulumi up -v=9 --logtostderr 2>&1 | tee deployment.log
 ```
+
+`-v=9` makes the provider's debug messages visible; see the [Logging Guide](./logging.md).
 
 Check `deployment.log` for detailed error messages.
 
@@ -1070,7 +1086,7 @@ Check `deployment.log` for detailed error messages.
    Error creating resource: invalid site ID 'abc': must be 24-character hex
 
    Steps to reproduce:
-   1. Create site with site_id="abc"
+   1. Create a RobotsTxt with site_id="abc"
    2. Run `pulumi up`
 
    Expected: Site should be created
@@ -1110,8 +1126,8 @@ Helpful:
 ### How do I get support?
 
 **For Pulumi provider issues:**
-- GitHub Issues: https://github.com/jdetmar/pulumi-webflow/issues
-- GitHub Discussions: https://github.com/jdetmar/pulumi-webflow/discussions
+- GitHub Issues: https://github.com/JDetmar/pulumi-webflow/issues
+- GitHub Discussions: https://github.com/JDetmar/pulumi-webflow/discussions
 
 **For Webflow API issues:**
 - Webflow Support: https://webflow.com/support
@@ -1145,4 +1161,4 @@ Instead:
 - **Search this FAQ** with Ctrl+F
 - **Check Troubleshooting Guide** - docs/troubleshooting.md
 - **Review examples** - examples/ directory
-- **Open a GitHub issue** - https://github.com/jdetmar/pulumi-webflow/issues
+- **Open a GitHub issue** - https://github.com/JDetmar/pulumi-webflow/issues

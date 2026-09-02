@@ -3,13 +3,14 @@ package main
 import (
 	"fmt"
 
+	"github.com/JDetmar/pulumi-webflow/sdk/go/webflow"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
-	"github.com/jdetmar/pulumi-webflow/sdk/go/webflow"
+	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
-		cfg := pulumi.NewConfig(ctx, "")
+		cfg := config.New(ctx, "")
 		collectionID := cfg.Require("collectionId")
 		environment := cfg.Get("environment")
 		if environment == "" {
@@ -32,8 +33,8 @@ func main() {
 				// "publish-date": pulumi.String("2025-01-06"),
 				// "featured-image": pulumi.String("https://example.com/image.jpg"),
 			},
-			IsDraft:    &isDraft,
-			IsArchived: &isNotArchived,
+			IsDraft:    pulumi.Bool(isDraft),
+			IsArchived: pulumi.Bool(isNotArchived),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create draft blog post: %w", err)
@@ -54,8 +55,8 @@ func main() {
 				// "category": pulumi.String("Electronics"),
 				// "in-stock": pulumi.Bool(true),
 			},
-			IsDraft:    &isPublished, // false = published
-			IsArchived: &isNotArchived,
+			IsDraft:    pulumi.Bool(isPublished), // false = published
+			IsArchived: pulumi.Bool(isNotArchived),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create published product: %w", err)
@@ -70,8 +71,8 @@ func main() {
 				"name": pulumi.String("Discontinued Product"),
 				"slug": pulumi.String("discontinued-product-archive"),
 			},
-			IsDraft:    &isDraft,
-			IsArchived: &isArchived, // Hidden from both CMS and live site
+			IsDraft:    pulumi.Bool(isDraft),
+			IsArchived: pulumi.Bool(isArchived), // Hidden from both CMS and live site
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create archived item: %w", err)
@@ -89,8 +90,8 @@ func main() {
 			{"Webflow API Best Practices", "webflow-api-best-practices", "Guide"},
 		}
 
-		bulkItemIDs := []pulumi.StringOutput{}
-		bulkItemItemIDs := []pulumi.StringOutput{}
+		bulkItemIDs := pulumi.StringArray{}
+		bulkItemItemIDs := pulumi.StringArray{}
 		for i, data := range contentData {
 			item, err := webflow.NewCollectionItem(ctx, fmt.Sprintf("bulk-item-%d", i), &webflow.CollectionItemArgs{
 				CollectionId: pulumi.String(collectionID),
@@ -100,13 +101,13 @@ func main() {
 					// Add your custom fields here
 					// "category": pulumi.String(data.category),
 				},
-				IsDraft: &isDraft, // Start as drafts
+				IsDraft: pulumi.Bool(isDraft), // Start as drafts
 			})
 			if err != nil {
 				return fmt.Errorf("failed to create bulk item %d: %w", i, err)
 			}
 			bulkItemIDs = append(bulkItemIDs, item.ID().ToStringOutput())
-			bulkItemItemIDs = append(bulkItemItemIDs, item.ItemId)
+			bulkItemItemIDs = append(bulkItemItemIDs, item.ItemId.Elem())
 		}
 
 		// Example 5: Localized Content (optional - only if your site uses localization)
@@ -118,7 +119,7 @@ func main() {
 		// 		"slug": pulumi.String("bienvenue"),
 		// 	},
 		// 	CmsLocaleId: pulumi.String("fr-FR"), // French locale
-		// 	IsDraft:     &isPublished,
+		// 	IsDraft:     pulumi.Bool(isPublished),
 		// })
 		// if err != nil {
 		// 	return fmt.Errorf("failed to create localized item: %w", err)
@@ -143,25 +144,25 @@ func main() {
 		ctx.Export("archivedItemItemId", archivedItem.ItemId)
 
 		// Bulk items exports
-		ctx.Export("bulkItemIds", pulumi.StringArray(bulkItemIDs))
-		ctx.Export("bulkItemItemIds", pulumi.StringArray(bulkItemItemIDs))
+		ctx.Export("bulkItemIds", bulkItemIDs)
+		ctx.Export("bulkItemItemIds", bulkItemItemIDs)
 
 		// Print deployment success message
 		totalItems := 3 + len(contentData)
 		ctx.Log.Info(
 			fmt.Sprintf("✅ Successfully deployed %d collection items to collection %s", totalItems, collectionID),
-			&pulumi.LogOptions{},
+			nil,
 		)
 		ctx.Log.Info(
 			fmt.Sprintf("   Environment: %s", environment),
-			&pulumi.LogOptions{},
+			nil,
 		)
 		ctx.Log.Info(
 			fmt.Sprintf("   Draft items: %d", 1+len(contentData)),
-			&pulumi.LogOptions{},
+			nil,
 		)
-		ctx.Log.Info("   Published items: 1", &pulumi.LogOptions{})
-		ctx.Log.Info("   Archived items: 1", &pulumi.LogOptions{})
+		ctx.Log.Info("   Published items: 1", nil)
+		ctx.Log.Info("   Archived items: 1", nil)
 
 		return nil
 	})

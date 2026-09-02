@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Pulumi;
-using Pulumi.Webflow;
+using Community.Pulumi.Webflow;
 
 class Program
 {

@@ -80,7 +80,7 @@ examples/
       <resource-name>.csproj
       Pulumi.yaml
     java/
-      src/main/java/com/pulumi/webflow/examples/App.java
+      src/main/java/io/github/jdetmar/pulumi/webflow/examples/App.java
       pom.xml
       Pulumi.yaml
 ```
@@ -166,61 +166,53 @@ When modifying a resource:
 - [ ] Run `make codegen`
 - [ ] Test affected examples
 - [ ] Update README if behavior changed
-- [ ] Verify integration tests still pass
+- [ ] Re-run the affected examples (`pulumi preview` / `pulumi up`) against a real site
 
 ## Current Status
 
-Track example coverage in this section:
+Coverage is derived from the language directories that actually exist under `examples/<resource>/`
+(16 resources registered in `provider/provider.go`, plus 2 functions):
 
-### Complete Coverage (All 5 languages: TypeScript, Python, Go, C#, Java)
-- ✅ Asset
-- ✅ Collection
-- ✅ CollectionItem
-- ✅ Page
-- ✅ Redirect
-- ✅ RobotsTxt
-- ✅ Site
-- ✅ Webhook
-
-### Multi-Language Coverage (TypeScript, Python, Go)
-- ✅ Collection (TS, Python, Go, C#, Java)
-- ✅ CollectionItem (TS, Python, Go, C#, Java)
-- ✅ Page (TS, Python, Go)
-- ✅ Webhook (TS, Python, Go)
-
-### TypeScript-Only Coverage
-- ✅ AssetFolder
-- ✅ CollectionField
-- ✅ PageContent
-- ✅ PageCustomCode
-- ✅ RegisteredScript
-- ✅ SiteCustomCode
-
-### TypeScript-Only Coverage (continued)
-- ✅ EcommerceSettings
+| Resource            | TypeScript | Python | Go | C# | Java | Directory                      |
+|---------------------|:----------:|:------:|:--:|:--:|:----:|--------------------------------|
+| Asset               | ✅ | ✅ | ✅ | ✅ | ✅ | `examples/asset/`              |
+| AssetFolder         | ✅ |    |    |    |      | `examples/assetfolder/`        |
+| Collection          | ✅ | ✅ | ✅ | ✅ | ✅ | `examples/collection/`         |
+| CollectionField     | ✅ |    |    |    |      | `examples/collectionfield/`    |
+| CollectionItem      | ✅ | ✅ | ✅ | ✅ | ✅ | `examples/collectionitem/`     |
+| EcommerceSettings   | ✅ |    |    |    |      | `examples/ecommerce-settings/` |
+| InlineScript        | ✅ |    |    |    |      | `examples/inlinescript/`       |
+| PageContent         | ✅ |    |    |    |      | `examples/pagecontent/`        |
+| PageCustomCode      | ✅ |    |    |    |      | `examples/pagecustomcode/`     |
+| PageData            | ✅ | ✅ | ✅ |    |      | `examples/page/`               |
+| Redirect            | ✅ | ✅ | ✅ | ✅ | ✅ | `examples/redirect/`           |
+| RegisteredScript    | ✅ |    |    |    |      | `examples/registeredscript/`   |
+| RobotsTxt           | ✅ | ✅ | ✅ | ✅ | ✅ | `examples/robotstxt/`          |
+| Site                | ✅ | ✅ | ✅ | ✅ | ✅ | `examples/site/`               |
+| SiteCustomCode      | ✅ |    |    |    |      | `examples/sitecustomcode/`     |
+| Webhook             | ✅ | ✅ | ✅ |    |      | `examples/webhook/`            |
 
 ### Data Sources (Functions)
-- ✅ Token (getTokenInfo, getAuthorizedUser)
+- ✅ `getTokenInfo`, `getAuthorizedUser` - `examples/token/` (TypeScript)
 
 ### Missing Examples
-- (None - all resources and data sources have examples!)
+- (None - all 16 resources and both functions have at least a TypeScript example)
 
-**Current Coverage: 100% (15/15 resources + 2 data sources with at least TypeScript examples)**
-**Multi-Language Coverage: 53% (8/15 resources with 3+ languages)**
-**Complete Coverage: 53% (8/15 resources with all 5 languages)**
+**Tier 1 coverage: 100% (16/16 resources + 2 functions with at least a TypeScript example and README)**
+**Multi-language coverage: 50% (8/16 resources with 3+ languages: Asset, Collection, CollectionItem, PageData, Redirect, RobotsTxt, Site, Webhook)**
+**Complete coverage: 38% (6/16 resources with all 5 languages: Asset, Collection, CollectionItem, Redirect, RobotsTxt, Site)**
 
-✅ **Target Met:** 100% of resources have at least TypeScript examples
-✅ **Bonus:** All core resources have multi-language coverage
-✅ **Data Sources:** Token data sources have TypeScript examples
+Core resources still missing C#/Java examples: PageData, Webhook.
 
 ## Integration Examples
 
 Current integration examples (these go beyond single resources):
-- ✅ multi-site/ - Managing multiple Webflow sites
-- ✅ stack-config/ - Configuration management patterns
-- ✅ quickstart/ - Getting started guide
-- ✅ troubleshooting-logs/ - Debugging patterns
-- ✅ ci-cd/, git-workflows/ - Automation patterns
+- ✅ `multi-site/` - Managing multiple Webflow sites (TypeScript, Python, Go)
+- ✅ `stack-config/` - Multi-environment configuration patterns (TypeScript, Python, Go)
+- ✅ `quickstart/` - Getting started guide (TypeScript, Python, Go)
+- ✅ `troubleshooting-logs/` - Debugging and logging patterns (TypeScript, Python, Go)
+- ✅ `ci-cd/` - GitHub Actions and GitLab CI pipeline templates
+- ✅ `yaml/` - Pulumi YAML program
 
 ## Language-Specific Notes
 
@@ -237,17 +229,22 @@ Current integration examples (these go beyond single resources):
 ### Go
 - Follow Go conventions
 - Use proper error handling
-- Import from `github.com/jdetmar/pulumi-webflow/sdk/go/webflow`
+- Import from `github.com/JDetmar/pulumi-webflow/sdk/go/webflow`
 
 ### C#
 - Follow .NET naming conventions (PascalCase)
 - Use proper async/await patterns
-- Include proper project file
+- Reference the `Community.Pulumi.Webflow` NuGet package and `using Community.Pulumi.Webflow;`
+- Include proper project file (`net8.0`)
 
 ### Java
 - Follow Java conventions
-- Use Maven for dependency management
+- Use Maven for dependency management (`io.github.jdetmar.pulumi:pulumi-webflow`)
+- Import from the `io.github.jdetmar.pulumi.webflow` package
 - Include proper package structure
+
+### Dependency versions
+- Pin every example to the current release line (`^0.10.1` / `>=0.10.1` / `v0.10.1` / `0.10.1`); see [CHANGELOG.md](CHANGELOG.md)
 
 ## Questions?
 

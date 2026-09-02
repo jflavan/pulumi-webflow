@@ -6,3 +6,5 @@ config:
   webflow:apiToken:
     description: Webflow API token (from WEBFLOW_API_TOKEN environment variable)
     secret: true
+  workspaceId:
+    description: Webflow workspace ID that owns the sites (Enterprise workspace required for site creation)

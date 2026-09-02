@@ -23,7 +23,7 @@ This directory contains examples demonstrating how to register and manage custom
 cd typescript
 npm install
 pulumi stack init dev
-pulumi config set webflow:siteId your-site-id --secret
+pulumi config set siteId your-site-id --secret
 pulumi up
 ```
 
@@ -39,7 +39,7 @@ const analyticsScript = new webflow.RegisteredScript("analytics-script", {
   displayName: "AnalyticsTracker",
   hostedLocation: "https://cdn.example.com/analytics-tracker.js",
   integrityHash: "sha384-...",
-  version: "1.0.0",
+  scriptVersion: "1.0.0",
   canCopy: true,
 });
 ```
@@ -54,7 +54,7 @@ const cmsSliderScript = new webflow.RegisteredScript("cms-slider", {
   displayName: "CmsSlider",
   hostedLocation: "https://cdn.example.com/cms-slider.min.js",
   integrityHash: "sha384-...",
-  version: "2.1.5",
+  scriptVersion: "2.1.5",
   canCopy: false,
 });
 ```
@@ -66,13 +66,13 @@ Register multiple versions of the same script for gradual rollouts or A/B testin
 ```typescript
 const marketingScriptV1 = new webflow.RegisteredScript("marketing-v1", {
   displayName: "MarketingPixel",
-  version: "1.0.0",
+  scriptVersion: "1.0.0",
   // ... other properties
 });
 
 const marketingScriptV2 = new webflow.RegisteredScript("marketing-v2", {
   displayName: "MarketingPixel",
-  version: "2.0.0",
+  scriptVersion: "2.0.0",
   // ... other properties
 });
 ```
@@ -83,7 +83,7 @@ Each example requires the following configuration:
 
 | Config Key        | Required | Description                              |
 |-------------------|----------|------------------------------------------|
-| `webflow:siteId`  | Yes      | Your Webflow site ID (stored as secret)  |
+| `siteId`  | Yes      | Your Webflow site ID (stored as secret)  |
 | `environment`     | No       | Deployment environment (default: development) |
 
 ## Expected Output
@@ -192,7 +192,7 @@ sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=
 sha512-...
 ```
 
-### "Invalid version" Error
+### "Invalid scriptVersion" Error
 
 Version must be valid SemVer:
 - Valid: `1.0.0`, `2.3.1`

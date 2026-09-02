@@ -11,7 +11,7 @@ Your provider is configured to publish to **5 package managers** automatically w
 | **GitHub Releases** | `pulumi-resource-webflow` | Provider binary | SBOM included |
 | **npm** | `@jdetmar/pulumi-webflow` | TypeScript/JavaScript | Trusted Publishing + Provenance |
 | **PyPI** | `pulumi-webflow` | Python | Trusted Publishing + Sigstore |
-| **NuGet** | `Pulumi.Webflow` | .NET/C# | Trusted Publishing |
+| **NuGet** | `Community.Pulumi.Webflow` | .NET/C# | Trusted Publishing |
 | **Maven Central** | `io.github.jdetmar.pulumi:pulumi-webflow` | Java | GPG signed |
 
 The Go SDK is published to a separate GitHub repository branch.
@@ -108,7 +108,7 @@ NuGet uses Trusted Publishing via GitHub OIDC - no long-lived API key required.
 2. Click your username → "Trusted Publishing"
 3. Click "Add new trusted publishing policy"
 4. Fill in:
-   - Package name: `Pulumi.Webflow`
+   - Package name: `Community.Pulumi.Webflow`
    - Owner: `JDetmar`
    - Repository: `pulumi-webflow`
    - Workflow: `release.yml`
@@ -272,7 +272,7 @@ Use this checklist every time you release a new version.
    | GitHub Releases | https://github.com/JDetmar/pulumi-webflow/releases |
    | npm | https://www.npmjs.com/package/@jdetmar/pulumi-webflow |
    | PyPI | https://pypi.org/project/pulumi-webflow/ |
-   | NuGet | https://www.nuget.org/packages/Pulumi.Webflow |
+   | NuGet | https://www.nuget.org/packages/Community.Pulumi.Webflow |
    | Maven | https://central.sonatype.com/artifact/io.github.jdetmar/pulumi-webflow |
 
 ### Post-Release Checklist
@@ -285,13 +285,13 @@ Use this checklist every time you release a new version.
 - [ ] **Test installation works**
   ```bash
   # TypeScript/JavaScript
-  npm install @jdetmar/pulumi-webflow@0.1.0
+  npm install @jdetmar/pulumi-webflow@0.10.1
 
   # Python
-  pip install pulumi-webflow==0.1.0
+  pip install pulumi-webflow==0.10.1
 
   # .NET
-  dotnet add package Pulumi.Webflow --version 0.1.0
+  dotnet add package Community.Pulumi.Webflow --version 0.10.1
   ```
 
 ---
@@ -434,5 +434,5 @@ JAVA_SIGNING_PASSWORD    # Maven GPG signing
 - GitHub: https://github.com/JDetmar/pulumi-webflow/releases
 - npm: https://www.npmjs.com/package/@jdetmar/pulumi-webflow
 - PyPI: https://pypi.org/project/pulumi-webflow/
-- NuGet: https://www.nuget.org/packages/Pulumi.Webflow
+- NuGet: https://www.nuget.org/packages/Community.Pulumi.Webflow
 - Maven: https://central.sonatype.com/artifact/io.github.jdetmar/pulumi-webflow

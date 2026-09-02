@@ -12,8 +12,8 @@ The Webflow Pulumi Provider follows [Semantic Versioning (semver)](https://semve
 
 ## Version Compatibility
 
-- **Minimum Pulumi version:** 1.8.0
-- **Minimum Go version:** 1.21 (for provider development)
+- **Minimum Pulumi CLI version:** 3.x (the language SDKs pin their own floor, e.g. `@pulumi/pulumi ^3.142.0`, `pulumi>=3.165.0`, `Pulumi [3.76.1,4)`)
+- **Minimum Go version:** 1.24.7 (required by the Go SDK and for provider development)
 - **Language SDK versions** are bumped with provider releases
 
 ## Upgrading the Provider
@@ -27,22 +27,40 @@ The easiest way to upgrade is using the Pulumi CLI:
 pulumi plugin ls
 
 # Upgrade to latest version
-pulumi plugin install resource webflow
+pulumi plugin install resource webflow --server github://api.github.com/JDetmar/pulumi-webflow
 
 # Upgrade to specific version
-pulumi plugin install resource webflow --version 0.2.0
+pulumi plugin install resource webflow v0.10.1 --server github://api.github.com/JDetmar/pulumi-webflow
 ```
 
 ### Manual Installation
 
 If you prefer manual installation:
 
-1. Download the binary for your platform from [GitHub Releases](https://github.com/jdetmar/pulumi-webflow/releases)
+1. Download the binary for your platform from [GitHub Releases](https://github.com/JDetmar/pulumi-webflow/releases)
 2. Extract the binary
 3. Copy it to your Pulumi plugins directory: `~/.pulumi/plugins/`
 4. Verify installation: `pulumi plugin ls`
 
 ## Upgrade Paths
+
+### 0.9.x → 0.10.x (`version` renamed to `scriptVersion`)
+
+The `version` property on `RegisteredScript` and `InlineScript` (and in the `scripts` entries
+of `SiteCustomCode` / `PageCustomCode`) was renamed to `scriptVersion` in v0.10.0 to avoid a
+collision with the provider framework.
+
+**Action required:** replace `version` with `scriptVersion` in your resource inputs
+(`version: "1.0.0"` → `scriptVersion: "1.0.0"`). Existing state is migrated automatically
+on first access since v0.10.1.
+
+### 0.9.3 → 0.9.4 (`shortName` is no longer a Site input)
+
+`shortName` was removed as an input of the `Site` resource; Webflow generates it from
+`displayName`. It remains available as a read-only output.
+
+**Action required:** remove `shortName` from `Site` inputs and read `site.shortName`
+(`site.short_name` in Python) where you need the value.
 
 ### 0.1.0 → 0.2.0
 
@@ -119,7 +137,7 @@ When a breaking change is planned:
 pulumi plugin ls | grep webflow
 
 # Reinstall if missing
-pulumi plugin install resource webflow --version <VERSION>
+pulumi plugin install resource webflow <VERSION> --server github://api.github.com/JDetmar/pulumi-webflow
 ```
 
 ### State compatibility issues
@@ -138,7 +156,7 @@ Check the release notes for breaking changes:
 
 ```bash
 # Compare your code against the changelog
-# https://github.com/jdetmar/pulumi-webflow/releases/tag/vX.Y.Z
+# https://github.com/JDetmar/pulumi-webflow/releases/tag/vX.Y.Z
 ```
 
 ## Version Pinning
@@ -147,34 +165,43 @@ To use a specific provider version in your project:
 
 **Python:**
 ```bash
-pip install pulumi-webflow==0.1.0
+pip install pulumi-webflow==0.10.1
 ```
 
 **TypeScript/Node.js:**
 ```bash
-npm install pulumi-webflow@0.1.0
+npm install @jdetmar/pulumi-webflow@0.10.1
 ```
 
 **Go:**
 ```bash
-go get github.com/jdetmar/pulumi-webflow/sdk/go@v0.1.0
+go get github.com/JDetmar/pulumi-webflow/sdk/go/webflow@v0.10.1
 ```
 
 **C#/.NET:**
 ```bash
-dotnet add package Pulumi.Webflow --version 0.1.0
+dotnet add package Community.Pulumi.Webflow --version 0.10.1
+```
+
+**Java (Maven):**
+```xml
+<dependency>
+  <groupId>io.github.jdetmar.pulumi</groupId>
+  <artifactId>pulumi-webflow</artifactId>
+  <version>0.10.1</version>
+</dependency>
 ```
 
 ## Reporting Issues
 
 If you encounter problems during an upgrade:
 
-1. Check the [GitHub issues](https://github.com/jdetmar/pulumi-webflow/issues) for similar problems
+1. Check the [GitHub issues](https://github.com/JDetmar/pulumi-webflow/issues) for similar problems
 2. Include your version information: `pulumi plugin ls`
 3. Provide error messages and stack traces
 4. Describe what worked before and what changed
 
 ## See Also
 
-- [Release Notes](https://github.com/jdetmar/pulumi-webflow/releases)
+- [Release Notes](https://github.com/JDetmar/pulumi-webflow/releases)
 - [Pulumi Migration Guide](https://www.pulumi.com/docs/guides/adopting-pulumi/migrating-to-pulumi/)

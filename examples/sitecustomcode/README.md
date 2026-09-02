@@ -23,7 +23,7 @@ This directory contains examples demonstrating how to apply registered custom Ja
 cd typescript
 npm install
 pulumi stack init dev
-pulumi config set webflow:siteId your-site-id --secret
+pulumi config set siteId your-site-id --secret
 pulumi up
 ```
 
@@ -39,7 +39,7 @@ const siteScripts = new webflow.SiteCustomCode("site-wide-scripts", {
   scripts: [
     {
       id: analyticsScript.id,
-      version: "4.0.0",
+      scriptVersion: "4.0.0",
       location: "header",
       attributes: {
         "data-site-id": "GA-123456789",
@@ -58,13 +58,13 @@ scripts: [
   {
     // Analytics in header - loads before page renders
     id: analyticsScript.id,
-    version: "4.0.0",
+    scriptVersion: "4.0.0",
     location: "header",
   },
   {
     // Chat widget in footer - loads after content
     id: chatWidgetScript.id,
-    version: "2.5.0",
+    scriptVersion: "2.5.0",
     location: "footer",
     attributes: {
       "data-widget-id": "chat-123",
@@ -80,7 +80,7 @@ Apply cookie consent banners and GDPR compliance scripts.
 ```typescript
 {
   id: cookieConsentScript.id,
-  version: "1.0.0",
+  scriptVersion: "1.0.0",
   location: "header",
   attributes: {
     "data-theme": "dark",
@@ -105,7 +105,7 @@ Each example requires the following configuration:
 
 | Config Key        | Required | Description                              |
 |-------------------|----------|------------------------------------------|
-| `webflow:siteId`  | Yes      | Your Webflow site ID (stored as secret)  |
+| `siteId`  | Yes      | Your Webflow site ID (stored as secret)  |
 | `environment`     | No       | Deployment environment (default: development) |
 
 ## Expected Output
@@ -176,14 +176,14 @@ These become HTML attributes on the script tag:
 To update to a new version of a script:
 
 1. Register the new version with RegisteredScript
-2. Update the `version` field in SiteCustomCode
+2. Update the `scriptVersion` field in SiteCustomCode
 3. Run `pulumi up`
 
 ```typescript
 // Change from version "1.0.0" to "2.0.0"
 {
   id: analyticsScript.id,
-  version: "2.0.0",  // Updated
+  scriptVersion: "2.0.0",  // Updated
   location: "header",
 }
 ```
@@ -199,7 +199,7 @@ scripts: [
   {
     // New script
     id: newScript.id,
-    version: "1.0.0",
+    scriptVersion: "1.0.0",
     location: "footer",
   },
 ]
@@ -256,7 +256,7 @@ const myScript = new webflow.RegisteredScript("my-script", {
   displayName: "MyScript",
   hostedLocation: "https://cdn.example.com/script.js",
   integrityHash: "sha384-...",
-  version: "1.0.0",
+  scriptVersion: "1.0.0",
 });
 
 // 2. Then apply it to the site
@@ -264,7 +264,7 @@ const siteCode = new webflow.SiteCustomCode("site-code", {
   siteId: siteId,
   scripts: [{
     id: myScript.id,  // Reference the registered script
-    version: "1.0.0",
+    scriptVersion: "1.0.0",
     location: "header",
   }],
 });
@@ -276,20 +276,20 @@ Location must be exactly `"header"` or `"footer"`:
 - Valid: `"header"`, `"footer"`
 - Invalid: `"head"`, `"body"`, `"Header"`, `"FOOTER"`
 
-### "Version not found" Error
+### "scriptVersion not found" Error
 
 The version must match a registered version exactly:
 ```typescript
 // RegisteredScript has version "1.0.0"
 const script = new webflow.RegisteredScript("script", {
-  version: "1.0.0",  // Registered version
+  scriptVersion: "1.0.0",  // Registered version
   // ...
 });
 
 // SiteCustomCode must use the same version
 scripts: [{
   id: script.id,
-  version: "1.0.0",  // Must match
+  scriptVersion: "1.0.0",  // Must match
   location: "header",
 }]
 ```

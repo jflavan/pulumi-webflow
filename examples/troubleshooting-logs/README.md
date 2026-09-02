@@ -60,15 +60,14 @@ Verbose logging reveals:
 ### 1. Enable Verbose Logging for Local Development
 
 ```bash
-# Option A: Command-line flag (simplest)
-pulumi up --verbose
+# Option A: Command-line flags (simplest). -v=9 enables the provider's DEBUG
+# messages; --logtostderr prints them to the terminal instead of a temp file.
+pulumi up -v=9 --logtostderr
 
-# Option B: Environment variable (affects all commands)
-export PULUMI_LOG_LEVEL=debug
-pulumi up
+# Option B: Capture logs to file for analysis
+pulumi up -v=9 --logtostderr 2>&1 | tee deployment.log
 
-# Option C: Capture logs to file for analysis
-pulumi up --verbose 2>&1 | tee deployment.log
+# Note: there is no PULUMI_LOG_LEVEL environment variable - verbosity is a CLI flag.
 ```
 
 ### 2. View Log Output
@@ -98,7 +97,7 @@ Critical: Verify that your credentials are NOT exposed in logs:
 
 ```bash
 # Search logs for any token mentions
-pulumi up --verbose 2>&1 | grep -i "token\|bearer\|authorization"
+pulumi up -v=9 --logtostderr 2>&1 | grep -i "token\|bearer\|authorization"
 
 # Expected output:
 # ✅ Should ONLY see: "[REDACTED]"
@@ -110,10 +109,7 @@ pulumi up --verbose 2>&1 | grep -i "token\|bearer\|authorization"
 Once you've resolved the issue, disable verbose logging for better performance:
 
 ```bash
-# Clear the environment variable
-unset PULUMI_LOG_LEVEL
-
-# Or use command-line flags without --verbose
+# Simply omit the -v flag
 pulumi up
 ```
 
@@ -121,44 +117,36 @@ pulumi up
 
 ## Pulumi Logging Levels
 
-Pulumi provides multiple logging levels for different levels of detail:
+The provider logs through Pulumi's logging API. Which messages you see depends on the CLI's
+verbosity flag (`-v`), not on an environment variable:
 
 ### Logging Levels
 
-| Level | Flag | Env Variable | Description |
-|-------|------|-------------|-------------|
-| **Info** | (default) | `PULUMI_LOG_LEVEL=info` | Normal operational messages (recommended for production) |
-| **Debug** | `--verbose` | `PULUMI_LOG_LEVEL=debug` | Detailed diagnostic information (troubleshooting) |
-| **Warning** | N/A | `PULUMI_LOG_LEVEL=warn` | Potential issues that don't prevent execution |
-| **Error** | N/A | `PULUMI_LOG_LEVEL=error` | Failures that prevent operations |
+| Level | How to see it | Description |
+|-------|---------------|-------------|
+| **Info** | shown by default | Normal operational messages (resource created/updated/deleted) |
+| **Warning** | shown by default | Potential issues that don't prevent execution (rate-limit retries) |
+| **Error** | shown by default | Failures that prevent operations |
+| **Debug** | `-v=9 --logtostderr` | Detailed diagnostics: API requests/responses (redacted), retries, dry-run notices |
 
 ### Command-Line Flags
 
 ```bash
-# Enable verbose/debug logging
-pulumi up --verbose
+# Enable the provider's debug logging and print it to the terminal
+pulumi up -v=9 --logtostderr
 
-# Output logs to stderr instead of stdout
-pulumi up --logtostderr
+# Also log the engine's resource flow (very verbose)
+pulumi up -v=9 --logtostderr --logflow
 
-# Enable detailed workflow logging (very verbose)
-pulumi up --logflow
-
-# Combine flags for maximum detail
-pulumi up --verbose --logtostderr
+# Lower verbosity (engine-level messages only)
+pulumi up -v=3 --logtostderr
 ```
 
 ### Environment Variables
 
 ```bash
-# Set logging level for all Pulumi operations
-export PULUMI_LOG_LEVEL=debug
-
-# Enable gRPC debug logging (provider internals)
-export PULUMI_DEBUG_GRPC=true
-
-# Direct all logs to stderr
-export PULUMI_LOG_TO_STDERR=true
+# Record the raw gRPC traffic between the engine and the provider (bug reports)
+export PULUMI_DEBUG_GRPC=/tmp/pulumi-grpc.log
 ```
 
 ### Log File Locations
@@ -204,7 +192,7 @@ Before enabling verbose logging in production, verify redaction is functioning:
 ```bash
 # 1. Create a test with verbose logging
 export WEBFLOW_API_TOKEN="wf_test123456789"
-pulumi up --verbose 2>&1 > test-logs.txt
+pulumi up -v=9 --logtostderr 2>&1 > test-logs.txt
 
 # 2. Search for your token pattern - should find NOTHING
 grep -i "wf_test123456789" test-logs.txt
@@ -267,10 +255,10 @@ pulumi config get webflow:apiToken
 pulumi config --json | grep webflow
 
 # 3. Run with verbose logging
-pulumi up --verbose 2>&1 | grep -i "token\|auth"
+pulumi up -v=9 --logtostderr 2>&1 | grep -i "token\|auth"
 
 # 4. Confirm redaction (token should show as [REDACTED])
-pulumi up --verbose 2>&1 | grep -i "bearer\|authorization"
+pulumi up -v=9 --logtostderr 2>&1 | grep -i "bearer\|authorization"
 ```
 
 **Common causes**:
@@ -291,7 +279,7 @@ pulumi up --verbose 2>&1 | grep -i "bearer\|authorization"
 curl -v https://api.webflow.com/v2/
 
 # 2. Review verbose logs for connection errors
-pulumi up --verbose 2>&1 | grep -i "connect\|timeout\|dns"
+pulumi up -v=9 --logtostderr 2>&1 | grep -i "connect\|timeout\|dns"
 
 # 3. Check for firewall/proxy blocking
 # (your network team can verify)
@@ -312,7 +300,7 @@ pulumi up --verbose 2>&1 | grep -i "connect\|timeout\|dns"
 
 ```bash
 # Check logs for rate limiting indicators
-pulumi up --verbose 2>&1 | grep -i "429\|rate"
+pulumi up -v=9 --logtostderr 2>&1 | grep -i "429\|rate"
 
 # Verify request frequency
 # (slow down concurrent deployments)
@@ -332,19 +320,18 @@ pulumi up --verbose 2>&1 | grep -i "429\|rate"
 
 ```bash
 # 1. Enable maximum verbosity
-pulumi up --verbose --logtostderr
+pulumi up -v=9 --logtostderr
 
 # 2. Look for specific API error messages
-pulumi up --verbose 2>&1 | grep -A 5 "error\|failed"
+pulumi up -v=9 --logtostderr 2>&1 | grep -A 5 "error\|failed"
 
 # 3. Check resource configuration in code
-# (verify displayName, shortName, timezone are valid)
+# (verify workspaceId and displayName are valid; shortName/timeZone are outputs)
 ```
 
 **Common causes**:
 
-- Invalid timezone value
-- Duplicate short name (must be unique)
+- Missing or invalid workspaceId (site creation needs an Enterprise workspace)
 - Invalid characters in display name
 - Permission denied (token lacks create permission)
 
@@ -415,7 +402,7 @@ jobs:
           command: up
           stack-name: prod
           # Enable verbose logging for CI/CD troubleshooting
-          args: --verbose
+          args: -v=9 --logtostderr
 
       # Capture logs for debugging
       - name: Save logs if failure
@@ -437,7 +424,7 @@ deploy_webflow:
     - export PULUMI_CONFIG_PASSPHRASE=$PULUMI_PASSPHRASE
     - pulumi stack select $CI_COMMIT_BRANCH
     # Enable verbose logging for troubleshooting
-    - pulumi up --verbose --yes
+    - pulumi up -v=9 --logtostderr --yes
   only:
     - main
     - develop
@@ -448,7 +435,7 @@ deploy_webflow:
 ```bash
 # In CI/CD, capture logs in artifact directories
 mkdir -p logs
-pulumi up --verbose 2>&1 | tee logs/deployment.log
+pulumi up -v=9 --logtostderr 2>&1 | tee logs/deployment.log
 
 # Archive logs for historical analysis
 tar -czf logs-$(date +%Y%m%d-%H%M%S).tar.gz logs/
@@ -467,29 +454,29 @@ Extract specific information from verbose logs:
 
 ```bash
 # Find all API calls made by provider
-pulumi up --verbose 2>&1 | grep "API Call\|GET\|POST\|PUT\|DELETE"
+pulumi up -v=9 --logtostderr 2>&1 | grep "API Call\|GET\|POST\|PUT\|DELETE"
 
 # Find all responses
-pulumi up --verbose 2>&1 | grep "Response:" | head -20
+pulumi up -v=9 --logtostderr 2>&1 | grep "Response:" | head -20
 
 # Find all errors
-pulumi up --verbose 2>&1 | grep -i "error\|failed\|❌"
+pulumi up -v=9 --logtostderr 2>&1 | grep -i "error\|failed\|❌"
 
 # Extract timing information
-pulumi up --verbose 2>&1 | grep "Duration\|elapsed"
+pulumi up -v=9 --logtostderr 2>&1 | grep "Duration\|elapsed"
 ```
 
 ### Filtering Relevant Entries
 
 ```bash
 # Find resource creation logs only
-pulumi up --verbose 2>&1 | grep "Creating\|✅\|❌"
+pulumi up -v=9 --logtostderr 2>&1 | grep "Creating\|✅\|❌"
 
 # Find authentication-related logs
-pulumi up --verbose 2>&1 | grep -i "token\|auth\|credential\|\[redacted\]"
+pulumi up -v=9 --logtostderr 2>&1 | grep -i "token\|auth\|credential\|\[redacted\]"
 
 # Find performance-related logs
-pulumi up --verbose 2>&1 | grep -i "timeout\|slow\|performance"
+pulumi up -v=9 --logtostderr 2>&1 | grep -i "timeout\|slow\|performance"
 ```
 
 ### Creating Support Tickets with Logs
@@ -498,7 +485,7 @@ When reporting issues:
 
 1. **Capture full logs:**
    ```bash
-   pulumi up --verbose 2>&1 | tee full-logs.txt
+   pulumi up -v=9 --logtostderr 2>&1 | tee full-logs.txt
    ```
 
 2. **Verify no credentials are exposed:**
@@ -540,7 +527,7 @@ Verbose logging adds overhead:
 
 ```bash
 # Use default (info) level
-pulumi up  # No --verbose flag
+pulumi up  # No -v=9 --logtostderr flag
 
 # Result:
 # ✅ Minimal performance impact
@@ -553,10 +540,9 @@ pulumi up  # No --verbose flag
 
 ```bash
 # Enable only when debugging
-pulumi up --verbose
+pulumi up -v=9 --logtostderr
 
-# Remember to disable after troubleshooting:
-unset PULUMI_LOG_LEVEL
+# Remember to drop -v=9 after troubleshooting
 ```
 
 ### Log File Management
@@ -584,17 +570,17 @@ tar -czf pulumi-logs-archive-$(date +%Y%m).tar.gz ~/.pulumi/logs/
 
 1. **Verify the flag:**
    ```bash
-   pulumi up --verbose  # Double-check spelling
+   pulumi up -v=9 --logtostderr  # Double-check the flags
    ```
 
-2. **Check environment variable:**
+2. **Check the verbosity value:**
    ```bash
-   echo $PULUMI_LOG_LEVEL  # Should show "debug" or similar
+   pulumi up -v=9 --logtostderr  # values below 9 hide the provider's DEBUG output
    ```
 
 3. **Redirect stderr:**
    ```bash
-   pulumi up --verbose 2>&1 | head -100
+   pulumi up -v=9 --logtostderr 2>&1 | head -100
    # (some systems hide stderr by default)
    ```
 
@@ -636,7 +622,7 @@ gzip ~/.pulumi/logs/pulumi-20231101.log
 
 | Mistake | Solution |
 |---------|----------|
-| Running with `--verbose` in production | Use `--verbose` only for troubleshooting, disable for normal deployments |
+| Running with `-v=9` in production | Use `-v=9 --logtostderr` only for troubleshooting, omit it for normal deployments |
 | Committing logs with credentials | Always verify logs with `grep token` before committing |
 | Disabling logging entirely | Keep default logging enabled (minimal overhead) |
 | Not capturing logs for failures | Add `2>&1 | tee logs.txt` to capture both stdout and stderr |
@@ -653,7 +639,7 @@ gzip ~/.pulumi/logs/pulumi-20231101.log
 ```bash
 cd typescript-troubleshooting
 npm install
-pulumi up --verbose
+pulumi up -v=9 --logtostderr
 ```
 
 **Features:**
@@ -669,7 +655,7 @@ pulumi up --verbose
 ```bash
 cd python-cicd-logging
 pip install -r requirements.txt
-pulumi up --verbose
+pulumi up -v=9 --logtostderr
 ```
 
 **Features:**
@@ -684,7 +670,7 @@ pulumi up --verbose
 
 ```bash
 cd go-log-analysis
-pulumi up --verbose
+pulumi up -v=9 --logtostderr
 ```
 
 **Features:**
@@ -707,7 +693,7 @@ pulumi up --verbose
 
 **Key Takeaways:**
 
-1. ✅ **Enable verbose logging** when troubleshooting: `pulumi up --verbose`
+1. ✅ **Enable verbose logging** when troubleshooting: `pulumi up -v=9 --logtostderr`
 2. ✅ **Verify credential redaction** always works: credentials should show as `[REDACTED]`
 3. ✅ **Disable verbose logging** for production deployments
 4. ✅ **Capture logs** for support tickets and historical analysis

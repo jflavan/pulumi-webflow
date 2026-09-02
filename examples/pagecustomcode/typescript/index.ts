@@ -28,7 +28,7 @@ const conversionTrackingScript = new webflow.RegisteredScript("conversion-tracki
   displayName: "ConversionPixel",
   hostedLocation: "https://cdn.example.com/conversion-pixel.js",
   integrityHash: "sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC",
-  version: "3.2.1",
+  scriptVersion: "3.2.1",
   canCopy: true,
 });
 
@@ -37,7 +37,7 @@ const productViewerScript = new webflow.RegisteredScript("product-viewer", {
   displayName: "Product360Viewer",
   hostedLocation: "https://cdn.example.com/product-360-viewer.min.js",
   integrityHash: "sha384-abc123def456ghi789jkl012mno345pqr678stu901vwx234yz567ABC890DEF123",
-  version: "1.5.0",
+  scriptVersion: "1.5.0",
   canCopy: true,
 });
 
@@ -46,7 +46,7 @@ const heatmapScript = new webflow.RegisteredScript("heatmap-tracking", {
   displayName: "HeatmapTracker",
   hostedLocation: "https://cdn.example.com/heatmap-v2.js",
   integrityHash: "sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=",
-  version: "2.0.0",
+  scriptVersion: "2.0.0",
   canCopy: false,
 });
 
@@ -59,7 +59,7 @@ const landingPageScripts = new webflow.PageCustomCode("landing-page-scripts", {
     {
       // Conversion tracking in header
       id: conversionTrackingScript.scriptId,
-      version: "3.2.1",
+      scriptVersion: "3.2.1",
       location: "header",
       attributes: {
         "data-campaign-id": "summer-2025",
@@ -69,7 +69,7 @@ const landingPageScripts = new webflow.PageCustomCode("landing-page-scripts", {
     {
       // Heatmap tracking in footer
       id: heatmapScript.scriptId,
-      version: "2.0.0",
+      scriptVersion: "2.0.0",
       location: "footer",
       attributes: {
         "data-page-type": "landing",
@@ -87,7 +87,7 @@ const productPageScripts = new webflow.PageCustomCode("product-page-scripts", {
     {
       // 360 product viewer in footer (needs DOM elements)
       id: productViewerScript.scriptId,
-      version: "1.5.0",
+      scriptVersion: "1.5.0",
       location: "footer",
       attributes: {
         "data-viewer-container": "#product-viewer",
@@ -98,7 +98,7 @@ const productPageScripts = new webflow.PageCustomCode("product-page-scripts", {
     {
       // Conversion tracking in header
       id: conversionTrackingScript.scriptId,
-      version: "3.2.1",
+      scriptVersion: "3.2.1",
       location: "header",
       attributes: {
         "data-campaign-id": "product-launch",
@@ -114,7 +114,7 @@ const minimalPageScripts = new webflow.PageCustomCode("thank-you-page-scripts", 
   scripts: [
     {
       id: conversionTrackingScript.scriptId,
-      version: "3.2.1",
+      scriptVersion: "3.2.1",
       location: "header",
     },
   ],
