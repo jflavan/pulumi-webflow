@@ -76,7 +76,6 @@ for site_key, site_config in sites_config.items():
             site_id=site.id,
             source_path=redirect["sourcePath"],
             destination_path=redirect["destinationPath"],
-            status_code=redirect["statusCode"],
         )
 
     pulumi.log.info(f"✅ Configured site: {site_key} ({site_config['displayName']})")

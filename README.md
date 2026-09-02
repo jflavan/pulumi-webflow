@@ -248,19 +248,19 @@ existing site, page or collection ID.
 | Resource | What it manages | Example |
 |----------|-----------------|---------|
 | `Site` | Webflow sites (create/update/delete). Inputs: `workspaceId`, `displayName`, optional `parentFolderId`, `templateName`, and `publish` with `publishToWebflowSubdomain`, `publishCustomDomains` or `publishPageId` (single page). `shortName`, `timeZone` and `publishScope` are read-only outputs. | [examples/site](./examples/site/) |
-| `Redirect` | 301/302 URL redirects for a site | [examples/redirect](./examples/redirect/) |
+| `Redirect` | Permanent (301) URL redirects for a site; Webflow has no other status code, so `statusCode` is deprecated and ignored | [examples/redirect](./examples/redirect/) |
 | `RobotsTxt` | The site's `robots.txt` | [examples/robotstxt](./examples/robotstxt/) |
-| `Collection` | CMS collections (changes require replacement) | [examples/collection](./examples/collection/) |
-| `CollectionField` | Fields of a CMS collection | [examples/collectionfield](./examples/collectionfield/) |
+| `Collection` | CMS collections (`displayName`, `singularName` and `slug` update in place; `siteId` replaces) | [examples/collection](./examples/collection/) |
+| `CollectionField` | Fields of a CMS collection (`validations` and `slug` are deprecated and ignored; the slug is derived from `displayName`) | [examples/collectionfield](./examples/collectionfield/) |
 | `CollectionItem` | CMS items with dynamic field data | [examples/collectionitem](./examples/collectionitem/) |
 | `PageMetadata` | Title, slug, SEO and Open Graph settings of a page created in the Designer (pages cannot be created via the API), per locale | [examples/pagemetadata](./examples/pagemetadata/) |
-| `PageContent` | Text content inside existing DOM nodes of a page, optionally per locale | [examples/pagecontent](./examples/pagecontent/) |
+| `PageContent` | Text content inside existing DOM nodes of a page for a secondary locale (`localeId` is required; the API cannot edit primary-locale content) | [examples/pagecontent](./examples/pagecontent/) |
 | `PageSchemaMarkup` | JSON-LD schema markup of a page (beta API) | [examples/pageschemamarkup](./examples/pageschemamarkup/) |
-| `Webhook` | Event webhooks (form submissions, publishes, e-commerce events, comments, ...) | [examples/webhook](./examples/webhook/) |
+| `Webhook` | Event webhooks for the 14 Webflow trigger types (form submissions, publishes, page and CMS events, e-commerce events, comments); needs a Data Client token | [examples/webhook](./examples/webhook/) |
 | `Asset` | Files and images uploaded from a local path or URL (`fileSource`); content changes replace the asset | [examples/asset](./examples/asset/) |
 | `AssetFolder` | Asset folders (the API cannot delete them) | [examples/assetfolder](./examples/assetfolder/) |
-| `RegisteredScript` | Externally hosted scripts in the script registry, with `scriptVersion` and integrity hash | [examples/registeredscript](./examples/registeredscript/) |
-| `InlineScript` | Inline JavaScript (up to 2000 characters) in the script registry, with `scriptVersion` | [examples/inlinescript](./examples/inlinescript/) |
+| `RegisteredScript` | Externally hosted scripts in the script registry, with required `scriptVersion` and integrity hash. Webflow has no unregister endpoint: `pulumi destroy` only drops the resource from state (max 800 scripts per site) | [examples/registeredscript](./examples/registeredscript/) |
+| `InlineScript` | Inline JavaScript (up to 2000 characters) in the script registry, with `scriptVersion`; same no-unregister behaviour as `RegisteredScript` | [examples/inlinescript](./examples/inlinescript/) |
 | `SiteCustomCode` | Applies registered scripts site-wide (header/footer) | [examples/sitecustomcode](./examples/sitecustomcode/) |
 | `PageCustomCode` | Applies registered scripts to a single page | [examples/pagecustomcode](./examples/pagecustomcode/) |
 | `GoogleTag` | A Google Tag ID (GA4, Google Tag, Google Ads, Campaign Manager) on a site | [examples/googletag](./examples/googletag/) |
@@ -268,7 +268,7 @@ existing site, page or collection ID.
 
 | Function | What it returns | Example |
 |----------|-----------------|---------|
-| `getTokenInfo` | Scopes, rate limits and authorized resources of the configured API token | [examples/token](./examples/token/) |
+| `getTokenInfo` | Scopes, rate limits and authorized resources of the configured token (Data Client tokens only) | [examples/token](./examples/token/) |
 | `getAuthorizedUser` | The user who authorized the API token | [examples/token](./examples/token/) |
 | `getPages` | All pages of a site with their metadata (the way to find page IDs) | [examples/page](./examples/page/) |
 | `getPage` | The metadata of a single page, optionally for a locale | [examples/page](./examples/page/) |
@@ -295,18 +295,27 @@ also removes the `PageData` resource (use `getPages`/`getPage` instead); see the
 
    | Resource family | Resources / functions | Scopes |
    |-----------------|-----------------------|--------|
-   | Sites | `Site`, `Webhook` | `sites:read`, `sites:write` |
-   | Site configuration | `Redirect`, `RobotsTxt` | `site_config:read`, `site_config:write` |
+   | Sites | `Site` | `sites:read`, `sites:write`; **creating** a site additionally needs `workspace:write` (creation is a workspace endpoint and requires an Enterprise workspace) |
+   | Redirects | `Redirect` | `sites:read`, `sites:write` **and** `site_config:read`, `site_config:write` - Webflow's endpoint reference lists the `sites` pair, its scopes page the `site_config` pair; grant both |
+   | Site configuration | `RobotsTxt` | `site_config:read`, `site_config:write` |
+   | Webhooks | `Webhook` | **Data Client token only.** `sites:write` plus the read scope of the event family: `forms:read` (`form_submission`), `sites:read` (`site_publish`), `pages:read` (`page_*`), `cms:read` (`collection_item_*`), `ecommerce:read` (`ecomm_*`), `comments:read` (`comment_created`) |
    | Pages | `PageMetadata`, `PageContent`, `PageSchemaMarkup`, `getPages`, `getPage`, `getPageSchemaMarkup` | `pages:read`, `pages:write` |
    | CMS | `Collection`, `CollectionField`, `CollectionItem` | `cms:read`, `cms:write` |
    | Assets | `Asset`, `AssetFolder` | `assets:read`, `assets:write` |
-   | Custom code | `RegisteredScript`, `InlineScript`, `SiteCustomCode`, `PageCustomCode` | `custom_code:read`, `custom_code:write` |
+   | Custom code | `RegisteredScript`, `InlineScript`, `SiteCustomCode`, `PageCustomCode` | **Data Client token only** (site tokens cannot call the custom code endpoints). `custom_code:read`, `custom_code:write`; deleting `SiteCustomCode` / `PageCustomCode` (removing applied code) also needs `sites:write` / `pages:write` |
    | Google tags | `GoogleTag` | `sites:read`, `sites:write` |
    | E-commerce | `EcommerceSettings` | `ecommerce:read` |
-   | Token and user info | `getTokenInfo`, `getAuthorizedUser` | `authorized_user:read` |
+   | Token and user info | `getTokenInfo` (**Data Client token only**), `getAuthorizedUser` | `authorized_user:read` |
    | Analytics (beta API) | `getAnalytics*` | `sites:read`, plus a workspace with the Analyze add-on |
 
    Read-only scopes are enough for `pulumi preview`, `pulumi refresh` and the functions; `pulumi up` needs the write scopes.
+
+   **Token types.** A *site API token* (Site settings → Apps & integrations → API access) is
+   enough for most resources. Webflow exposes the webhook and custom-code endpoints and the
+   token-introspection endpoint behind `getTokenInfo` only to [Data Client apps](https://developers.webflow.com/data/docs/getting-started-data-clients),
+   so `Webhook`, `RegisteredScript`, `InlineScript`, `SiteCustomCode`, `PageCustomCode` and
+   `getTokenInfo` need an OAuth access token issued to such an app (with the scopes above) passed
+   as `webflow:apiToken`. A site token returns `401`/`403` for those calls.
 7. Click **Create Token**
 8. **Copy the token immediately** - Webflow won't show it again
 

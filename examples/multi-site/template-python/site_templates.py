@@ -45,7 +45,6 @@ def create_campaign_site(name: str, display_name: str) -> webflow.Site:
         site_id=site.id,
         source_path="/home",
         destination_path="/",
-        status_code=301,
     )
 
     webflow.Redirect(
@@ -53,7 +52,6 @@ def create_campaign_site(name: str, display_name: str) -> webflow.Site:
         site_id=site.id,
         source_path="/join",
         destination_path="/signup",
-        status_code=302,
     )
 
     return site
@@ -89,7 +87,6 @@ def create_product_site(name: str, display_name: str) -> webflow.Site:
         site_id=site.id,
         source_path="/price",
         destination_path="/pricing",
-        status_code=301,
     )
 
     webflow.Redirect(
@@ -97,7 +94,6 @@ def create_product_site(name: str, display_name: str) -> webflow.Site:
         site_id=site.id,
         source_path="/try",
         destination_path="/request-demo",
-        status_code=302,
     )
 
     webflow.Redirect(
@@ -105,7 +101,6 @@ def create_product_site(name: str, display_name: str) -> webflow.Site:
         site_id=site.id,
         source_path="/help",
         destination_path="/documentation",
-        status_code=301,
     )
 
     return site
@@ -141,7 +136,6 @@ def create_event_site(name: str, display_name: str) -> webflow.Site:
         site_id=site.id,
         source_path="/signup",
         destination_path="/register",
-        status_code=301,
     )
 
     webflow.Redirect(
@@ -149,7 +143,6 @@ def create_event_site(name: str, display_name: str) -> webflow.Site:
         site_id=site.id,
         source_path="/schedule",
         destination_path="/agenda",
-        status_code=301,
     )
 
     webflow.Redirect(
@@ -157,7 +150,6 @@ def create_event_site(name: str, display_name: str) -> webflow.Site:
         site_id=site.id,
         source_path="/presenters",
         destination_path="/speakers",
-        status_code=301,
     )
 
     webflow.Redirect(
@@ -165,7 +157,6 @@ def create_event_site(name: str, display_name: str) -> webflow.Site:
         site_id=site.id,
         source_path="/buy",
         destination_path="/tickets",
-        status_code=301,
     )
 
     return site

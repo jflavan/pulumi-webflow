@@ -38,10 +38,10 @@ if (isProd) {
 interface SiteConfig {
     displayName: string;
     allowIndexing: boolean;  // Whether search engines can index this site
+    // Webflow redirects are always 301; there is no status code to configure.
     redirects?: Array<{
         sourcePath: string;
         destinationPath: string;
-        statusCode: number;
     }>;
 }
 
@@ -84,7 +84,6 @@ for (const [siteKey, siteConfig] of Object.entries(sitesConfig)) {
                 siteId: site.id,
                 sourcePath: redirect.sourcePath,
                 destinationPath: redirect.destinationPath,
-                statusCode: redirect.statusCode,
             });
         }
     }

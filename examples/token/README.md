@@ -13,8 +13,8 @@ This directory contains examples demonstrating how to use the Token data sources
 
 | Function | Description |
 |----------|-------------|
-| `getTokenInfo` | Returns token authorization details, scopes, rate limits, and authorized site/workspace/user IDs |
-| `getAuthorizedUser` | Returns information about the user who authorized the API token |
+| `getTokenInfo` | Returns token authorization details, scopes, rate limits, and authorized site/workspace/user IDs. **Data Client (OAuth app) tokens only** - the introspection endpoint rejects site API tokens |
+| `getAuthorizedUser` | Returns information about the user who authorized the API token (`authorized_user:read`) |
 
 ## Available Languages
 

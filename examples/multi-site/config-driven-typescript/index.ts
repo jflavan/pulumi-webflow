@@ -15,10 +15,10 @@ const workspaceId = pulumiConfig.require("workspaceId");
 interface SiteConfig {
   name: string;
   displayName: string;
+  // Webflow redirects are always 301; there is no status code to configure.
   redirects?: Array<{
     sourcePath: string;
     destinationPath: string;
-    statusCode: number;
   }>;
   robotsTxtContent?: string;
 }
@@ -65,7 +65,6 @@ const sites = config.sites.map((siteConfig) => {
         siteId: site.id,
         sourcePath: redirect.sourcePath,
         destinationPath: redirect.destinationPath,
-        statusCode: redirect.statusCode,
       });
     });
   }

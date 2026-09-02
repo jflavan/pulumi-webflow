@@ -125,10 +125,13 @@ const thankYouPageScripts = new webflow.PageCustomCode("thank-you-page-scripts",
 
 Before using PageCustomCode, you must:
 
-1. **Register your scripts** using the `RegisteredScript` resource
-2. **Know the script ID** from the registered script
-3. **Know the version** you want to deploy
-4. **Have page IDs** for the pages you want to customize
+1. **Use a Data Client (OAuth app) token** - the custom code endpoints are not available to site
+   API tokens. The token needs `custom_code:read` and `custom_code:write`, plus `pages:write` so
+   `pulumi destroy` can remove the applied code from the page
+2. **Register your scripts** using the `RegisteredScript` resource
+3. **Know the script ID** from the registered script
+4. **Know the version** you want to deploy
+5. **Have page IDs** for the pages you want to customize
 
 See the [RegisteredScript example](../registeredscript/) for how to register scripts.
 
@@ -357,7 +360,9 @@ pulumi destroy
 pulumi stack rm dev
 ```
 
-**Note:** This only removes the custom code configuration from pages. The registered scripts remain available for future use.
+**Note:** This only removes the custom code configuration from pages (`DELETE /pages/{id}/custom_code`,
+which needs `pages:write`). The registered scripts remain in the registry - Webflow has no
+unregister endpoint - and stay available for future use.
 
 ## Troubleshooting
 
