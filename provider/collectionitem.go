@@ -55,16 +55,33 @@ type CollectionItemPublishResponse struct {
 	Errors           []string `json:"errors"`
 }
 
-// ValidateFieldData validates that fieldData is non-empty and contains required fields.
+// ValidateFieldData validates that fieldData is non-empty.
 // Returns actionable error messages that explain what's wrong and how to fix it.
+//
+// The Webflow API requires name and slug in fieldData when creating an item. They are not
+// enforced here because this runs for updates too, where an unchanged slug is deliberately
+// left out of the PATCH payload (see prepareFieldDataForPatch); Check reports a missing
+// name or slug at preview time instead.
 func ValidateFieldData(fieldData map[string]interface{}) error {
 	if len(fieldData) == 0 {
 		return errors.New("fieldData is required but was not provided. " +
 			"Please provide a map of field slugs to values (e.g., {\"name\": \"My Item\", \"slug\": \"my-item\"}). " +
 			"The field slugs must match the fields defined in the collection schema")
 	}
-	// Note: Name and slug are typically required but may be auto-generated
-	// We don't enforce this here as it depends on the collection schema
+	return nil
+}
+
+// ValidateCmsLocaleID validates an optional CMS locale ID. An empty value is valid and
+// means the primary locale.
+func ValidateCmsLocaleID(cmsLocaleID string) error {
+	if cmsLocaleID == "" {
+		return nil
+	}
+	if !siteIDPattern.MatchString(cmsLocaleID) {
+		return fmt.Errorf("cmsLocaleId has invalid format: got '%s'. "+
+			"Expected a 24-character lowercase hexadecimal string (e.g., '653fd9af6a07fc9cfd7a5e57'). "+
+			"CMS locale IDs are listed under Site Settings > Localization or via the Get Site endpoint", cmsLocaleID)
+	}
 	return nil
 }
 
@@ -180,8 +197,7 @@ func PublishCollectionItems(
 	}
 
 	if len(response.Errors) > 0 {
-		return &response, fmt.Errorf("webflow reported errors while publishing items: %s. "+
-			"Publishing requires the site to have been published at least once and the item to exist in staging",
+		return &response, fmt.Errorf("webflow reported errors while publishing items: %s",
 			strings.Join(response.Errors, "; "))
 	}
 	published := make(map[string]bool, len(response.PublishedItemIDs))
@@ -198,10 +214,14 @@ func PublishCollectionItems(
 
 // DeleteCollectionItem removes an item from a Webflow collection.
 // It calls DELETE /v2/collections/{collection_id}/items/{item_id}, or the /live variant
-// when live is true (which unpublishes the item from the live site).
+// when live is true (which unpublishes the item from the live site). Both endpoints only
+// act on the primary locale unless cmsLocaleId is passed as a query parameter, so
+// cmsLocaleID is sent whenever it is set.
 // A 404 is treated as success so deletes are idempotent.
-func DeleteCollectionItem(ctx context.Context, client *http.Client, collectionID, itemID string, live bool) error {
-	return doDelete(ctx, client, collectionItemURL(collectionID, itemID, "", live), nil)
+func DeleteCollectionItem(
+	ctx context.Context, client *http.Client, collectionID, itemID, cmsLocaleID string, live bool,
+) error {
+	return doDelete(ctx, client, collectionItemURL(collectionID, itemID, cmsLocaleID, live), nil)
 }
 
 // prepareFieldDataForPatch returns a copy of newFieldData suitable for a PATCH request.

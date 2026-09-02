@@ -30,14 +30,15 @@ type CollectionFieldResponse struct {
 }
 
 // CollectionFieldCreateRequest represents the request body for POST /v2/collections/{id}/fields.
+// The Create Field endpoint accepts type, displayName, id, isEditable, isRequired, helpText and
+// metadata. It does not accept a slug (Webflow generates one from displayName) and
+// "field validation is currently not available through the API", so neither is sent.
 type CollectionFieldCreateRequest struct {
-	Type        string                 `json:"type"`                  // Field type (required)
-	DisplayName string                 `json:"displayName"`           // Human-readable name (required)
-	Slug        string                 `json:"slug,omitempty"`        // Optional URL slug
-	IsRequired  *bool                  `json:"isRequired,omitempty"`  // Whether the field is required
-	HelpText    string                 `json:"helpText,omitempty"`    // Optional help text
-	Validations map[string]interface{} `json:"validations,omitempty"` // Type-specific validations
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`    // Required for Option/Reference/MultiReference
+	Type        string                 `json:"type"`                 // Field type (required)
+	DisplayName string                 `json:"displayName"`          // Human-readable name (required)
+	IsRequired  *bool                  `json:"isRequired,omitempty"` // Whether the field is required
+	HelpText    string                 `json:"helpText,omitempty"`   // Optional help text
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`   // Required for Option/Reference/MultiReference
 }
 
 // CollectionFieldUpdateRequest represents the request body for PATCH /v2/collections/{id}/fields/{fid}.
@@ -233,9 +234,49 @@ func PostCollectionField(
 	return &field, nil
 }
 
+// metadataFromValidations reconstructs the create-time metadata of a field from the
+// validations the Get Collection endpoint reports. Fields are read back without a metadata
+// object: Option choices come back as validations.options ([{name, id}]) and referenced
+// collections as validations.collectionId. For other field types nil is returned.
+//
+// With includeOptionIDs false the option entries carry only their name, which is the shape
+// users write in their programs; with true the Webflow-assigned option IDs are kept.
+func metadataFromValidations(
+	fieldType string, validations map[string]interface{}, includeOptionIDs bool,
+) map[string]interface{} {
+	switch fieldType {
+	case FieldTypeOption:
+		raw, ok := validations["options"].([]interface{})
+		if !ok {
+			return nil
+		}
+		options := make([]interface{}, 0, len(raw))
+		for _, entry := range raw {
+			option, ok := entry.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			normalized := map[string]interface{}{"name": option["name"]}
+			if id, ok := option["id"]; ok && includeOptionIDs {
+				normalized["id"] = id
+			}
+			options = append(options, normalized)
+		}
+		return map[string]interface{}{"options": options}
+	case FieldTypeReference, FieldTypeMultiReference:
+		id, ok := validations["collectionId"].(string)
+		if !ok || id == "" {
+			return nil
+		}
+		return map[string]interface{}{"collectionId": id}
+	default:
+		return nil
+	}
+}
+
 // PatchCollectionField updates the mutable properties of an existing field.
 // It calls PATCH /v2/collections/{collection_id}/fields/{field_id}; only isRequired,
-// displayName and helpText can be changed (slug, type, validations and metadata are create-only).
+// displayName and helpText can be changed (type and metadata are create-only).
 func PatchCollectionField(
 	ctx context.Context, client *http.Client, collectionID, fieldID string, body CollectionFieldUpdateRequest,
 ) (*CollectionFieldResponse, error) {
@@ -257,8 +298,8 @@ func DeleteCollectionField(ctx context.Context, client *http.Client, collectionI
 // subsetEqual reports whether every value in want is present and equal in have.
 // Maps are compared key by key (extra keys in have are ignored), slices element by element
 // (same length, each element subsetEqual), and numbers by value regardless of Go numeric type.
-// It is used to compare user-supplied validations/metadata against what the API reports,
-// because the API decorates those objects with server-side keys (option IDs, defaults).
+// It is used to compare user-supplied metadata against what the API reports, because the
+// API decorates those objects with server-side keys (option IDs).
 func subsetEqual(want, have interface{}) bool {
 	switch w := want.(type) {
 	case map[string]interface{}:

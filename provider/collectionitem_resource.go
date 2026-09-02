@@ -15,6 +15,7 @@ import (
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
 )
 
 // CollectionItemResource is the resource controller for managing Webflow CMS collection items.
@@ -101,7 +102,6 @@ func (args *CollectionItemArgs) Annotate(a infer.Annotator) {
 		"Publish the item to the live site after every create and update (optional, defaults to false). "+
 			"When true the provider calls the Webflow publish-items endpoint after writing the item and "+
 			"reads the item back from the live endpoint, so lastPublished reflects the live copy. "+
-			"Publishing requires the site to have been published at least once. "+
 			"Setting this back to false stops publishing future changes but does not unpublish the item.")
 }
 
@@ -159,8 +159,70 @@ func projectFieldData(apiFieldData, wanted map[string]interface{}) map[string]in
 	return projected
 }
 
+// collectionItemValidators are the per-property string checks shared by Check and the
+// apply-time validation.
+var collectionItemValidators = []stringValidator{
+	{property: "collectionId", validate: ValidateCollectionID},
+	{property: "cmsLocaleId", validate: ValidateCmsLocaleID},
+}
+
+// checkFieldDataKeys reports the required fieldData keys (name, slug) that are missing or
+// known to be empty. Values that are still unknown are accepted: presence is all that can
+// be checked at preview time.
+func checkFieldDataKeys(fieldData property.Map) []p.CheckFailure {
+	var failures []p.CheckFailure
+	for _, key := range []string{"name", "slug"} {
+		v, ok := fieldData.GetOk(key)
+		if !ok || v.IsNull() {
+			failures = append(failures, checkFailure("fieldData", fmt.Errorf(
+				"fieldData.%s is required by the Webflow API. "+
+					"Provide it alongside the other fields, e.g. {\"name\": \"My Item\", \"slug\": \"my-item\"}", key)))
+			continue
+		}
+		if v.IsString() && v.AsString() == "" {
+			failures = append(failures, checkFailure("fieldData", fmt.Errorf(
+				"fieldData.%s must be a non-empty string", key)))
+		}
+	}
+	return failures
+}
+
+// Check validates the known inputs at preview time. Unknown (computed) values - a
+// collectionId that comes from a Collection resource, or a fieldData value that comes from
+// another resource - are skipped and validated again in Create/Update once resolved.
+func (c *CollectionItemResource) Check(
+	ctx context.Context, req infer.CheckRequest,
+) (infer.CheckResponse[CollectionItemArgs], error) {
+	inputs, failures, err := checkStrings[CollectionItemArgs](ctx, req.NewInputs, collectionItemValidators...)
+	if err != nil {
+		return infer.CheckResponse[CollectionItemArgs]{Inputs: inputs, Failures: failures}, err
+	}
+	// The set of keys in fieldData is known even when some of the values are not, so the
+	// required keys can be checked as long as the map itself is not unknown.
+	if v, ok := req.NewInputs.GetOk("fieldData"); ok && v.IsMap() {
+		failures = append(failures, checkFieldDataKeys(v.AsMap())...)
+	}
+	return infer.CheckResponse[CollectionItemArgs]{Inputs: inputs, Failures: failures}, nil
+}
+
+// validateCollectionItemArgs validates fully-resolved inputs at apply time.
+func validateCollectionItemArgs(args CollectionItemArgs) error {
+	if err := ValidateCollectionID(args.CollectionID); err != nil {
+		return fmt.Errorf("validation failed for CollectionItem resource: %w", err)
+	}
+	if err := ValidateFieldData(args.FieldData); err != nil {
+		return fmt.Errorf("validation failed for CollectionItem resource: %w", err)
+	}
+	if err := ValidateCmsLocaleID(args.CmsLocaleID); err != nil {
+		return fmt.Errorf("validation failed for CollectionItem resource: %w", err)
+	}
+	return nil
+}
+
 // Diff determines what changes need to be made to the collection item resource.
-// collectionId change requires replacement; everything else is updated in place.
+// A collectionId change requires replacement: the item is created in the new collection
+// before the old one is deleted (different collections cannot conflict on slug).
+// Everything else is updated in place.
 func (c *CollectionItemResource) Diff(
 	ctx context.Context, req infer.DiffRequest[CollectionItemArgs, CollectionItemState],
 ) (infer.DiffResponse, error) {
@@ -174,7 +236,6 @@ func (c *CollectionItemResource) Diff(
 
 	if req.State.CollectionID != req.Inputs.CollectionID {
 		detailedDiff["collectionId"] = p.PropertyDiff{Kind: p.UpdateReplace}
-		diff.DeleteBeforeReplace = true
 		diff.HasChanges = true
 	}
 
@@ -252,21 +313,16 @@ func (c *CollectionItemResource) Create(
 ) (infer.CreateResponse[CollectionItemState], error) {
 	// During preview, return the expected state without validating or calling the API:
 	// inputs that come from other resources (e.g. collectionId) are unknown at this point.
-	// Server-assigned outputs (itemId, timestamps) are left empty rather than fabricated.
+	// The ID is left empty so dependents see it as unknown, and server-assigned outputs
+	// (itemId, timestamps) are left empty rather than fabricated.
 	if req.DryRun {
 		return infer.CreateResponse[CollectionItemState]{
-			ID:     GenerateCollectionItemResourceID(req.Inputs.CollectionID, "preview"),
 			Output: CollectionItemState{CollectionItemArgs: req.Inputs},
 		}, nil
 	}
 
-	if err := ValidateCollectionID(req.Inputs.CollectionID); err != nil {
-		return infer.CreateResponse[CollectionItemState]{}, fmt.Errorf(
-			"validation failed for CollectionItem resource: %w", err)
-	}
-	if err := ValidateFieldData(req.Inputs.FieldData); err != nil {
-		return infer.CreateResponse[CollectionItemState]{}, fmt.Errorf(
-			"validation failed for CollectionItem resource: %w", err)
+	if err := validateCollectionItemArgs(req.Inputs); err != nil {
+		return infer.CreateResponse[CollectionItemState]{}, err
 	}
 
 	client, err := GetHTTPClient(ctx, currentProviderVersion())
@@ -396,13 +452,8 @@ func (c *CollectionItemResource) Update(
 		}, nil
 	}
 
-	if err := ValidateCollectionID(req.Inputs.CollectionID); err != nil {
-		return infer.UpdateResponse[CollectionItemState]{}, fmt.Errorf(
-			"validation failed for CollectionItem resource: %w", err)
-	}
-	if err := ValidateFieldData(req.Inputs.FieldData); err != nil {
-		return infer.UpdateResponse[CollectionItemState]{}, fmt.Errorf(
-			"validation failed for CollectionItem resource: %w", err)
+	if err := validateCollectionItemArgs(req.Inputs); err != nil {
+		return infer.UpdateResponse[CollectionItemState]{}, err
 	}
 
 	collectionID, itemID, err := ExtractIDsFromCollectionItemResourceID(req.ID)
@@ -454,7 +505,8 @@ func (c *CollectionItemResource) Update(
 
 // Delete removes a collection item from the Webflow collection.
 // Items that were published through live=true are first removed from the live site,
-// then the staged copy is deleted.
+// then the staged copy is deleted. Both calls carry the item's cmsLocaleId (when set):
+// without it Webflow only deletes the item in the primary locale.
 func (c *CollectionItemResource) Delete(
 	ctx context.Context, req infer.DeleteRequest[CollectionItemState],
 ) (infer.DeleteResponse, error) {
@@ -474,13 +526,16 @@ func (c *CollectionItemResource) Delete(
 		return infer.DeleteResponse{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
+	// The locale is sent as-is (URL-encoded): it was recorded from the inputs or the API.
+	cmsLocaleID := req.State.CmsLocaleID
+
 	// Both calls treat 404 as success so deletes are idempotent
 	if req.State.Live {
-		if err := DeleteCollectionItem(ctx, client, collectionID, itemID, true); err != nil {
+		if err := DeleteCollectionItem(ctx, client, collectionID, itemID, cmsLocaleID, true); err != nil {
 			return infer.DeleteResponse{}, fmt.Errorf("failed to unpublish collection item: %w", err)
 		}
 	}
-	if err := DeleteCollectionItem(ctx, client, collectionID, itemID, false); err != nil {
+	if err := DeleteCollectionItem(ctx, client, collectionID, itemID, cmsLocaleID, false); err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("failed to delete collection item: %w", err)
 	}
 

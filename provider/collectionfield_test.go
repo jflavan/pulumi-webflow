@@ -9,12 +9,14 @@ package provider
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
 )
 
 // TestValidateFieldType tests the field type validation function against the documented v2 enum.
@@ -229,7 +231,7 @@ func TestCollectionFieldResource_Create(t *testing.T) {
 
 	resp, err := (&CollectionField{}).Create(context.Background(), infer.CreateRequest[CollectionFieldArgs]{
 		Inputs: CollectionFieldArgs{
-			CollectionID: testCollectionID, Type: "PlainText", DisplayName: "Title",
+			CollectionID: testCollectionID, Type: "PlainText", DisplayName: "Title", Slug: "custom-slug",
 			HelpText: "The post title", Validations: map[string]interface{}{"maxLength": 120},
 		},
 	})
@@ -251,17 +253,44 @@ func TestCollectionFieldResource_Create(t *testing.T) {
 		t.Fatalf("expected 1 POST, got %d", len(calls))
 	}
 	body := calls[0].Body
+	if keys := sortedKeys(body); strings.Join(keys, ",") != "displayName,helpText,isRequired,type" {
+		t.Errorf("POST body must contain only displayName, helpText, isRequired, type; got keys %v", keys)
+	}
 	if body["type"] != "PlainText" || body["displayName"] != "Title" || body["helpText"] != "The post title" {
 		t.Errorf("unexpected POST body: %v", body)
 	}
 	if v, ok := body["isRequired"]; !ok || v != false {
 		t.Errorf("isRequired:false must be present in the POST body, got %v", body)
 	}
-	if v, ok := body["validations"].(map[string]interface{}); !ok || v["maxLength"] != float64(120) {
-		t.Errorf("validations missing from POST body: %v", body)
+	if _, ok := body["validations"]; ok {
+		t.Errorf("validations are not accepted by the Create Field endpoint and must not be sent: %v", body)
 	}
-	if _, ok := body["metadata"]; ok {
-		t.Errorf("metadata must be omitted when empty: %v", body)
+	if _, ok := body["slug"]; ok {
+		t.Errorf("slug is not accepted by the Create Field endpoint and must not be sent: %v", body)
+	}
+}
+
+func TestCollectionFieldResource_Create_RecordsValidationsFromResponse(t *testing.T) {
+	mock := newCMSMock(t)
+	mock.handle(
+		http.MethodPost,
+		"/v2/collections/"+testCollectionID+"/fields",
+		func(w http.ResponseWriter, r *http.Request) {
+			writeCMSJSON(w, http.StatusCreated, CollectionFieldResponse{
+				ID: testFieldID, Type: "PlainText", DisplayName: "Title", Slug: "title", IsEditable: true,
+				Validations: map[string]interface{}{"singleLine": true},
+			})
+		},
+	)
+
+	resp, err := (&CollectionField{}).Create(context.Background(), infer.CreateRequest[CollectionFieldArgs]{
+		Inputs: CollectionFieldArgs{CollectionID: testCollectionID, Type: "PlainText", DisplayName: "Title"},
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if resp.Output.Validations["singleLine"] != true {
+		t.Errorf("state validations should come from the API response, got %v", resp.Output.Validations)
 	}
 }
 
@@ -314,9 +343,119 @@ func TestCollectionFieldResource_Create_DryRunSkipsValidationAndAPI(t *testing.T
 	if len(mock.requests()) != 0 {
 		t.Errorf("dry run must not call the API")
 	}
+	if resp.ID != "" {
+		t.Errorf("dry run must return an empty ID so dependents see it as unknown, got %q", resp.ID)
+	}
 	if resp.Output.FieldID != "" {
 		t.Errorf("dry run must not fabricate a field ID: %+v", resp.Output)
 	}
+}
+
+// =============================================================================
+// CollectionField resource: Check
+// =============================================================================
+
+func TestCollectionFieldResource_Check(t *testing.T) {
+	check := func(t *testing.T, inputs map[string]property.Value) infer.CheckResponse[CollectionFieldArgs] {
+		t.Helper()
+		resp, err := (&CollectionField{}).Check(
+			context.Background(), infer.CheckRequest{NewInputs: property.NewMap(inputs)},
+		)
+		if err != nil {
+			t.Fatalf("Check() error = %v", err)
+		}
+		return resp
+	}
+	failedProps := func(resp infer.CheckResponse[CollectionFieldArgs]) string {
+		props := make([]string, 0, len(resp.Failures))
+		for _, f := range resp.Failures {
+			props = append(props, f.Property)
+		}
+		sort.Strings(props)
+		return strings.Join(props, ",")
+	}
+	options := func(names ...string) property.Value {
+		list := make([]property.Value, 0, len(names))
+		for _, name := range names {
+			list = append(list, property.New(map[string]property.Value{"name": property.New(name)}))
+		}
+		return property.New(map[string]property.Value{"options": property.New(list)})
+	}
+
+	t.Run("valid plain text field passes", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{
+			"collectionId": property.New(testCollectionID), "type": property.New("PlainText"),
+			"displayName": property.New("Title"),
+		})
+		if len(resp.Failures) != 0 {
+			t.Errorf("unexpected failures: %+v", resp.Failures)
+		}
+		if resp.Inputs.CollectionID != testCollectionID || resp.Inputs.Type != "PlainText" {
+			t.Errorf("inputs not decoded: %+v", resp.Inputs)
+		}
+	})
+
+	t.Run("valid option field with metadata passes", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{
+			"collectionId": property.New(testCollectionID), "type": property.New("Option"),
+			"displayName": property.New("Status"), "metadata": options("Draft", "Published"),
+		})
+		if len(resp.Failures) != 0 {
+			t.Errorf("unexpected failures: %+v", resp.Failures)
+		}
+	})
+
+	t.Run("malformed known values fail per property", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{
+			"collectionId": property.New("bad"), "type": property.New("Video"), "displayName": property.New(""),
+		})
+		if got := failedProps(resp); got != "collectionId,displayName,type" {
+			t.Errorf("failures = %q, want collectionId,displayName,type: %+v", got, resp.Failures)
+		}
+	})
+
+	t.Run("reference field without metadata fails", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{
+			"collectionId": property.New(testCollectionID), "type": property.New("Reference"),
+			"displayName": property.New("Author"),
+		})
+		if got := failedProps(resp); got != "metadata" {
+			t.Errorf("failures = %q, want metadata: %+v", got, resp.Failures)
+		}
+	})
+
+	t.Run("metadata on a plain text field fails", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{
+			"collectionId": property.New(testCollectionID), "type": property.New("PlainText"),
+			"displayName": property.New("Title"), "metadata": options("Draft"),
+		})
+		if got := failedProps(resp); got != "metadata" {
+			t.Errorf("failures = %q, want metadata: %+v", got, resp.Failures)
+		}
+	})
+
+	t.Run("unknown values are skipped", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{
+			"collectionId": property.New(property.Computed), "type": property.New(property.Computed),
+			"displayName": property.New(property.Computed), "metadata": property.New(property.Computed),
+		})
+		if len(resp.Failures) != 0 {
+			t.Errorf("computed inputs must not fail: %+v", resp.Failures)
+		}
+	})
+
+	t.Run("metadata with an unknown collectionId is skipped", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{
+			"collectionId": property.New(testCollectionID), "type": property.New("Reference"),
+			"displayName": property.New("Author"),
+			"metadata": property.New(map[string]property.Value{
+				"collectionId": property.New(property.Computed),
+			}),
+		})
+		if len(resp.Failures) != 0 {
+			t.Errorf("metadata that depends on another resource must not fail: %+v", resp.Failures)
+		}
+	})
 }
 
 func TestCollectionFieldResource_Create_ValidationErrors(t *testing.T) {
@@ -499,7 +638,7 @@ func TestCollectionFieldResource_Read(t *testing.T) {
 		}
 	})
 
-	t.Run("explicit slug and validations are refreshed", func(t *testing.T) {
+	t.Run("deprecated slug and validations inputs are left untouched", func(t *testing.T) {
 		resp, err := (&CollectionField{}).Read(
 			context.Background(),
 			infer.ReadRequest[CollectionFieldArgs, CollectionFieldState]{
@@ -513,10 +652,175 @@ func TestCollectionFieldResource_Read(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Read() error = %v", err)
 		}
-		if resp.Inputs.Slug != "title" || resp.Inputs.Validations["maxLength"] != float64(120) {
-			t.Errorf("explicit inputs should reflect API values: %+v", resp.Inputs)
+		if resp.Inputs.Slug != "old" || resp.Inputs.Validations["maxLength"] != float64(50) {
+			t.Errorf("slug/validations are not API inputs and must stay as written: %+v", resp.Inputs)
+		}
+		if resp.State.Slug != "title" || resp.State.Validations["maxLength"] != float64(120) {
+			t.Errorf("state should reflect the API values: %+v", resp.State)
 		}
 	})
+}
+
+// optionFieldFromAPI is an Option field as GET /v2/collections/{id} reports it: no metadata,
+// the choices are under validations.options with Webflow-assigned IDs.
+func optionFieldFromAPI() map[string]interface{} {
+	return map[string]interface{}{
+		"id": testFieldID, "type": "Option", "displayName": "Status", "slug": "status", "isEditable": true,
+		"validations": map[string]interface{}{"options": []interface{}{
+			map[string]interface{}{"name": "Draft", "id": "a1b2c3d4e5f60718293a4b5c"},
+			map[string]interface{}{"name": "Published", "id": "b2c3d4e5f60718293a4b5c6d"},
+		}},
+	}
+}
+
+// referenceFieldFromAPI is a Reference field as GET /v2/collections/{id} reports it: no
+// metadata, the referenced collection is under validations.collectionId.
+func referenceFieldFromAPI(fieldType string) map[string]interface{} {
+	return map[string]interface{}{
+		"id": testFieldID, "type": fieldType, "displayName": "Author", "slug": "author", "isEditable": true,
+		"validations": map[string]interface{}{"collectionId": testSiteID},
+	}
+}
+
+// readThenDiff runs Read with the given program inputs and then Diff between the refreshed
+// state and the same program inputs, mirroring `pulumi refresh` followed by `pulumi up`.
+func readThenDiff(t *testing.T, inputs CollectionFieldArgs) (
+	read infer.ReadResponse[CollectionFieldArgs, CollectionFieldState], diff infer.DiffResponse,
+) {
+	t.Helper()
+	read, err := (&CollectionField{}).Read(
+		context.Background(),
+		infer.ReadRequest[CollectionFieldArgs, CollectionFieldState]{ID: fieldResourceID, Inputs: inputs},
+	)
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+	diff, err = (&CollectionField{}).Diff(
+		context.Background(),
+		infer.DiffRequest[CollectionFieldArgs, CollectionFieldState]{State: read.State, Inputs: inputs},
+	)
+	if err != nil {
+		t.Fatalf("Diff() error = %v", err)
+	}
+	return read, diff
+}
+
+func TestCollectionFieldResource_ReadThenDiff_OptionField(t *testing.T) {
+	mock := newCMSMock(t)
+	mock.handle(http.MethodGet, "/v2/collections/"+testCollectionID, func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusOK, collectionWithFields(optionFieldFromAPI()))
+	})
+	inputs := CollectionFieldArgs{
+		CollectionID: testCollectionID, Type: "Option", DisplayName: "Status",
+		Metadata: map[string]interface{}{"options": []interface{}{
+			map[string]interface{}{"name": "Draft"}, map[string]interface{}{"name": "Published"},
+		}},
+	}
+
+	read, diff := readThenDiff(t, inputs)
+	if diff.HasChanges || len(diff.DetailedDiff) != 0 {
+		t.Errorf("an unchanged Option field must not diff after refresh: %+v (state %+v)", diff, read.State)
+	}
+
+	// Inputs carry the user-facing shape (names only), state keeps the Webflow option IDs.
+	if !reflect.DeepEqual(read.Inputs.Metadata, inputs.Metadata) {
+		t.Errorf("refreshed inputs metadata = %v, want %v", read.Inputs.Metadata, inputs.Metadata)
+	}
+	stateOptions, _ := read.State.Metadata["options"].([]interface{})
+	if len(stateOptions) != 2 {
+		t.Fatalf("state metadata should be reconstructed from validations, got %v", read.State.Metadata)
+	}
+	if first, _ := stateOptions[0].(map[string]interface{}); first["id"] != "a1b2c3d4e5f60718293a4b5c" {
+		t.Errorf("state metadata should keep the option IDs, got %v", stateOptions)
+	}
+	if read.State.Validations == nil {
+		t.Errorf("state validations should reflect the API, got %+v", read.State)
+	}
+
+	// The same field with a renamed choice still replaces.
+	renamed := inputs
+	renamed.Metadata = map[string]interface{}{"options": []interface{}{
+		map[string]interface{}{"name": "Draft"}, map[string]interface{}{"name": "Archived"},
+	}}
+	_, diff = readThenDiff(t, renamed)
+	if d, ok := diff.DetailedDiff["metadata"]; !ok || d.Kind != p.UpdateReplace {
+		t.Errorf("a renamed option must replace the field: %+v", diff)
+	}
+}
+
+func TestCollectionFieldResource_ReadThenDiff_ReferenceFields(t *testing.T) {
+	for _, fieldType := range []string{FieldTypeReference, FieldTypeMultiReference} {
+		t.Run(fieldType, func(t *testing.T) {
+			mock := newCMSMock(t)
+			mock.handle(http.MethodGet, "/v2/collections/"+testCollectionID, func(w http.ResponseWriter, r *http.Request) {
+				writeCMSJSON(w, http.StatusOK, collectionWithFields(referenceFieldFromAPI(fieldType)))
+			})
+			inputs := CollectionFieldArgs{
+				CollectionID: testCollectionID, Type: fieldType, DisplayName: "Author",
+				Metadata: map[string]interface{}{"collectionId": testSiteID},
+			}
+
+			read, diff := readThenDiff(t, inputs)
+			if diff.HasChanges || len(diff.DetailedDiff) != 0 {
+				t.Errorf("an unchanged %s field must not diff after refresh: %+v (state %+v)", fieldType, diff, read.State)
+			}
+			if read.State.Metadata["collectionId"] != testSiteID || read.Inputs.Metadata["collectionId"] != testSiteID {
+				t.Errorf("metadata.collectionId should be reconstructed from validations: %+v", read)
+			}
+
+			// Pointing the field at another collection replaces it.
+			other := inputs
+			other.Metadata = map[string]interface{}{"collectionId": testCollectionID}
+			_, diff = readThenDiff(t, other)
+			if d, ok := diff.DetailedDiff["metadata"]; !ok || d.Kind != p.UpdateReplace {
+				t.Errorf("a different referenced collection must replace the field: %+v", diff)
+			}
+		})
+	}
+}
+
+func TestCollectionFieldResource_Read_ImportReconstructsMetadataOnlyInState(t *testing.T) {
+	mock := newCMSMock(t)
+	mock.handle(http.MethodGet, "/v2/collections/"+testCollectionID, func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusOK, collectionWithFields(optionFieldFromAPI()))
+	})
+	read, err := (&CollectionField{}).Read(
+		context.Background(),
+		infer.ReadRequest[CollectionFieldArgs, CollectionFieldState]{ID: fieldResourceID},
+	)
+	if err != nil {
+		t.Fatalf("Read() error = %v", err)
+	}
+	if read.Inputs.Metadata != nil {
+		t.Errorf("omitted metadata input must stay omitted, got %v", read.Inputs.Metadata)
+	}
+	if _, ok := read.State.Metadata["options"]; !ok {
+		t.Errorf("state metadata should be reconstructed for Option fields, got %v", read.State.Metadata)
+	}
+}
+
+func TestMetadataFromValidations(t *testing.T) {
+	optionValidations := map[string]interface{}{"options": []interface{}{
+		map[string]interface{}{"name": "Draft", "id": "aaa"},
+		"not an object",
+	}}
+	if got := metadataFromValidations(FieldTypeOption, optionValidations, false); !reflect.DeepEqual(got,
+		map[string]interface{}{"options": []interface{}{map[string]interface{}{"name": "Draft"}}}) {
+		t.Errorf("names only: got %v", got)
+	}
+	if got := metadataFromValidations(FieldTypeOption, optionValidations, true); !reflect.DeepEqual(got,
+		map[string]interface{}{"options": []interface{}{map[string]interface{}{"name": "Draft", "id": "aaa"}}}) {
+		t.Errorf("with ids: got %v", got)
+	}
+	if got := metadataFromValidations(FieldTypeOption, map[string]interface{}{"singleLine": true}, true); got != nil {
+		t.Errorf("Option without options: got %v, want nil", got)
+	}
+	if got := metadataFromValidations(FieldTypeReference, map[string]interface{}{"collectionId": ""}, true); got != nil {
+		t.Errorf("Reference with empty collectionId: got %v, want nil", got)
+	}
+	if got := metadataFromValidations(FieldTypePlainText, map[string]interface{}{"maxLength": 5}, true); got != nil {
+		t.Errorf("PlainText: got %v, want nil", got)
+	}
 }
 
 func TestCollectionFieldResource_Read_Missing(t *testing.T) {
@@ -646,29 +950,21 @@ func TestCollectionFieldDiff(t *testing.T) {
 	}{
 		{"no changes", base, withArgs(func(a *CollectionFieldArgs) {}), nil},
 		{
-			"validations change replaces", base,
+			"validations are ignored by the API and never diff", base,
 			withArgs(func(a *CollectionFieldArgs) { a.Validations = map[string]interface{}{"maxLength": float64(1000)} }),
-			map[string]p.DiffKind{"validations": p.UpdateReplace},
+			nil,
 		},
 		{
 			"validations omitted after refresh does not diff", base,
 			withArgs(func(a *CollectionFieldArgs) { a.Validations = nil }), nil,
 		},
 		{
-			"validations subset of API-decorated state does not diff",
-			withArgs(func(a *CollectionFieldArgs) {
-				a.Validations = map[string]interface{}{"maxLength": float64(500), "singleLine": false}
-			}),
-			withArgs(func(a *CollectionFieldArgs) {}), nil,
-		},
-		{
-			"slug omitted after refresh does not replace", base,
+			"slug omitted after refresh does not diff", base,
 			withArgs(func(a *CollectionFieldArgs) { a.Slug = "" }), nil,
 		},
 		{
-			"explicit slug change replaces", base,
-			withArgs(func(a *CollectionFieldArgs) { a.Slug = "headline" }),
-			map[string]p.DiffKind{"slug": p.UpdateReplace},
+			"slug is ignored by the API and never diffs", base,
+			withArgs(func(a *CollectionFieldArgs) { a.Slug = "headline" }), nil,
 		},
 		{
 			"type change replaces", base,
