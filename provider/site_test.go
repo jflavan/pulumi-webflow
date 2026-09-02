@@ -105,8 +105,16 @@ func TestSiteUpdateRequest_MarshalJSON(t *testing.T) {
 		want string
 	}{
 		{"name only", SiteUpdateRequest{Name: "Site"}, `{"name":"Site"}`},
-		{"set folder", SiteUpdateRequest{Name: "Site", ParentFolderID: &folder}, `{"name":"Site","parentFolderId":"folder789"}`},
-		{"clear folder sends null", SiteUpdateRequest{Name: "Site", ParentFolderID: &cleared}, `{"name":"Site","parentFolderId":null}`},
+		{
+			"set folder",
+			SiteUpdateRequest{Name: "Site", ParentFolderID: &folder},
+			`{"name":"Site","parentFolderId":"folder789"}`,
+		},
+		{
+			"clear folder sends null",
+			SiteUpdateRequest{Name: "Site", ParentFolderID: &cleared},
+			`{"name":"Site","parentFolderId":null}`,
+		},
 		{"empty", SiteUpdateRequest{}, `{}`},
 	}
 	for _, tt := range tests {
@@ -128,7 +136,8 @@ func TestSiteCustomDomains_UnmarshalObjectsAndStrings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(site.CustomDomains) != 2 || site.CustomDomains[0] != "example.com" || site.CustomDomains[1] != "www.example.com" {
+	if len(site.CustomDomains) != 2 || site.CustomDomains[0] != "example.com" ||
+		site.CustomDomains[1] != "www.example.com" {
 		t.Errorf("unexpected custom domains: %v", site.CustomDomains)
 	}
 }
@@ -781,8 +790,10 @@ func TestSiteRead_Success_PreservesPublishInputs(t *testing.T) {
 		in.TemplateName != "blank" {
 		t.Errorf("publish-related inputs must be preserved from state: %+v", in)
 	}
-	if resp.State.ShortName != "live-name" || resp.State.TimeZone != "UTC" || resp.State.LastPublished != "2024-01-15T10:30:00Z" ||
-		len(resp.State.CustomDomains) != 1 || resp.State.CustomDomains[0] != "example.com" || resp.State.PublishScope != "site" {
+	if resp.State.ShortName != "live-name" || resp.State.TimeZone != "UTC" ||
+		resp.State.LastPublished != "2024-01-15T10:30:00Z" ||
+		len(resp.State.CustomDomains) != 1 || resp.State.CustomDomains[0] != "example.com" ||
+		resp.State.PublishScope != "site" {
 		t.Errorf("state not populated: %+v", resp.State)
 	}
 }
@@ -948,9 +959,11 @@ func TestSiteUpdate_DryRun_PreservesReadOnlyOutputs(t *testing.T) {
 		t.Error("API must not be called in DryRun mode")
 	}
 	o := resp.Output
-	if o.TimeZone != "America/New_York" || o.LastPublished != "2024-01-15T10:00:00Z" || o.LastUpdated != "2024-01-20T15:30:00Z" ||
+	if o.TimeZone != "America/New_York" || o.LastPublished != "2024-01-15T10:00:00Z" ||
+		o.LastUpdated != "2024-01-20T15:30:00Z" ||
 		o.PreviewURL != "https://preview.webflow.com/site123" || len(o.CustomDomains) != 2 || !o.DataCollectionEnabled ||
-		o.DataCollectionType != "optOut" || o.ShortName != "old-site" || o.PublishScope != "site" {
+		o.DataCollectionType != "optOut" || o.ShortName != "old-site" ||
+		o.PublishScope != "site" {
 		t.Errorf("read-only outputs not preserved: %+v", o)
 	}
 }
@@ -991,7 +1004,7 @@ func TestSiteDelete_InvalidID(t *testing.T) {
 // SiteResource.Diff
 // ============================================================================
 
-func siteDiff(t *testing.T, inputs SiteArgs, state SiteArgs) infer.DiffResponse {
+func siteDiff(t *testing.T, inputs, state SiteArgs) infer.DiffResponse {
 	t.Helper()
 	diff, err := (&SiteResource{}).Diff(context.Background(), infer.DiffRequest[SiteArgs, SiteState]{
 		Inputs: inputs,
@@ -1004,7 +1017,12 @@ func siteDiff(t *testing.T, inputs SiteArgs, state SiteArgs) infer.DiffResponse 
 }
 
 func TestSiteDiff_NoChanges(t *testing.T) {
-	args := SiteArgs{WorkspaceID: testWorkspaceID, DisplayName: "My Site", Publish: true, PublishCustomDomains: []string{"d1"}}
+	args := SiteArgs{
+		WorkspaceID:          testWorkspaceID,
+		DisplayName:          "My Site",
+		Publish:              true,
+		PublishCustomDomains: []string{"d1"},
+	}
 	diff := siteDiff(t, args, args)
 	if diff.HasChanges || len(diff.DetailedDiff) != 0 {
 		t.Errorf("expected no changes (read-only shortName/timeZone must not diff), got %+v", diff)
@@ -1013,15 +1031,19 @@ func TestSiteDiff_NoChanges(t *testing.T) {
 
 func TestSiteDiff_AccumulatesMutableFields(t *testing.T) {
 	diff := siteDiff(t,
-		SiteArgs{WorkspaceID: testWorkspaceID, DisplayName: "New", ParentFolderID: "new", Publish: true,
-			PublishToWebflowSubdomain: true, PublishCustomDomains: []string{"d1"}, PublishPageID: "pg"},
+		SiteArgs{
+			WorkspaceID: testWorkspaceID, DisplayName: "New", ParentFolderID: "new", Publish: true,
+			PublishToWebflowSubdomain: true, PublishCustomDomains: []string{"d1"}, PublishPageID: "pg",
+		},
 		SiteArgs{WorkspaceID: testWorkspaceID, DisplayName: "Old", ParentFolderID: "old"},
 	)
 	if !diff.HasChanges {
 		t.Fatal("expected changes")
 	}
-	for _, field := range []string{"displayName", "parentFolderId", "publish", "publishToWebflowSubdomain",
-		"publishCustomDomains", "publishPageId"} {
+	for _, field := range []string{
+		"displayName", "parentFolderId", "publish", "publishToWebflowSubdomain",
+		"publishCustomDomains", "publishPageId",
+	} {
 		pd, ok := diff.DetailedDiff[field]
 		if !ok {
 			t.Errorf("expected %q in DetailedDiff", field)

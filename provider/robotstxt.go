@@ -122,13 +122,19 @@ func ParseRobotsTxtContentWithWarnings(content string) (rules []RobotsTxtRule, s
 		}
 
 		if strings.HasPrefix(line, "#") {
-			warnings = append(warnings, fmt.Sprintf("line %d: comment %q is not stored by the Webflow API and will be dropped", lineNo, line))
+			warnings = append(
+				warnings,
+				fmt.Sprintf("line %d: comment %q is not stored by the Webflow API and will be dropped", lineNo, line),
+			)
 			continue
 		}
 
 		// Strip trailing inline comments ("Disallow: /admin # private")
 		if idx := strings.Index(line, "#"); idx > 0 {
-			warnings = append(warnings, fmt.Sprintf("line %d: inline comment %q will be dropped", lineNo, strings.TrimSpace(line[idx:])))
+			warnings = append(
+				warnings,
+				fmt.Sprintf("line %d: inline comment %q will be dropped", lineNo, strings.TrimSpace(line[idx:])),
+			)
 			line = strings.TrimSpace(line[:idx])
 		}
 
@@ -148,14 +154,20 @@ func ParseRobotsTxtContentWithWarnings(content string) (rules []RobotsTxtRule, s
 		case strings.HasPrefix(lower, "allow:"):
 			path := strings.TrimSpace(line[6:])
 			if currentRule == nil {
-				warnings = append(warnings, fmt.Sprintf("line %d: %q appears before any User-agent directive and will be dropped", lineNo, line))
+				warnings = append(
+					warnings,
+					fmt.Sprintf("line %d: %q appears before any User-agent directive and will be dropped", lineNo, line),
+				)
 			} else if path != "" {
 				currentRule.Allows = append(currentRule.Allows, path)
 			}
 		case strings.HasPrefix(lower, "disallow:"):
 			path := strings.TrimSpace(line[9:])
 			if currentRule == nil {
-				warnings = append(warnings, fmt.Sprintf("line %d: %q appears before any User-agent directive and will be dropped", lineNo, line))
+				warnings = append(
+					warnings,
+					fmt.Sprintf("line %d: %q appears before any User-agent directive and will be dropped", lineNo, line),
+				)
 			} else if path != "" {
 				currentRule.Disallows = append(currentRule.Disallows, path)
 			}
@@ -239,11 +251,6 @@ func stringSlicesEqual(a, b []string) bool {
 	}
 	return true
 }
-
-// maxRetries is the number of retries performed by the legacy per-function retry loops that
-// still exist in other resources. Site, Redirect and RobotsTxt no longer use it; the retry
-// transport and doRequest handle retries for them.
-const maxRetries = 3
 
 // GetRobotsTxt retrieves the robots.txt configuration for a Webflow site.
 // It calls GET /v2/sites/{site_id}/robots_txt endpoint.

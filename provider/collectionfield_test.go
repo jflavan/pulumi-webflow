@@ -95,15 +95,31 @@ func TestValidateFieldMetadata(t *testing.T) {
 		wantErr   string
 	}{
 		{"plain text without metadata", FieldTypePlainText, nil, ""},
-		{"plain text with metadata", FieldTypePlainText, map[string]interface{}{"options": []interface{}{}}, "only supported"},
-		{"option with options", FieldTypeOption,
-			map[string]interface{}{"options": []interface{}{map[string]interface{}{"name": "Draft"}}}, ""},
+		{
+			"plain text with metadata",
+			FieldTypePlainText,
+			map[string]interface{}{"options": []interface{}{}},
+			"only supported",
+		},
+		{
+			"option with options", FieldTypeOption,
+			map[string]interface{}{"options": []interface{}{map[string]interface{}{"name": "Draft"}}},
+			"",
+		},
 		{"option without metadata", FieldTypeOption, nil, "metadata.options is required"},
 		{"option with empty options", FieldTypeOption, map[string]interface{}{"options": []interface{}{}}, "non-empty"},
-		{"option with unnamed option", FieldTypeOption,
-			map[string]interface{}{"options": []interface{}{map[string]interface{}{"id": "x"}}}, "name is required"},
+		{
+			"option with unnamed option", FieldTypeOption,
+			map[string]interface{}{"options": []interface{}{map[string]interface{}{"id": "x"}}},
+			"name is required",
+		},
 		{"reference with collectionId", FieldTypeReference, map[string]interface{}{"collectionId": testCollectionID}, ""},
-		{"multi reference with collectionId", FieldTypeMultiReference, map[string]interface{}{"collectionId": testCollectionID}, ""},
+		{
+			"multi reference with collectionId",
+			FieldTypeMultiReference,
+			map[string]interface{}{"collectionId": testCollectionID},
+			"",
+		},
 		{"reference without collectionId", FieldTypeReference, nil, "metadata.collectionId is required"},
 		{"reference with bad collectionId", FieldTypeReference, map[string]interface{}{"collectionId": "nope"}, "invalid"},
 	}
@@ -201,11 +217,15 @@ func sortedKeys(m map[string]interface{}) []string {
 
 func TestCollectionFieldResource_Create(t *testing.T) {
 	mock := newCMSMock(t)
-	mock.handle(http.MethodPost, "/v2/collections/"+testCollectionID+"/fields", func(w http.ResponseWriter, r *http.Request) {
-		writeCMSJSON(w, http.StatusCreated, CollectionFieldResponse{
-			ID: testFieldID, Type: "PlainText", DisplayName: "Title", Slug: "title", IsEditable: true, IsRequired: false,
-		})
-	})
+	mock.handle(
+		http.MethodPost,
+		"/v2/collections/"+testCollectionID+"/fields",
+		func(w http.ResponseWriter, r *http.Request) {
+			writeCMSJSON(w, http.StatusCreated, CollectionFieldResponse{
+				ID: testFieldID, Type: "PlainText", DisplayName: "Title", Slug: "title", IsEditable: true, IsRequired: false,
+			})
+		},
+	)
 
 	resp, err := (&CollectionField{}).Create(context.Background(), infer.CreateRequest[CollectionFieldArgs]{
 		Inputs: CollectionFieldArgs{
@@ -247,9 +267,17 @@ func TestCollectionFieldResource_Create(t *testing.T) {
 
 func TestCollectionFieldResource_Create_OptionFieldSendsMetadata(t *testing.T) {
 	mock := newCMSMock(t)
-	mock.handle(http.MethodPost, "/v2/collections/"+testCollectionID+"/fields", func(w http.ResponseWriter, r *http.Request) {
-		writeCMSJSON(w, http.StatusCreated, CollectionFieldResponse{ID: testFieldID, Type: "Option", DisplayName: "Status", Slug: "status"})
-	})
+	mock.handle(
+		http.MethodPost,
+		"/v2/collections/"+testCollectionID+"/fields",
+		func(w http.ResponseWriter, r *http.Request) {
+			writeCMSJSON(
+				w,
+				http.StatusCreated,
+				CollectionFieldResponse{ID: testFieldID, Type: "Option", DisplayName: "Status", Slug: "status"},
+			)
+		},
+	)
 
 	isRequired := true
 	_, err := (&CollectionField{}).Create(context.Background(), infer.CreateRequest[CollectionFieldArgs]{
@@ -298,15 +326,29 @@ func TestCollectionFieldResource_Create_ValidationErrors(t *testing.T) {
 		inputs CollectionFieldArgs
 		want   string
 	}{
-		{"invalid collectionId", CollectionFieldArgs{CollectionID: "bad", Type: "PlainText", DisplayName: "T"}, "collectionId"},
-		{"legacy Video type", CollectionFieldArgs{CollectionID: testCollectionID, Type: "Video", DisplayName: "T"}, "VideoLink"},
+		{
+			"invalid collectionId",
+			CollectionFieldArgs{CollectionID: "bad", Type: "PlainText", DisplayName: "T"},
+			"collectionId",
+		},
+		{
+			"legacy Video type",
+			CollectionFieldArgs{CollectionID: testCollectionID, Type: "Video", DisplayName: "T"},
+			"VideoLink",
+		},
 		{"missing displayName", CollectionFieldArgs{CollectionID: testCollectionID, Type: "PlainText"}, "displayName"},
-		{"reference without metadata", CollectionFieldArgs{CollectionID: testCollectionID, Type: "Reference", DisplayName: "Author"},
-			"metadata.collectionId"},
+		{
+			"reference without metadata",
+			CollectionFieldArgs{CollectionID: testCollectionID, Type: "Reference", DisplayName: "Author"},
+			"metadata.collectionId",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := (&CollectionField{}).Create(context.Background(), infer.CreateRequest[CollectionFieldArgs]{Inputs: tt.inputs})
+			_, err := (&CollectionField{}).Create(
+				context.Background(),
+				infer.CreateRequest[CollectionFieldArgs]{Inputs: tt.inputs},
+			)
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Errorf("expected error containing %q, got %v", tt.want, err)
 			}
@@ -330,20 +372,23 @@ func TestCollectionFieldResource_Update_UsesPatchWithMutableFieldsOnly(t *testin
 		})
 	})
 
-	resp, err := (&CollectionField{}).Update(context.Background(), infer.UpdateRequest[CollectionFieldArgs, CollectionFieldState]{
-		ID: fieldResourceID,
-		State: CollectionFieldState{
-			CollectionFieldArgs: CollectionFieldArgs{
-				CollectionID: testCollectionID, Type: "PlainText", DisplayName: "Title", Slug: "title", IsRequired: true,
+	resp, err := (&CollectionField{}).Update(
+		context.Background(),
+		infer.UpdateRequest[CollectionFieldArgs, CollectionFieldState]{
+			ID: fieldResourceID,
+			State: CollectionFieldState{
+				CollectionFieldArgs: CollectionFieldArgs{
+					CollectionID: testCollectionID, Type: "PlainText", DisplayName: "Title", Slug: "title", IsRequired: true,
+					Validations: map[string]interface{}{"maxLength": float64(120)},
+				},
+				FieldID: testFieldID, IsEditable: true,
+			},
+			Inputs: CollectionFieldArgs{
+				CollectionID: testCollectionID, Type: "PlainText", DisplayName: "Headline", IsRequired: false, HelpText: "",
 				Validations: map[string]interface{}{"maxLength": float64(120)},
 			},
-			FieldID: testFieldID, IsEditable: true,
 		},
-		Inputs: CollectionFieldArgs{
-			CollectionID: testCollectionID, Type: "PlainText", DisplayName: "Headline", IsRequired: false, HelpText: "",
-			Validations: map[string]interface{}{"maxLength": float64(120)},
-		},
-	})
+	)
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
@@ -369,12 +414,19 @@ func TestCollectionFieldResource_Update_UsesPatchWithMutableFieldsOnly(t *testin
 
 func TestCollectionFieldResource_Update_DryRun(t *testing.T) {
 	mock := newCMSMock(t)
-	resp, err := (&CollectionField{}).Update(context.Background(), infer.UpdateRequest[CollectionFieldArgs, CollectionFieldState]{
-		ID:     fieldResourceID,
-		State:  CollectionFieldState{FieldID: testFieldID, IsEditable: true, CollectionFieldArgs: CollectionFieldArgs{Slug: "title"}},
-		Inputs: CollectionFieldArgs{CollectionID: testCollectionID, Type: "PlainText", DisplayName: "Headline"},
-		DryRun: true,
-	})
+	resp, err := (&CollectionField{}).Update(
+		context.Background(),
+		infer.UpdateRequest[CollectionFieldArgs, CollectionFieldState]{
+			ID: fieldResourceID,
+			State: CollectionFieldState{
+				FieldID:             testFieldID,
+				IsEditable:          true,
+				CollectionFieldArgs: CollectionFieldArgs{Slug: "title"},
+			},
+			Inputs: CollectionFieldArgs{CollectionID: testCollectionID, Type: "PlainText", DisplayName: "Headline"},
+			DryRun: true,
+		},
+	)
 	if err != nil {
 		t.Fatalf("Update(DryRun) error = %v", err)
 	}
@@ -392,10 +444,13 @@ func TestCollectionFieldResource_Update_APIError(t *testing.T) {
 		func(w http.ResponseWriter, r *http.Request) {
 			writeCMSJSON(w, http.StatusNotFound, map[string]string{"message": "field not found"})
 		})
-	_, err := (&CollectionField{}).Update(context.Background(), infer.UpdateRequest[CollectionFieldArgs, CollectionFieldState]{
-		ID:     fieldResourceID,
-		Inputs: CollectionFieldArgs{CollectionID: testCollectionID, Type: "PlainText", DisplayName: "Headline"},
-	})
+	_, err := (&CollectionField{}).Update(
+		context.Background(),
+		infer.UpdateRequest[CollectionFieldArgs, CollectionFieldState]{
+			ID:     fieldResourceID,
+			Inputs: CollectionFieldArgs{CollectionID: testCollectionID, Type: "PlainText", DisplayName: "Headline"},
+		},
+	)
 	if err == nil || !strings.Contains(err.Error(), "failed to update collection field") {
 		t.Fatalf("expected update error, got %v", err)
 	}
@@ -419,10 +474,13 @@ func TestCollectionFieldResource_Read(t *testing.T) {
 	})
 
 	t.Run("omitted inputs stay omitted, state reflects API", func(t *testing.T) {
-		resp, err := (&CollectionField{}).Read(context.Background(), infer.ReadRequest[CollectionFieldArgs, CollectionFieldState]{
-			ID:     fieldResourceID,
-			Inputs: CollectionFieldArgs{CollectionID: testCollectionID, Type: "PlainText", DisplayName: "Title"},
-		})
+		resp, err := (&CollectionField{}).Read(
+			context.Background(),
+			infer.ReadRequest[CollectionFieldArgs, CollectionFieldState]{
+				ID:     fieldResourceID,
+				Inputs: CollectionFieldArgs{CollectionID: testCollectionID, Type: "PlainText", DisplayName: "Title"},
+			},
+		)
 		if err != nil {
 			t.Fatalf("Read() error = %v", err)
 		}
@@ -442,13 +500,16 @@ func TestCollectionFieldResource_Read(t *testing.T) {
 	})
 
 	t.Run("explicit slug and validations are refreshed", func(t *testing.T) {
-		resp, err := (&CollectionField{}).Read(context.Background(), infer.ReadRequest[CollectionFieldArgs, CollectionFieldState]{
-			ID: fieldResourceID,
-			Inputs: CollectionFieldArgs{
-				CollectionID: testCollectionID, Type: "PlainText", DisplayName: "Title", Slug: "old",
-				Validations: map[string]interface{}{"maxLength": float64(50)},
+		resp, err := (&CollectionField{}).Read(
+			context.Background(),
+			infer.ReadRequest[CollectionFieldArgs, CollectionFieldState]{
+				ID: fieldResourceID,
+				Inputs: CollectionFieldArgs{
+					CollectionID: testCollectionID, Type: "PlainText", DisplayName: "Title", Slug: "old",
+					Validations: map[string]interface{}{"maxLength": float64(50)},
+				},
 			},
-		})
+		)
 		if err != nil {
 			t.Fatalf("Read() error = %v", err)
 		}
@@ -466,7 +527,10 @@ func TestCollectionFieldResource_Read_Missing(t *testing.T) {
 				map[string]interface{}{"id": "other000000000000000000", "type": "RichText", "displayName": "Body"},
 			))
 		})
-		resp, err := (&CollectionField{}).Read(context.Background(), infer.ReadRequest[CollectionFieldArgs, CollectionFieldState]{ID: fieldResourceID})
+		resp, err := (&CollectionField{}).Read(
+			context.Background(),
+			infer.ReadRequest[CollectionFieldArgs, CollectionFieldState]{ID: fieldResourceID},
+		)
 		if err != nil || resp.ID != "" {
 			t.Errorf("expected empty ID and nil error, got ID=%q err=%v", resp.ID, err)
 		}
@@ -477,7 +541,10 @@ func TestCollectionFieldResource_Read_Missing(t *testing.T) {
 		mock.handle(http.MethodGet, "/v2/collections/"+testCollectionID, func(w http.ResponseWriter, r *http.Request) {
 			writeCMSJSON(w, http.StatusNotFound, map[string]string{"message": "not found"})
 		})
-		resp, err := (&CollectionField{}).Read(context.Background(), infer.ReadRequest[CollectionFieldArgs, CollectionFieldState]{ID: fieldResourceID})
+		resp, err := (&CollectionField{}).Read(
+			context.Background(),
+			infer.ReadRequest[CollectionFieldArgs, CollectionFieldState]{ID: fieldResourceID},
+		)
 		if err != nil || resp.ID != "" {
 			t.Errorf("expected empty ID and nil error, got ID=%q err=%v", resp.ID, err)
 		}
@@ -488,7 +555,9 @@ func TestCollectionFieldResource_Read_Missing(t *testing.T) {
 		mock.handle(http.MethodGet, "/v2/collections/"+testCollectionID, func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 		})
-		if _, err := (&CollectionField{}).Read(context.Background(), infer.ReadRequest[CollectionFieldArgs, CollectionFieldState]{ID: fieldResourceID}); err == nil {
+		if _, err := (&CollectionField{}).Read(
+			context.Background(), infer.ReadRequest[CollectionFieldArgs, CollectionFieldState]{ID: fieldResourceID},
+		); err == nil {
 			t.Error("expected error for 500")
 		}
 	})
@@ -496,7 +565,9 @@ func TestCollectionFieldResource_Read_Missing(t *testing.T) {
 	t.Run("invalid resource ID", func(t *testing.T) {
 		mock := newCMSMock(t)
 		for _, id := range []string{"", "bad/fields/" + testFieldID, testCollectionID + "/fields/a/b"} {
-			if _, err := (&CollectionField{}).Read(context.Background(), infer.ReadRequest[CollectionFieldArgs, CollectionFieldState]{ID: id}); err == nil {
+			if _, err := (&CollectionField{}).Read(
+				context.Background(), infer.ReadRequest[CollectionFieldArgs, CollectionFieldState]{ID: id},
+			); err == nil {
 				t.Errorf("Read(%q) expected error", id)
 			}
 		}
@@ -524,7 +595,10 @@ func TestCollectionFieldResource_Delete(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mock := newCMSMock(t)
 			mock.handle(http.MethodDelete, path, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(tt.status) })
-			_, err := (&CollectionField{}).Delete(context.Background(), infer.DeleteRequest[CollectionFieldState]{ID: fieldResourceID})
+			_, err := (&CollectionField{}).Delete(
+				context.Background(),
+				infer.DeleteRequest[CollectionFieldState]{ID: fieldResourceID},
+			)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Delete() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -571,31 +645,48 @@ func TestCollectionFieldDiff(t *testing.T) {
 		wantKinds map[string]p.DiffKind
 	}{
 		{"no changes", base, withArgs(func(a *CollectionFieldArgs) {}), nil},
-		{"validations change replaces", base,
+		{
+			"validations change replaces", base,
 			withArgs(func(a *CollectionFieldArgs) { a.Validations = map[string]interface{}{"maxLength": float64(1000)} }),
-			map[string]p.DiffKind{"validations": p.UpdateReplace}},
-		{"validations omitted after refresh does not diff", base,
-			withArgs(func(a *CollectionFieldArgs) { a.Validations = nil }), nil},
-		{"validations subset of API-decorated state does not diff",
+			map[string]p.DiffKind{"validations": p.UpdateReplace},
+		},
+		{
+			"validations omitted after refresh does not diff", base,
+			withArgs(func(a *CollectionFieldArgs) { a.Validations = nil }), nil,
+		},
+		{
+			"validations subset of API-decorated state does not diff",
 			withArgs(func(a *CollectionFieldArgs) {
 				a.Validations = map[string]interface{}{"maxLength": float64(500), "singleLine": false}
 			}),
-			withArgs(func(a *CollectionFieldArgs) {}), nil},
-		{"slug omitted after refresh does not replace", base,
-			withArgs(func(a *CollectionFieldArgs) { a.Slug = "" }), nil},
-		{"explicit slug change replaces", base,
+			withArgs(func(a *CollectionFieldArgs) {}), nil,
+		},
+		{
+			"slug omitted after refresh does not replace", base,
+			withArgs(func(a *CollectionFieldArgs) { a.Slug = "" }), nil,
+		},
+		{
+			"explicit slug change replaces", base,
 			withArgs(func(a *CollectionFieldArgs) { a.Slug = "headline" }),
-			map[string]p.DiffKind{"slug": p.UpdateReplace}},
-		{"type change replaces", base,
+			map[string]p.DiffKind{"slug": p.UpdateReplace},
+		},
+		{
+			"type change replaces", base,
 			withArgs(func(a *CollectionFieldArgs) { a.Type = "RichText" }),
-			map[string]p.DiffKind{"type": p.UpdateReplace}},
-		{"collectionId change replaces", base,
+			map[string]p.DiffKind{"type": p.UpdateReplace},
+		},
+		{
+			"collectionId change replaces", base,
 			withArgs(func(a *CollectionFieldArgs) { a.CollectionID = testSiteID }),
-			map[string]p.DiffKind{"collectionId": p.UpdateReplace}},
-		{"displayName, isRequired and helpText update in place", base,
+			map[string]p.DiffKind{"collectionId": p.UpdateReplace},
+		},
+		{
+			"displayName, isRequired and helpText update in place", base,
 			withArgs(func(a *CollectionFieldArgs) { a.DisplayName = "Headline"; a.IsRequired = false; a.HelpText = "" }),
-			map[string]p.DiffKind{"displayName": p.Update, "isRequired": p.Update, "helpText": p.Update}},
-		{"metadata change replaces",
+			map[string]p.DiffKind{"displayName": p.Update, "isRequired": p.Update, "helpText": p.Update},
+		},
+		{
+			"metadata change replaces",
 			withArgs(func(a *CollectionFieldArgs) {
 				a.Type = "Reference"
 				a.Metadata = map[string]interface{}{"collectionId": testCollectionID}
@@ -604,8 +695,10 @@ func TestCollectionFieldDiff(t *testing.T) {
 				a.Type = "Reference"
 				a.Metadata = map[string]interface{}{"collectionId": testSiteID}
 			}),
-			map[string]p.DiffKind{"metadata": p.UpdateReplace}},
-		{"metadata options with API-assigned ids do not diff",
+			map[string]p.DiffKind{"metadata": p.UpdateReplace},
+		},
+		{
+			"metadata options with API-assigned ids do not diff",
 			withArgs(func(a *CollectionFieldArgs) {
 				a.Type = "Option"
 				a.Metadata = map[string]interface{}{"options": []interface{}{
@@ -617,8 +710,10 @@ func TestCollectionFieldDiff(t *testing.T) {
 				a.Metadata = map[string]interface{}{"options": []interface{}{
 					map[string]interface{}{"name": "Draft"}, map[string]interface{}{"name": "Published"},
 				}}
-			}), nil},
-		{"metadata option renamed replaces",
+			}), nil,
+		},
+		{
+			"metadata option renamed replaces",
 			withArgs(func(a *CollectionFieldArgs) {
 				a.Type = "Option"
 				a.Metadata = map[string]interface{}{"options": []interface{}{map[string]interface{}{"name": "Draft", "id": "aaa"}}}
@@ -627,15 +722,19 @@ func TestCollectionFieldDiff(t *testing.T) {
 				a.Type = "Option"
 				a.Metadata = map[string]interface{}{"options": []interface{}{map[string]interface{}{"name": "Archived"}}}
 			}),
-			map[string]p.DiffKind{"metadata": p.UpdateReplace}},
+			map[string]p.DiffKind{"metadata": p.UpdateReplace},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := (&CollectionField{}).Diff(context.Background(), infer.DiffRequest[CollectionFieldArgs, CollectionFieldState]{
-				State:  CollectionFieldState{CollectionFieldArgs: tt.state, FieldID: testFieldID},
-				Inputs: tt.inputs,
-			})
+			resp, err := (&CollectionField{}).Diff(
+				context.Background(),
+				infer.DiffRequest[CollectionFieldArgs, CollectionFieldState]{
+					State:  CollectionFieldState{CollectionFieldArgs: tt.state, FieldID: testFieldID},
+					Inputs: tt.inputs,
+				},
+			)
 			if err != nil {
 				t.Fatalf("Diff() error = %v", err)
 			}

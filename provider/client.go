@@ -14,9 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"strings"
-	"time"
 )
 
 // webflowAPIBaseURL is the production base URL for the Webflow Data API v2.
@@ -147,18 +145,6 @@ func handleNetworkError(err error) error {
 			"To fix this: 1) Check your internet connection, 2) Check https://status.webflow.com, "+
 			"3) Wait a few minutes and retry: %w", err)
 	}
-}
-
-// getRetryAfterDuration parses a Retry-After header value in seconds.
-// Returns defaultBackoff when the header is absent or not a positive integer.
-func getRetryAfterDuration(retryAfter string, defaultBackoff time.Duration) time.Duration {
-	if retryAfter == "" {
-		return defaultBackoff
-	}
-	if seconds, err := strconv.Atoi(retryAfter); err == nil && seconds > 0 {
-		return time.Duration(seconds) * time.Second
-	}
-	return defaultBackoff
 }
 
 // defaultOKStatuses are the statuses doRequest accepts when the caller passes none.

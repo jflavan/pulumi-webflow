@@ -30,10 +30,14 @@ func TestValidatePageID_Format(t *testing.T) {
 			t.Errorf("ValidatePageID(%q) = %v", id, err)
 		}
 	}
-	if err := ValidatePageID(""); err == nil || !strings.Contains(err.Error(), "required") || !strings.Contains(err.Error(), "24-character") {
+	if err := ValidatePageID(""); err == nil || !strings.Contains(err.Error(), "required") ||
+		!strings.Contains(err.Error(), "24-character") {
 		t.Errorf("empty: %v", err)
 	}
-	for _, id := range []string{"5f0c8c9e1c9d", "5f0c8c9e1c9d440000e8d8c4000", "5F0C8C9E1C9D440000E8D8C4", "5g0c8c9e1c9d440000e8d8c4", "5f0c8c9e-1c9d-4400-00e8d8c4"} {
+	for _, id := range []string{
+		"5f0c8c9e1c9d", "5f0c8c9e1c9d440000e8d8c4000", "5F0C8C9E1C9D440000E8D8C4",
+		"5g0c8c9e1c9d440000e8d8c4", "5f0c8c9e-1c9d-4400-00e8d8c4",
+	} {
 		if err := ValidatePageID(id); err == nil || !strings.Contains(err.Error(), "invalid format") {
 			t.Errorf("ValidatePageID(%q) = %v, want invalid format", id, err)
 		}
@@ -61,7 +65,10 @@ func TestPageResourceIDRoundTrip(t *testing.T) {
 	if err != nil || siteID != testPageSiteID || pageID != testPageID {
 		t.Fatalf("round trip: %q %q %v", siteID, pageID, err)
 	}
-	for _, bad := range []string{"", testPageSiteID + "/" + testPageID, testPageSiteID + "/redirects/" + testPageID, testPageSiteID, "/pages/" + testPageID, testPageSiteID + "/pages/"} {
+	for _, bad := range []string{
+		"", testPageSiteID + "/" + testPageID, testPageSiteID + "/redirects/" + testPageID, testPageSiteID,
+		"/pages/" + testPageID, testPageSiteID + "/pages/",
+	} {
 		if _, _, err := ExtractIDsFromPageResourceID(bad); err == nil {
 			t.Errorf("expected error for %q", bad)
 		}
@@ -69,14 +76,14 @@ func TestPageResourceIDRoundTrip(t *testing.T) {
 }
 
 // pageListServer serves total pages across paginated requests and records the queries it saw.
-func pageListServer(t *testing.T, total int) (*httptest.Server, *[]string) {
+func pageListServer(t *testing.T, total int) (server *httptest.Server, queries *[]string) {
 	t.Helper()
-	var queries []string
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var seen []string
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet || r.URL.Path != "/v2/sites/"+testPageSiteID+"/pages" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
-		queries = append(queries, r.URL.RawQuery)
+		seen = append(seen, r.URL.RawQuery)
 		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 		if limit <= 0 || limit > 100 {
@@ -84,14 +91,22 @@ func pageListServer(t *testing.T, total int) (*httptest.Server, *[]string) {
 		}
 		var pages []Page
 		for i := offset; i < total && i < offset+limit; i++ {
-			pages = append(pages, Page{ID: fmt.Sprintf("%024d", i), SiteID: testPageSiteID, Title: fmt.Sprintf("Page %d", i), Slug: fmt.Sprintf("page-%d", i)})
+			pages = append(
+				pages,
+				Page{
+					ID:     fmt.Sprintf("%024d", i),
+					SiteID: testPageSiteID,
+					Title:  fmt.Sprintf("Page %d", i),
+					Slug:   fmt.Sprintf("page-%d", i),
+				},
+			)
 		}
 		resp := PagesResponse{Pages: pages}
 		resp.Pagination.Limit, resp.Pagination.Offset, resp.Pagination.Total = limit, offset, total
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	t.Cleanup(server.Close)
-	return server, &queries
+	return server, &seen
 }
 
 func TestListPages_FollowsPagination(t *testing.T) {
@@ -144,7 +159,9 @@ func TestListPages_EmptyAndErrors(t *testing.T) {
 		t.Fatalf("expected empty non-nil slice, got %v %v", pages, err)
 	}
 
-	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError} {
+	for _, status := range []int{
+		http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError,
+	} {
 		errServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(status)
 			_, _ = w.Write([]byte("error body"))
@@ -171,8 +188,9 @@ func TestGetPageMetadata(t *testing.T) {
 		}
 		gotQuery = r.URL.RawQuery
 		_, _ = w.Write([]byte(`{"id":"` + testPageID + `","siteId":"` + testPageSiteID + `","title":"Home","slug":"home",` +
-			`"parentId":"5f0c8c9e1c9d440000e8d8c5","collectionId":"5f0c8c9e1c9d440000e8d8c6","createdOn":"2024-01-01T00:00:00Z",` +
-			`"lastUpdated":"2024-01-02T00:00:00Z","archived":false,"draft":true,"canBranch":true,"isBranch":false,"branchId":null,` +
+			`"parentId":"5f0c8c9e1c9d440000e8d8c5","collectionId":"5f0c8c9e1c9d440000e8d8c6",` +
+			`"createdOn":"2024-01-01T00:00:00Z","lastUpdated":"2024-01-02T00:00:00Z",` +
+			`"archived":false,"draft":true,"canBranch":true,"isBranch":false,"branchId":null,` +
 			`"seo":{"title":"SEO Home","description":"SEO desc"},` +
 			`"openGraph":{"title":"OG Home","titleCopied":false,"description":"OG desc","descriptionCopied":true},` +
 			`"localeId":"` + testLocaleID + `","publishedPath":"/home"}`))
@@ -231,8 +249,10 @@ func TestPutPageMetadata(t *testing.T) {
 	defer server.Close()
 	client := useMockAPI(t, server)
 
-	body := PageMetadataUpdateRequest{Title: ptr("New"), SEO: &PageSEOUpdate{Description: ptr("d")},
-		OpenGraph: &PageOpenGraphUpdate{TitleCopied: ptr(false)}}
+	body := PageMetadataUpdateRequest{
+		Title: ptr("New"), SEO: &PageSEOUpdate{Description: ptr("d")},
+		OpenGraph: &PageOpenGraphUpdate{TitleCopied: ptr(false)},
+	}
 
 	page, err := PutPageMetadata(context.Background(), client, testPageID, testLocaleID, body)
 	if err != nil {

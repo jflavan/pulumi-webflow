@@ -36,7 +36,9 @@ func TestValidateAssetFolderID(t *testing.T) {
 	if err := ValidateAssetFolderID(""); err == nil || !strings.Contains(err.Error(), "required") {
 		t.Errorf("empty: %v", err)
 	}
-	for _, id := range []string{"5f0c8c9e1c9d44", "5f0c8c9e1c9d440000e8d8c3extra", "5F0C8C9E1C9D440000E8D8C3", "5f0c8c9e1c9d440000e8d8g3"} {
+	for _, id := range []string{
+		"5f0c8c9e1c9d44", "5f0c8c9e1c9d440000e8d8c3extra", "5F0C8C9E1C9D440000E8D8C3", "5f0c8c9e1c9d440000e8d8g3",
+	} {
 		if err := ValidateAssetFolderID(id); err == nil || !strings.Contains(err.Error(), "invalid format") {
 			t.Errorf("ValidateAssetFolderID(%q) = %v, want invalid format", id, err)
 		}
@@ -52,7 +54,9 @@ func TestAssetFolderResourceIDRoundTrip(t *testing.T) {
 	if err != nil || siteID != testFolderSiteID || folderID != testFolderID {
 		t.Fatalf("round trip: %q %q %v", siteID, folderID, err)
 	}
-	for _, bad := range []string{"", testFolderSiteID + "/" + testFolderID, testFolderSiteID + "/folders/" + testFolderID, testFolderSiteID} {
+	for _, bad := range []string{
+		"", testFolderSiteID + "/" + testFolderID, testFolderSiteID + "/folders/" + testFolderID, testFolderSiteID,
+	} {
 		if _, _, err := ExtractIDsFromAssetFolderResourceID(bad); err == nil {
 			t.Errorf("expected error for %q", bad)
 		}
@@ -85,7 +89,9 @@ func TestGetAssetFolder(t *testing.T) {
 		if r.Method != http.MethodGet || r.URL.Path != "/v2/asset_folders/"+testFolderID {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
-		_ = json.NewEncoder(w).Encode(AssetFolderResponse{ID: testFolderID, DisplayName: "Documents", ParentFolder: testFolderParent})
+		_ = json.NewEncoder(w).Encode(AssetFolderResponse{
+			ID: testFolderID, DisplayName: "Documents", ParentFolder: testFolderParent,
+		})
 	}))
 	defer server.Close()
 	client := useMockAPI(t, server)
@@ -127,7 +133,9 @@ func TestPostAssetFolder(t *testing.T) {
 			_, _ = w.Write([]byte("invalid folder configuration"))
 			return
 		}
-		_ = json.NewEncoder(w).Encode(AssetFolderResponse{ID: testFolderID, DisplayName: got.DisplayName, ParentFolder: got.ParentFolder})
+		_ = json.NewEncoder(w).Encode(AssetFolderResponse{
+			ID: testFolderID, DisplayName: got.DisplayName, ParentFolder: got.ParentFolder,
+		})
 	}))
 	defer server.Close()
 	client := useMockAPI(t, server)
@@ -148,7 +156,8 @@ func TestPostAssetFolder(t *testing.T) {
 	}
 
 	status = http.StatusBadRequest
-	if _, err := PostAssetFolder(context.Background(), client, testFolderSiteID, "", ""); err == nil || !strings.Contains(err.Error(), "bad request") {
+	if _, err := PostAssetFolder(context.Background(), client, testFolderSiteID, "", ""); err == nil ||
+		!strings.Contains(err.Error(), "bad request") {
 		t.Errorf("expected bad request error, got %v", err)
 	}
 }
@@ -209,7 +218,11 @@ func TestAssetFolderCreate_DryRunThenValidation(t *testing.T) {
 	}{
 		{"invalid siteId", AssetFolderArgs{SiteID: "bad", DisplayName: "Images"}, "siteId has invalid format"},
 		{"empty displayName", AssetFolderArgs{SiteID: testFolderSiteID, DisplayName: ""}, "displayName"},
-		{"invalid parentFolder", AssetFolderArgs{SiteID: testFolderSiteID, DisplayName: "Images", ParentFolder: "bad"}, "parentFolder"},
+		{
+			"invalid parentFolder",
+			AssetFolderArgs{SiteID: testFolderSiteID, DisplayName: "Images", ParentFolder: "bad"},
+			"parentFolder",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -247,7 +260,8 @@ func TestAssetFolderRead(t *testing.T) {
 		t.Fatalf("Read: %v", err)
 	}
 	if resp.ID != id || resp.Inputs.DisplayName != "Renamed" || resp.Inputs.ParentFolder != testFolderParent ||
-		resp.State.FolderID != testFolderID || len(resp.State.Assets) != 1 || resp.State.LastUpdated != "2024-02-01T00:00:00Z" {
+		resp.State.FolderID != testFolderID || len(resp.State.Assets) != 1 ||
+		resp.State.LastUpdated != "2024-02-01T00:00:00Z" {
 		t.Errorf("unexpected response %+v", resp)
 	}
 
@@ -258,12 +272,16 @@ func TestAssetFolderRead(t *testing.T) {
 	}
 
 	status = http.StatusInternalServerError
-	if _, err := (&AssetFolder{}).Read(context.Background(), infer.ReadRequest[AssetFolderArgs, AssetFolderState]{ID: id}); err == nil {
+	if _, err := (&AssetFolder{}).Read(
+		context.Background(), infer.ReadRequest[AssetFolderArgs, AssetFolderState]{ID: id},
+	); err == nil {
 		t.Error("500 must propagate as an error")
 	}
 
 	for _, bad := range []string{"", "x/asset-folders/y", testFolderSiteID + "/asset-folders/nope"} {
-		if _, err := (&AssetFolder{}).Read(context.Background(), infer.ReadRequest[AssetFolderArgs, AssetFolderState]{ID: bad}); err == nil {
+		if _, err := (&AssetFolder{}).Read(
+			context.Background(), infer.ReadRequest[AssetFolderArgs, AssetFolderState]{ID: bad},
+		); err == nil {
 			t.Errorf("expected invalid ID error for %q", bad)
 		}
 	}
@@ -273,7 +291,10 @@ func TestAssetFolderDiff(t *testing.T) {
 	base := AssetFolderArgs{SiteID: testFolderSiteID, DisplayName: "Images", ParentFolder: testFolderParent}
 	state := AssetFolderState{AssetFolderArgs: base, FolderID: testFolderID}
 
-	resp, err := (&AssetFolder{}).Diff(context.Background(), infer.DiffRequest[AssetFolderArgs, AssetFolderState]{Inputs: base, State: state})
+	resp, err := (&AssetFolder{}).Diff(
+		context.Background(),
+		infer.DiffRequest[AssetFolderArgs, AssetFolderState]{Inputs: base, State: state},
+	)
 	if err != nil || resp.HasChanges {
 		t.Fatalf("expected no changes: %+v %v", resp, err)
 	}
@@ -290,7 +311,10 @@ func TestAssetFolderDiff(t *testing.T) {
 		t.Run(tt.field, func(t *testing.T) {
 			in := base
 			tt.modify(&in)
-			resp, err := (&AssetFolder{}).Diff(context.Background(), infer.DiffRequest[AssetFolderArgs, AssetFolderState]{Inputs: in, State: state})
+			resp, err := (&AssetFolder{}).Diff(
+				context.Background(),
+				infer.DiffRequest[AssetFolderArgs, AssetFolderState]{Inputs: in, State: state},
+			)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -313,13 +337,18 @@ func TestAssetFolderDeleteAndUpdate(t *testing.T) {
 	useMockAPI(t, server)
 
 	_, err := (&AssetFolder{}).Delete(context.Background(), infer.DeleteRequest[AssetFolderState]{
-		ID:    GenerateAssetFolderResourceID(testFolderSiteID, testFolderID),
-		State: AssetFolderState{AssetFolderArgs: AssetFolderArgs{SiteID: testFolderSiteID, DisplayName: "Images"}, FolderID: testFolderID},
+		ID: GenerateAssetFolderResourceID(testFolderSiteID, testFolderID),
+		State: AssetFolderState{
+			AssetFolderArgs: AssetFolderArgs{SiteID: testFolderSiteID, DisplayName: "Images"},
+			FolderID:        testFolderID,
+		},
 	})
 	if err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-	if _, err := (&AssetFolder{}).Update(context.Background(), infer.UpdateRequest[AssetFolderArgs, AssetFolderState]{}); err == nil {
+	if _, err := (&AssetFolder{}).Update(
+		context.Background(), infer.UpdateRequest[AssetFolderArgs, AssetFolderState]{},
+	); err == nil {
 		t.Fatal("Update must return an error")
 	}
 }

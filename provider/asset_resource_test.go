@@ -111,7 +111,8 @@ func TestAssetCreate_UploadsFile(t *testing.T) {
 	if m.createCalls != 1 || m.uploadCalls != 1 || m.deleteCalls != 0 {
 		t.Fatalf("calls create=%d upload=%d delete=%d", m.createCalls, m.uploadCalls, m.deleteCalls)
 	}
-	if m.createBody.FileName != "logo.png" || m.createBody.FileHash != wantHash || m.createBody.ParentFolder != testAssetFolder {
+	if m.createBody.FileName != "logo.png" || m.createBody.FileHash != wantHash ||
+		m.createBody.ParentFolder != testAssetFolder {
 		t.Errorf("metadata request = %+v (want hash %s)", m.createBody, wantHash)
 	}
 	for k, v := range m.uploadDetails {
@@ -167,7 +168,12 @@ func TestAssetCreate_ExplicitHashMustMatch(t *testing.T) {
 	path := writeTempAsset(t, testAssetContent)
 
 	_, err := (&Asset{}).Create(context.Background(), infer.CreateRequest[AssetArgs]{
-		Inputs: AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png", FileSource: path, FileHash: "d41d8cd98f00b204e9800998ecf8427e"},
+		Inputs: AssetArgs{
+			SiteID:     testAssetSiteID,
+			FileName:   "logo.png",
+			FileSource: path,
+			FileHash:   "d41d8cd98f00b204e9800998ecf8427e",
+		},
 	})
 	if err == nil || !strings.Contains(err.Error(), "does not match") {
 		t.Fatalf("expected hash mismatch error, got %v", err)
@@ -178,8 +184,10 @@ func TestAssetCreate_ExplicitHashMustMatch(t *testing.T) {
 
 	// A matching explicit hash (any case) is accepted.
 	resp, err := (&Asset{}).Create(context.Background(), infer.CreateRequest[AssetArgs]{
-		Inputs: AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png", FileSource: path,
-			FileHash: strings.ToUpper(ComputeFileHash([]byte(testAssetContent)))},
+		Inputs: AssetArgs{
+			SiteID: testAssetSiteID, FileName: "logo.png", FileSource: path,
+			FileHash: strings.ToUpper(ComputeFileHash([]byte(testAssetContent))),
+		},
 	})
 	if err != nil {
 		t.Fatalf("Create with matching hash: %v", err)
@@ -213,7 +221,8 @@ func TestAssetCreate_APIError(t *testing.T) {
 	_, err := (&Asset{}).Create(context.Background(), infer.CreateRequest[AssetArgs]{
 		Inputs: AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png", FileSource: path},
 	})
-	if err == nil || !strings.Contains(err.Error(), "failed to create asset") || !strings.Contains(err.Error(), "bad request") {
+	if err == nil || !strings.Contains(err.Error(), "failed to create asset") ||
+		!strings.Contains(err.Error(), "bad request") {
 		t.Fatalf("expected bad request error, got %v", err)
 	}
 	if m.uploadCalls != 0 {
@@ -235,7 +244,8 @@ func TestAssetCreate_DryRunSkipsValidationAndAPI(t *testing.T) {
 	if resp.ID != "" {
 		t.Errorf("dry run must not fabricate an ID, got %q", resp.ID)
 	}
-	if resp.Output.AssetID != "" || resp.Output.HostedURL != "" || resp.Output.CreatedOn != "" || resp.Output.FileHash != "" {
+	if resp.Output.AssetID != "" || resp.Output.HostedURL != "" || resp.Output.CreatedOn != "" ||
+		resp.Output.FileHash != "" {
 		t.Errorf("dry run must not fabricate outputs: %+v", resp.Output)
 	}
 	if m.createCalls != 0 || m.uploadCalls != 0 {
@@ -254,10 +264,22 @@ func TestAssetCreate_ValidationAfterDryRun(t *testing.T) {
 	}{
 		{"invalid siteId", AssetArgs{SiteID: "invalid", FileName: "logo.png", FileSource: path}, "siteId has invalid format"},
 		{"missing fileName", AssetArgs{SiteID: testAssetSiteID, FileName: "", FileSource: path}, "fileName is required"},
-		{"invalid fileName", AssetArgs{SiteID: testAssetSiteID, FileName: "logo<>.png", FileSource: path}, "invalid character"},
+		{
+			"invalid fileName",
+			AssetArgs{SiteID: testAssetSiteID, FileName: "logo<>.png", FileSource: path},
+			"invalid character",
+		},
 		{"missing fileSource", AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png"}, "fileSource is required"},
-		{"invalid parentFolder", AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png", FileSource: path, ParentFolder: "nope"}, "assetFolderId has invalid format"},
-		{"invalid fileHash", AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png", FileSource: path, FileHash: "xyz"}, "fileHash has invalid format"},
+		{
+			"invalid parentFolder",
+			AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png", FileSource: path, ParentFolder: "nope"},
+			"assetFolderId has invalid format",
+		},
+		{
+			"invalid fileHash",
+			AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png", FileSource: path, FileHash: "xyz"},
+			"fileHash has invalid format",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -289,7 +311,13 @@ func TestAssetRead_Success(t *testing.T) {
 
 	id := GenerateAssetResourceID(testAssetSiteID, testAssetID)
 	prev := AssetState{
-		AssetArgs:     AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png", FileSource: "./logo.png", FileHash: "abc", ParentFolder: testAssetFolder},
+		AssetArgs: AssetArgs{
+			SiteID:       testAssetSiteID,
+			FileName:     "logo.png",
+			FileSource:   "./logo.png",
+			FileHash:     "abc",
+			ParentFolder: testAssetFolder,
+		},
 		AssetID:       testAssetID,
 		UploadURL:     "https://s3/upload",
 		UploadDetails: map[string]string{"key": "k"},
@@ -304,11 +332,13 @@ func TestAssetRead_Success(t *testing.T) {
 		t.Errorf("ID = %q", resp.ID)
 	}
 	s := resp.State
-	if s.Size != 12345 || s.HostedURL != "https://cdn.prod.website-files.com/x/logo.png" || s.LastUpdated != "2025-01-13T10:00:00Z" {
+	if s.Size != 12345 || s.HostedURL != "https://cdn.prod.website-files.com/x/logo.png" ||
+		s.LastUpdated != "2025-01-13T10:00:00Z" {
 		t.Errorf("API values not applied: %+v", s)
 	}
 	if s.FileHash != "abc" || s.FileSource != "./logo.png" || s.ParentFolder != testAssetFolder ||
-		s.UploadURL != "https://s3/upload" || s.UploadDetails["key"] != "k" || s.AssetURL != "https://s3/asset" || s.FolderID != testAssetFolder {
+		s.UploadURL != "https://s3/upload" || s.UploadDetails["key"] != "k" || s.AssetURL != "https://s3/asset" ||
+		s.FolderID != testAssetFolder {
 		t.Errorf("state values not carried through: %+v", s)
 	}
 	if resp.Inputs.FileName != "logo.png" {
@@ -352,7 +382,9 @@ func TestAssetRead_InvalidIDsRejectedBeforeAPI(t *testing.T) {
 			t.Errorf("expected error for id %q", id)
 		}
 	}
-	if _, err := (&Asset{}).Delete(context.Background(), infer.DeleteRequest[AssetState]{ID: testAssetSiteID + "/assets/nope"}); err == nil {
+	if _, err := (&Asset{}).Delete(
+		context.Background(), infer.DeleteRequest[AssetState]{ID: testAssetSiteID + "/assets/nope"},
+	); err == nil {
 		t.Error("Delete should reject an invalid asset ID")
 	}
 }
@@ -391,7 +423,10 @@ func TestAssetDiff(t *testing.T) {
 	state.FileHash = hash
 
 	t.Run("no changes", func(t *testing.T) {
-		resp, err := (&Asset{}).Diff(context.Background(), infer.DiffRequest[AssetArgs, AssetState]{Inputs: base, State: state})
+		resp, err := (&Asset{}).Diff(
+			context.Background(),
+			infer.DiffRequest[AssetArgs, AssetState]{Inputs: base, State: state},
+		)
 		if err != nil || resp.HasChanges {
 			t.Fatalf("expected no changes: %+v %v", resp, err)
 		}
@@ -420,7 +455,10 @@ func TestAssetDiff(t *testing.T) {
 		t.Run(tt.field+" replaces", func(t *testing.T) {
 			in := base
 			tt.modify(&in)
-			resp, err := (&Asset{}).Diff(context.Background(), infer.DiffRequest[AssetArgs, AssetState]{Inputs: in, State: state})
+			resp, err := (&Asset{}).Diff(
+				context.Background(),
+				infer.DiffRequest[AssetArgs, AssetState]{Inputs: in, State: state},
+			)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -434,7 +472,10 @@ func TestAssetDiff(t *testing.T) {
 		if err := os.WriteFile(path, []byte("new-content"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		resp, err := (&Asset{}).Diff(context.Background(), infer.DiffRequest[AssetArgs, AssetState]{Inputs: base, State: state})
+		resp, err := (&Asset{}).Diff(
+			context.Background(),
+			infer.DiffRequest[AssetArgs, AssetState]{Inputs: base, State: state},
+		)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -448,7 +489,9 @@ func TestAssetDiff(t *testing.T) {
 		in.FileSource = filepath.Join(t.TempDir(), "missing.png")
 		st := state
 		st.FileSource = in.FileSource
-		if _, err := (&Asset{}).Diff(context.Background(), infer.DiffRequest[AssetArgs, AssetState]{Inputs: in, State: st}); err == nil {
+		if _, err := (&Asset{}).Diff(
+			context.Background(), infer.DiffRequest[AssetArgs, AssetState]{Inputs: in, State: st},
+		); err == nil {
 			t.Error("expected error for unreadable fileSource")
 		}
 	})

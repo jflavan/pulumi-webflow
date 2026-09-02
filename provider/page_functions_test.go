@@ -32,7 +32,8 @@ func TestGetPageFunction_Invoke(t *testing.T) {
 			`"createdOn":"2024-01-01T00:00:00Z","lastUpdated":"2024-01-02T00:00:00Z","archived":false,"draft":false,` +
 			`"canBranch":true,"isBranch":true,"branchId":"5f0c8c9e1c9d440000e8d8c7",` +
 			`"seo":{"title":"About us","description":"Who we are"},` +
-			`"openGraph":{"title":"OG","titleCopied":true,"description":"OGD","descriptionCopied":false},"publishedPath":"/about"}`))
+			`"openGraph":{"title":"OG","titleCopied":true,"description":"OGD","descriptionCopied":false},` +
+			`"publishedPath":"/about"}`))
 	}))
 	defer server.Close()
 	useMockAPI(t, server)
@@ -47,9 +48,12 @@ func TestGetPageFunction_Invoke(t *testing.T) {
 		t.Errorf("unexpected query %q", gotQuery)
 	}
 	out := resp.Output
-	if out.PageID != testPageID || out.Title != "About" || out.Slug != "about" || !out.IsBranch || out.BranchID != "5f0c8c9e1c9d440000e8d8c7" ||
-		out.SEO.Title != "About us" || out.SEO.Description != "Who we are" || !out.OpenGraph.TitleCopied || out.OpenGraph.Description != "OGD" ||
-		out.PublishedPath != "/about" || !out.CanBranch {
+	if out.PageID != testPageID || out.Title != "About" || out.Slug != "about" || !out.IsBranch ||
+		out.BranchID != "5f0c8c9e1c9d440000e8d8c7" ||
+		out.SEO.Title != "About us" || out.SEO.Description != "Who we are" || !out.OpenGraph.TitleCopied ||
+		out.OpenGraph.Description != "OGD" ||
+		out.PublishedPath != "/about" ||
+		!out.CanBranch {
 		t.Errorf("unexpected output %+v", out)
 	}
 }
@@ -63,15 +67,22 @@ func TestGetPageFunction_ValidationAndErrors(t *testing.T) {
 	defer server.Close()
 	useMockAPI(t, server)
 
-	if _, err := (&GetPage{}).Invoke(context.Background(), infer.FunctionRequest[GetPageInput]{Input: GetPageInput{PageID: "bad"}}); err == nil ||
+	if _, err := (&GetPage{}).Invoke(
+		context.Background(), infer.FunctionRequest[GetPageInput]{Input: GetPageInput{PageID: "bad"}},
+	); err == nil ||
 		!strings.Contains(err.Error(), "pageId has invalid format") {
 		t.Errorf("expected validation error, got %v", err)
 	}
-	if _, err := (&GetPage{}).Invoke(context.Background(), infer.FunctionRequest[GetPageInput]{Input: GetPageInput{PageID: testPageID, LocaleID: "en"}}); err == nil ||
+	if _, err := (&GetPage{}).Invoke(
+		context.Background(), infer.FunctionRequest[GetPageInput]{Input: GetPageInput{PageID: testPageID, LocaleID: "en"}},
+	); err == nil ||
 		!strings.Contains(err.Error(), "localeId has invalid format") {
 		t.Errorf("expected locale validation error, got %v", err)
 	}
-	_, err := (&GetPage{}).Invoke(context.Background(), infer.FunctionRequest[GetPageInput]{Input: GetPageInput{PageID: testPageID}})
+	_, err := (&GetPage{}).Invoke(
+		context.Background(),
+		infer.FunctionRequest[GetPageInput]{Input: GetPageInput{PageID: testPageID}},
+	)
 	if err == nil || !IsNotFound(err) {
 		t.Errorf("expected not found error, got %v", err)
 	}
@@ -109,14 +120,19 @@ func TestGetPagesFunction_EmptyAndValidation(t *testing.T) {
 	server, _ := pageListServer(t, 0)
 	useMockAPI(t, server)
 
-	resp, err := (&GetPages{}).Invoke(context.Background(), infer.FunctionRequest[GetPagesInput]{Input: GetPagesInput{SiteID: testPageSiteID}})
+	resp, err := (&GetPages{}).Invoke(
+		context.Background(),
+		infer.FunctionRequest[GetPagesInput]{Input: GetPagesInput{SiteID: testPageSiteID}},
+	)
 	if err != nil {
 		t.Fatalf("Invoke: %v", err)
 	}
 	if resp.Output.Pages == nil || len(resp.Output.Pages) != 0 {
 		t.Errorf("expected empty non-nil list, got %v", resp.Output.Pages)
 	}
-	if _, err := (&GetPages{}).Invoke(context.Background(), infer.FunctionRequest[GetPagesInput]{Input: GetPagesInput{SiteID: "bad"}}); err == nil ||
+	if _, err := (&GetPages{}).Invoke(
+		context.Background(), infer.FunctionRequest[GetPagesInput]{Input: GetPagesInput{SiteID: "bad"}},
+	); err == nil ||
 		!strings.Contains(err.Error(), "siteId has invalid format") {
 		t.Errorf("expected validation error, got %v", err)
 	}
@@ -124,7 +140,9 @@ func TestGetPagesFunction_EmptyAndValidation(t *testing.T) {
 
 func TestPageFunctions_RequireToken(t *testing.T) {
 	t.Setenv("WEBFLOW_API_TOKEN", "")
-	if _, err := (&GetPages{}).Invoke(context.Background(), infer.FunctionRequest[GetPagesInput]{Input: GetPagesInput{SiteID: testPageSiteID}}); err == nil ||
+	if _, err := (&GetPages{}).Invoke(
+		context.Background(), infer.FunctionRequest[GetPagesInput]{Input: GetPagesInput{SiteID: testPageSiteID}},
+	); err == nil ||
 		!errors.Is(err, ErrTokenNotConfigured) {
 		t.Errorf("expected ErrTokenNotConfigured, got %v", err)
 	}

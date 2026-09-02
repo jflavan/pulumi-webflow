@@ -49,7 +49,9 @@ func TestPageContentResourceIDRoundTrip(t *testing.T) {
 
 func TestDOMTextUnmarshal(t *testing.T) {
 	var node DOMNode
-	if err := json.Unmarshal([]byte(`{"id":"n1","type":"text","text":{"html":"<h1>Hi</h1>","text":"Hi"}}`), &node); err != nil {
+	if err := json.Unmarshal(
+		[]byte(`{"id":"n1","type":"text","text":{"html":"<h1>Hi</h1>","text":"Hi"}}`), &node,
+	); err != nil {
 		t.Fatal(err)
 	}
 	if node.ID != "n1" || node.Text == nil || node.Text.HTML != "<h1>Hi</h1>" || node.Text.Text != "Hi" {
@@ -73,8 +75,10 @@ func TestGetPageContent(t *testing.T) {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
 		gotQuery = r.URL.RawQuery
-		_, _ = w.Write([]byte(`{"pageId":"` + testPageID + `","nodes":[{"id":"a1","type":"text","text":{"html":"<p>x</p>","text":"x"}},` +
-			`{"id":"a2","type":"image","image":{"alt":"","assetId":"z"}}],"pagination":{"limit":100,"offset":0,"total":2},"lastUpdated":null}`))
+		_, _ = w.Write([]byte(`{"pageId":"` + testPageID + `","nodes":[` +
+			`{"id":"a1","type":"text","text":{"html":"<p>x</p>","text":"x"}},` +
+			`{"id":"a2","type":"image","image":{"alt":"","assetId":"z"}}],` +
+			`"pagination":{"limit":100,"offset":0,"total":2},"lastUpdated":null}`))
 	}))
 	defer server.Close()
 	client := useMockAPI(t, server)
@@ -83,7 +87,8 @@ func TestGetPageContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetPageContent: %v", err)
 	}
-	if gotQuery != "" || resp.PageID != testPageID || len(resp.Nodes) != 2 || resp.Nodes[0].Text.Text != "x" || resp.Pagination.Total != 2 {
+	if gotQuery != "" || resp.PageID != testPageID || len(resp.Nodes) != 2 || resp.Nodes[0].Text.Text != "x" ||
+		resp.Pagination.Total != 2 {
 		t.Errorf("query=%q resp=%+v", gotQuery, resp)
 	}
 	if _, err := GetPageContent(context.Background(), client, testPageID, testLocaleID); err != nil {
@@ -170,8 +175,11 @@ func TestPostPageContent(t *testing.T) {
 	if err := json.Unmarshal([]byte(m.body), &sent); err != nil {
 		t.Fatalf("decode body %s: %v", m.body, err)
 	}
-	if len(sent.Nodes) != 2 || sent.Nodes[0].NodeID != "n1" || sent.Nodes[0].Text == nil || *sent.Nodes[0].Text != "<p>Hello</p>" ||
-		sent.Nodes[1].NodeID != "n2" || sent.Nodes[1].Text == nil || *sent.Nodes[1].Text != "" {
+	if len(sent.Nodes) != 2 || sent.Nodes[0].NodeID != "n1" || sent.Nodes[0].Text == nil ||
+		*sent.Nodes[0].Text != "<p>Hello</p>" ||
+		sent.Nodes[1].NodeID != "n2" ||
+		sent.Nodes[1].Text == nil ||
+		*sent.Nodes[1].Text != "" {
 		t.Errorf("body = %s", m.body)
 	}
 	if !strings.Contains(m.body, `"text":""`) {
@@ -187,20 +195,26 @@ func TestPostPageContent(t *testing.T) {
 
 	m.errors = []string{"Node n1 not found", "Node n2 is not a text node"}
 	_, err := PostPageContent(context.Background(), client, testPageID, "", nodes)
-	if err == nil || !strings.Contains(err.Error(), "rejected 2 node update(s)") || !strings.Contains(err.Error(), "Node n2 is not a text node") {
+	if err == nil || !strings.Contains(err.Error(), "rejected 2 node update(s)") ||
+		!strings.Contains(err.Error(), "Node n2 is not a text node") {
 		t.Errorf("expected errors surfaced, got %v", err)
 	}
 
 	m.errors = nil
 	m.status = http.StatusBadRequest
-	if _, err := PostPageContent(context.Background(), client, testPageID, "", nodes); err == nil || !strings.Contains(err.Error(), "bad request") {
+	if _, err := PostPageContent(context.Background(), client, testPageID, "", nodes); err == nil ||
+		!strings.Contains(err.Error(), "bad request") {
 		t.Errorf("expected bad request, got %v", err)
 	}
 }
 
 func TestPageContentCreate(t *testing.T) {
 	m := newPageContentMock(t)
-	args := PageContentArgs{PageID: testPageID, LocaleID: testLocaleID, Nodes: []NodeContentUpdate{{NodeID: "n1", Text: "Hi"}, {NodeID: "n2", Text: ""}}}
+	args := PageContentArgs{
+		PageID:   testPageID,
+		LocaleID: testLocaleID,
+		Nodes:    []NodeContentUpdate{{NodeID: "n1", Text: "Hi"}, {NodeID: "n2", Text: ""}},
+	}
 
 	resp, err := (&PageContent{}).Create(context.Background(), infer.CreateRequest[PageContentArgs]{Inputs: args})
 	if err != nil {
@@ -241,11 +255,26 @@ func TestPageContentCreate_DryRunThenValidation(t *testing.T) {
 		args PageContentArgs
 		want string
 	}{
-		{"invalid pageId", PageContentArgs{PageID: "bad", Nodes: []NodeContentUpdate{{NodeID: "n1"}}}, "pageId has invalid format"},
-		{"invalid localeId", PageContentArgs{PageID: testPageID, LocaleID: "en", Nodes: []NodeContentUpdate{{NodeID: "n1"}}}, "localeId has invalid format"},
+		{
+			"invalid pageId",
+			PageContentArgs{PageID: "bad", Nodes: []NodeContentUpdate{{NodeID: "n1"}}},
+			"pageId has invalid format",
+		},
+		{
+			"invalid localeId",
+			PageContentArgs{PageID: testPageID, LocaleID: "en", Nodes: []NodeContentUpdate{{NodeID: "n1"}}},
+			"localeId has invalid format",
+		},
 		{"no nodes", PageContentArgs{PageID: testPageID}, "at least one node"},
 		{"empty nodeId", PageContentArgs{PageID: testPageID, Nodes: []NodeContentUpdate{{NodeID: ""}}}, "nodeId is required"},
-		{"duplicate nodeId", PageContentArgs{PageID: testPageID, Nodes: []NodeContentUpdate{{NodeID: "n1", Text: "a"}, {NodeID: "n1", Text: "b"}}}, "appears more than once"},
+		{
+			"duplicate nodeId",
+			PageContentArgs{
+				PageID: testPageID,
+				Nodes:  []NodeContentUpdate{{NodeID: "n1", Text: "a"}, {NodeID: "n1", Text: "b"}},
+			},
+			"appears more than once",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -262,7 +291,9 @@ func TestPageContentCreate_DryRunThenValidation(t *testing.T) {
 
 func TestPageContentCheck_RejectsDuplicateNodeIDs(t *testing.T) {
 	node := func(id, text string) property.Value {
-		return property.New(property.NewMap(map[string]property.Value{"nodeId": property.New(id), "text": property.New(text)}))
+		return property.New(
+			property.NewMap(map[string]property.Value{"nodeId": property.New(id), "text": property.New(text)}),
+		)
 	}
 	inputs := property.NewMap(map[string]property.Value{
 		"pageId": property.New(testPageID),
@@ -273,7 +304,8 @@ func TestPageContentCheck_RejectsDuplicateNodeIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Check: %v", err)
 	}
-	if len(resp.Failures) != 1 || resp.Failures[0].Property != "nodes" || !strings.Contains(resp.Failures[0].Reason, "n1") {
+	if len(resp.Failures) != 1 || resp.Failures[0].Property != "nodes" ||
+		!strings.Contains(resp.Failures[0].Reason, "n1") {
 		t.Errorf("expected one nodes failure, got %+v", resp.Failures)
 	}
 	if resp.Inputs.PageID != testPageID || len(resp.Inputs.Nodes) != 3 {
@@ -297,7 +329,10 @@ func TestPageContentRead(t *testing.T) {
 		PageID: testPageID, LocaleID: testLocaleID, Nodes: []NodeContentUpdate{{NodeID: "n1", Text: "Hi"}},
 	}}
 
-	resp, err := (&PageContent{}).Read(context.Background(), infer.ReadRequest[PageContentArgs, PageContentState]{ID: id, State: state})
+	resp, err := (&PageContent{}).Read(
+		context.Background(),
+		infer.ReadRequest[PageContentArgs, PageContentState]{ID: id, State: state},
+	)
 	if err != nil {
 		t.Fatalf("Read: %v", err)
 	}
@@ -306,20 +341,27 @@ func TestPageContentRead(t *testing.T) {
 	}
 
 	m.status = http.StatusNotFound
-	resp, err = (&PageContent{}).Read(context.Background(), infer.ReadRequest[PageContentArgs, PageContentState]{ID: id, State: state})
+	resp, err = (&PageContent{}).Read(
+		context.Background(),
+		infer.ReadRequest[PageContentArgs, PageContentState]{ID: id, State: state},
+	)
 	if err != nil || resp.ID != "" {
 		t.Errorf("404 should clear the resource: id=%q err=%v", resp.ID, err)
 	}
 
 	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusInternalServerError} {
 		m.status = status
-		if _, err := (&PageContent{}).Read(context.Background(), infer.ReadRequest[PageContentArgs, PageContentState]{ID: id, State: state}); err == nil {
+		if _, err := (&PageContent{}).Read(
+			context.Background(), infer.ReadRequest[PageContentArgs, PageContentState]{ID: id, State: state},
+		); err == nil {
 			t.Errorf("status %d must propagate", status)
 		}
 	}
 
 	calls := m.getCalls
-	if _, err := (&PageContent{}).Read(context.Background(), infer.ReadRequest[PageContentArgs, PageContentState]{ID: "bad/content"}); err == nil {
+	if _, err := (&PageContent{}).Read(
+		context.Background(), infer.ReadRequest[PageContentArgs, PageContentState]{ID: "bad/content"},
+	); err == nil {
 		t.Error("invalid page ID must be rejected")
 	}
 	if m.getCalls != calls {
@@ -331,33 +373,52 @@ func TestPageContentUpdate(t *testing.T) {
 	m := newPageContentMock(t)
 	args := PageContentArgs{PageID: testPageID, Nodes: []NodeContentUpdate{{NodeID: "n1", Text: "New"}}}
 
-	if _, err := (&PageContent{}).Update(context.Background(), infer.UpdateRequest[PageContentArgs, PageContentState]{Inputs: args, DryRun: true}); err != nil || m.postCalls != 0 {
+	if _, err := (&PageContent{}).Update(
+		context.Background(), infer.UpdateRequest[PageContentArgs, PageContentState]{Inputs: args, DryRun: true},
+	); err != nil ||
+		m.postCalls != 0 {
 		t.Fatalf("dry run: %v calls=%d", err, m.postCalls)
 	}
-	resp, err := (&PageContent{}).Update(context.Background(), infer.UpdateRequest[PageContentArgs, PageContentState]{Inputs: args})
+	resp, err := (&PageContent{}).Update(
+		context.Background(),
+		infer.UpdateRequest[PageContentArgs, PageContentState]{Inputs: args},
+	)
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
-	if m.postCalls != 1 || m.query != "" || m.body != `{"nodes":[{"nodeId":"n1","text":"New"}]}` || resp.Output.Nodes[0].Text != "New" {
+	if m.postCalls != 1 || m.query != "" || m.body != `{"nodes":[{"nodeId":"n1","text":"New"}]}` ||
+		resp.Output.Nodes[0].Text != "New" {
 		t.Errorf("calls=%d query=%q body=%s", m.postCalls, m.query, m.body)
 	}
-	if _, err := (&PageContent{}).Delete(context.Background(), infer.DeleteRequest[PageContentState]{ID: testPageID + "/content"}); err != nil || m.postCalls != 1 {
+	if _, err := (&PageContent{}).Delete(
+		context.Background(), infer.DeleteRequest[PageContentState]{ID: testPageID + "/content"},
+	); err != nil ||
+		m.postCalls != 1 {
 		t.Errorf("Delete must be a no-op: %v calls=%d", err, m.postCalls)
 	}
 }
 
 func TestPageContentDiff(t *testing.T) {
-	base := PageContentArgs{PageID: testPageID, LocaleID: testLocaleID, Nodes: []NodeContentUpdate{{NodeID: "n1", Text: "a"}, {NodeID: "n2", Text: "b"}}}
+	base := PageContentArgs{
+		PageID:   testPageID,
+		LocaleID: testLocaleID,
+		Nodes:    []NodeContentUpdate{{NodeID: "n1", Text: "a"}, {NodeID: "n2", Text: "b"}},
+	}
 	state := PageContentState{PageContentArgs: base}
 
-	resp, err := (&PageContent{}).Diff(context.Background(), infer.DiffRequest[PageContentArgs, PageContentState]{Inputs: base, State: state})
+	resp, err := (&PageContent{}).Diff(
+		context.Background(),
+		infer.DiffRequest[PageContentArgs, PageContentState]{Inputs: base, State: state},
+	)
 	if err != nil || resp.HasChanges {
 		t.Fatalf("expected no changes: %+v %v", resp, err)
 	}
 
 	reordered := base
 	reordered.Nodes = []NodeContentUpdate{{NodeID: "n2", Text: "b"}, {NodeID: "n1", Text: "a"}}
-	if resp, _ := (&PageContent{}).Diff(context.Background(), infer.DiffRequest[PageContentArgs, PageContentState]{Inputs: reordered, State: state}); resp.HasChanges {
+	if resp, _ := (&PageContent{}).Diff(
+		context.Background(), infer.DiffRequest[PageContentArgs, PageContentState]{Inputs: reordered, State: state},
+	); resp.HasChanges {
 		t.Error("node order must not matter")
 	}
 
@@ -372,13 +433,20 @@ func TestPageContentDiff(t *testing.T) {
 			a.Nodes = []NodeContentUpdate{{NodeID: "n1", Text: "changed"}, {NodeID: "n2", Text: "b"}}
 		}},
 		{"nodes", p.Update, func(a *PageContentArgs) { a.Nodes = []NodeContentUpdate{{NodeID: "n1", Text: "a"}} }},
-		{"nodes", p.Update, func(a *PageContentArgs) { a.Nodes = append(a.Nodes, NodeContentUpdate{NodeID: "n3", Text: ""}) }},
+		{
+			"nodes",
+			p.Update,
+			func(a *PageContentArgs) { a.Nodes = append(a.Nodes, NodeContentUpdate{NodeID: "n3", Text: ""}) },
+		},
 	}
 	for _, tt := range tests {
 		in := base
 		in.Nodes = append([]NodeContentUpdate(nil), base.Nodes...)
 		tt.modify(&in)
-		resp, err := (&PageContent{}).Diff(context.Background(), infer.DiffRequest[PageContentArgs, PageContentState]{Inputs: in, State: state})
+		resp, err := (&PageContent{}).Diff(
+			context.Background(),
+			infer.DiffRequest[PageContentArgs, PageContentState]{Inputs: in, State: state},
+		)
 		if err != nil {
 			t.Fatal(err)
 		}

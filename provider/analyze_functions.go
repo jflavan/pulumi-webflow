@@ -130,24 +130,24 @@ func (o *GetAnalyticsTrafficOutput) Annotate(a infer.Annotator) {
 }
 
 // buildQuery validates the inputs and builds the query string.
-func (in GetAnalyticsTrafficInput) buildQuery() (*analyzeQuery, error) {
+func (i GetAnalyticsTrafficInput) buildQuery() (*analyzeQuery, error) {
 	const fn = "GetAnalyticsTraffic"
-	if err := validateAnalyzeCommon(fn, in.SiteID, in.StartTime, in.EndTime, in.AnalyticsCommonFilters); err != nil {
+	if err := validateAnalyzeCommon(fn, i.SiteID, i.StartTime, i.EndTime, i.AnalyticsCommonFilters); err != nil {
 		return nil, err
 	}
-	if err := validateEnum("metricScope", in.MetricScope, analyzeMetricScopes, true); err != nil {
+	if err := validateEnum("metricScope", i.MetricScope, analyzeMetricScopes, true); err != nil {
 		return nil, validationError(fn, err)
 	}
-	if err := validateBucketTimeZone("bucketTimeZone", in.BucketTimeZone, true); err != nil {
+	if err := validateBucketTimeZone("bucketTimeZone", i.BucketTimeZone, true); err != nil {
 		return nil, validationError(fn, err)
 	}
 
 	q := newAnalyzeQuery()
-	q.set("startTime", in.StartTime)
-	q.set("endTime", in.EndTime)
-	q.set("metricScope", in.MetricScope)
-	q.set("bucketTimeZone", in.BucketTimeZone)
-	q.addCommonFilters(in.AnalyticsCommonFilters)
+	q.set("startTime", i.StartTime)
+	q.set("endTime", i.EndTime)
+	q.set("metricScope", i.MetricScope)
+	q.set("bucketTimeZone", i.BucketTimeZone)
+	q.addCommonFilters(i.AnalyticsCommonFilters)
 	return q, nil
 }
 
@@ -290,29 +290,29 @@ func (o *GetAnalyticsTopPagesOutput) Annotate(a infer.Annotator) {
 }
 
 // buildQuery validates the inputs and builds the query string.
-func (in GetAnalyticsTopPagesInput) buildQuery() (*analyzeQuery, error) {
+func (i GetAnalyticsTopPagesInput) buildQuery() (*analyzeQuery, error) {
 	const fn = "GetAnalyticsTopPages"
-	if err := validateAnalyzeCommon(fn, in.SiteID, in.StartTime, in.EndTime, in.AnalyticsCommonFilters); err != nil {
+	if err := validateAnalyzeCommon(fn, i.SiteID, i.StartTime, i.EndTime, i.AnalyticsCommonFilters); err != nil {
 		return nil, err
 	}
-	if err := validateEnum("sortBy", in.SortBy, analyzeMetricScopes, false); err != nil {
+	if err := validateEnum("sortBy", i.SortBy, analyzeMetricScopes, false); err != nil {
 		return nil, validationError(fn, err)
 	}
-	if err := validateLimit(in.Limit, analyzeTopPagesMaxLimit); err != nil {
+	if err := validateLimit(i.Limit, analyzeTopPagesMaxLimit); err != nil {
 		return nil, validationError(fn, err)
 	}
 
 	q := newAnalyzeQuery()
-	q.set("startTime", in.StartTime)
-	q.set("endTime", in.EndTime)
-	q.set("sortBy", in.SortBy)
-	q.setInt("limit", in.Limit)
-	if in.Timeseries != nil {
-		if err := q.setDailyTimeseries(in.Timeseries.BucketTimeZone); err != nil {
+	q.set("startTime", i.StartTime)
+	q.set("endTime", i.EndTime)
+	q.set("sortBy", i.SortBy)
+	q.setInt("limit", i.Limit)
+	if i.Timeseries != nil {
+		if err := q.setDailyTimeseries(i.Timeseries.BucketTimeZone); err != nil {
 			return nil, validationError(fn, err)
 		}
 	}
-	q.addCommonFilters(in.AnalyticsCommonFilters)
+	q.addCommonFilters(i.AnalyticsCommonFilters)
 	return q, nil
 }
 
@@ -426,28 +426,28 @@ func (o *GetAnalyticsTopDimensionsOutput) Annotate(a infer.Annotator) {
 }
 
 // buildQuery validates the inputs and builds the query string.
-func (in GetAnalyticsTopDimensionsInput) buildQuery() (*analyzeQuery, error) {
+func (i GetAnalyticsTopDimensionsInput) buildQuery() (*analyzeQuery, error) {
 	const fn = "GetAnalyticsTopDimensions"
-	if err := validateAnalyzeCommon(fn, in.SiteID, in.StartTime, in.EndTime, in.AnalyticsCommonFilters); err != nil {
+	if err := validateAnalyzeCommon(fn, i.SiteID, i.StartTime, i.EndTime, i.AnalyticsCommonFilters); err != nil {
 		return nil, err
 	}
-	if err := validateEnum("dimension", in.Dimension, analyzeTopDimensionValues, true); err != nil {
+	if err := validateEnum("dimension", i.Dimension, analyzeTopDimensionValues, true); err != nil {
 		return nil, validationError(fn, err)
 	}
-	if err := validateEnum("metricScope", in.MetricScope, analyzeTopDimensionScopes, true); err != nil {
+	if err := validateEnum("metricScope", i.MetricScope, analyzeTopDimensionScopes, true); err != nil {
 		return nil, validationError(fn, err)
 	}
-	if err := validateLimit(in.Limit, analyzeTopDimensionsMaxLimit); err != nil {
+	if err := validateLimit(i.Limit, analyzeTopDimensionsMaxLimit); err != nil {
 		return nil, validationError(fn, err)
 	}
 
 	q := newAnalyzeQuery()
-	q.set("startTime", in.StartTime)
-	q.set("endTime", in.EndTime)
-	q.set("dimension", in.Dimension)
-	q.set("metricScope", in.MetricScope)
-	q.setInt("limit", in.Limit)
-	q.addCommonFilters(in.AnalyticsCommonFilters)
+	q.set("startTime", i.StartTime)
+	q.set("endTime", i.EndTime)
+	q.set("dimension", i.Dimension)
+	q.set("metricScope", i.MetricScope)
+	q.setInt("limit", i.Limit)
+	q.addCommonFilters(i.AnalyticsCommonFilters)
 	return q, nil
 }
 
@@ -604,29 +604,29 @@ func (o *GetAnalyticsTopEventsOutput) Annotate(a infer.Annotator) {
 }
 
 // buildQuery validates the inputs and builds the query string.
-func (in GetAnalyticsTopEventsInput) buildQuery() (*analyzeQuery, error) {
+func (i GetAnalyticsTopEventsInput) buildQuery() (*analyzeQuery, error) {
 	const fn = "GetAnalyticsTopEvents"
-	if err := validateAnalyzeCommon(fn, in.SiteID, in.StartTime, in.EndTime, in.AnalyticsCommonFilters); err != nil {
+	if err := validateAnalyzeCommon(fn, i.SiteID, i.StartTime, i.EndTime, i.AnalyticsCommonFilters); err != nil {
 		return nil, err
 	}
-	if in.Referrer != "" {
+	if i.Referrer != "" {
 		return nil, validationError(fn, fmt.Errorf("the top-events report does not support the 'referrer' "+
-			"filter (got '%s'). Remove it or use a different report", in.Referrer))
+			"filter (got '%s'). Remove it or use a different report", i.Referrer))
 	}
-	if err := validateLimit(in.Limit, analyzeTopEventsMaxLimit); err != nil {
+	if err := validateLimit(i.Limit, analyzeTopEventsMaxLimit); err != nil {
 		return nil, validationError(fn, err)
 	}
 
 	q := newAnalyzeQuery()
-	q.set("startTime", in.StartTime)
-	q.set("endTime", in.EndTime)
-	q.setInt("limit", in.Limit)
-	if in.Timeseries != nil {
-		if err := q.setDailyTimeseries(in.Timeseries.BucketTimeZone); err != nil {
+	q.set("startTime", i.StartTime)
+	q.set("endTime", i.EndTime)
+	q.setInt("limit", i.Limit)
+	if i.Timeseries != nil {
+		if err := q.setDailyTimeseries(i.Timeseries.BucketTimeZone); err != nil {
 			return nil, validationError(fn, err)
 		}
 	}
-	q.addCommonFilters(in.AnalyticsCommonFilters)
+	q.addCommonFilters(i.AnalyticsCommonFilters)
 	return q, nil
 }
 
@@ -730,20 +730,20 @@ func (o *GetAnalyticsTimeOnPageOutput) Annotate(a infer.Annotator) {
 }
 
 // buildQuery validates the inputs and builds the query string.
-func (in GetAnalyticsTimeOnPageInput) buildQuery() (*analyzeQuery, error) {
+func (i GetAnalyticsTimeOnPageInput) buildQuery() (*analyzeQuery, error) {
 	const fn = "GetAnalyticsTimeOnPage"
-	if err := validateAnalyzeCommon(fn, in.SiteID, in.StartTime, in.EndTime, in.AnalyticsCommonFilters); err != nil {
+	if err := validateAnalyzeCommon(fn, i.SiteID, i.StartTime, i.EndTime, i.AnalyticsCommonFilters); err != nil {
 		return nil, err
 	}
-	if err := validateEnum("metricScope", in.MetricScope, analyzeMetricScopes, true); err != nil {
+	if err := validateEnum("metricScope", i.MetricScope, analyzeMetricScopes, true); err != nil {
 		return nil, validationError(fn, err)
 	}
 
 	q := newAnalyzeQuery()
-	q.set("startTime", in.StartTime)
-	q.set("endTime", in.EndTime)
-	q.set("metricScope", in.MetricScope)
-	if ts := in.Timeseries; ts != nil {
+	q.set("startTime", i.StartTime)
+	q.set("endTime", i.EndTime)
+	q.set("metricScope", i.MetricScope)
+	if ts := i.Timeseries; ts != nil {
 		err := validateEnum("timeseries.granularityPeriod", ts.GranularityPeriod, analyzeGranularityPeriods, true)
 		if err != nil {
 			return nil, validationError(fn, err)
@@ -758,7 +758,7 @@ func (in GetAnalyticsTimeOnPageInput) buildQuery() (*analyzeQuery, error) {
 			return nil, err
 		}
 	}
-	q.addCommonFilters(in.AnalyticsCommonFilters)
+	q.addCommonFilters(i.AnalyticsCommonFilters)
 	return q, nil
 }
 

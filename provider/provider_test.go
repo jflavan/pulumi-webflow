@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/blang/semver"
+
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/integration"
 )
@@ -72,7 +73,7 @@ func TestProvider_RegistersExpectedSurface(t *testing.T) {
 		}
 	}
 	if len(schema.Resources) != len(expectedResources) {
-		var names []string
+		names := make([]string, 0, len(schema.Resources))
 		for name := range schema.Resources {
 			names = append(names, name)
 		}

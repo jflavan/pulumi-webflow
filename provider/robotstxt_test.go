@@ -87,9 +87,15 @@ func TestParseRobotsTxtContentWithWarnings(t *testing.T) {
 		t.Errorf("unexpected rules: %+v", rules)
 	}
 	if len(warnings) != 4 {
-		t.Fatalf("expected 4 warnings (comment, early directive, inline comment, unknown directive), got %d: %v", len(warnings), warnings)
+		t.Fatalf(
+			"expected 4 warnings (comment, early directive, inline comment, unknown directive), got %d: %v",
+			len(warnings),
+			warnings,
+		)
 	}
-	for i, want := range []string{"line 1: comment", "line 2:", "line 4: inline comment", "line 5: directive \"Crawl-delay: 10\" is not supported"} {
+	for i, want := range []string{
+		"line 1: comment", "line 2:", "line 4: inline comment", "line 5: directive \"Crawl-delay: 10\" is not supported",
+	} {
 		if !strings.Contains(warnings[i], want) {
 			t.Errorf("warning %d = %q, want it to contain %q", i, warnings[i], want)
 		}
@@ -108,10 +114,18 @@ func TestFormatRobotsTxtContent(t *testing.T) {
 		expected string
 	}{
 		{"simple allow all", []RobotsTxtRule{{UserAgent: "*", Allows: []string{"/"}}}, "", "User-agent: *\nAllow: /\n"},
-		{"with disallow", []RobotsTxtRule{{UserAgent: "*", Allows: []string{"/"}, Disallows: []string{"/admin/"}}}, "",
-			"User-agent: *\nAllow: /\nDisallow: /admin/\n"},
-		{"with sitemap", []RobotsTxtRule{{UserAgent: "*", Allows: []string{"/"}}}, "https://example.com/sitemap.xml",
-			"User-agent: *\nAllow: /\n\nSitemap: https://example.com/sitemap.xml\n"},
+		{
+			"with disallow",
+			[]RobotsTxtRule{{UserAgent: "*", Allows: []string{"/"}, Disallows: []string{"/admin/"}}},
+			"",
+			"User-agent: *\nAllow: /\nDisallow: /admin/\n",
+		},
+		{
+			"with sitemap",
+			[]RobotsTxtRule{{UserAgent: "*", Allows: []string{"/"}}},
+			"https://example.com/sitemap.xml",
+			"User-agent: *\nAllow: /\n\nSitemap: https://example.com/sitemap.xml\n",
+		},
 		{"empty rules", []RobotsTxtRule{}, "", ""},
 	}
 	for _, tt := range tests {
@@ -130,8 +144,10 @@ func TestRobotsTxtContentEqual(t *testing.T) {
 		want bool
 	}{
 		{"identical", testRobotsContent, testRobotsContent, true},
-		{"formatting only", "user-agent: *\n\n  allow: /\nDisallow:   /admin/\n\nsitemap: https://example.com/sitemap.xml\n",
-			FormatRobotsTxtContent(ParseRobotsTxtContent(testRobotsContent)), true},
+		{
+			"formatting only", "user-agent: *\n\n  allow: /\nDisallow:   /admin/\n\nsitemap: https://example.com/sitemap.xml\n",
+			FormatRobotsTxtContent(ParseRobotsTxtContent(testRobotsContent)), true,
+		},
 		{"comments ignored", "# hi\nUser-agent: *\nAllow: /", "User-agent: *\nAllow: /\n", true},
 		{"different path", "User-agent: *\nDisallow: /a", "User-agent: *\nDisallow: /b", false},
 		{"different sitemap", "User-agent: *\nSitemap: https://a", "User-agent: *\nSitemap: https://b", false},
@@ -199,7 +215,12 @@ func TestGetRobotsTxt_Success(t *testing.T) {
 	var gotMethod, gotPath string
 	server := mockWebflowAPI(t, func(w http.ResponseWriter, r *http.Request) {
 		gotMethod, gotPath = r.Method, r.URL.Path
-		writeJSON(t, w, http.StatusOK, `{"rules":[{"userAgent":"*","allows":["/"],"disallows":["/admin/"]}],"sitemap":"https://example.com/sitemap.xml"}`)
+		writeJSON(
+			t,
+			w,
+			http.StatusOK,
+			`{"rules":[{"userAgent":"*","allows":["/"],"disallows":["/admin/"]}],"sitemap":"https://example.com/sitemap.xml"}`,
+		)
 	})
 	client := useMockAPI(t, server)
 
@@ -210,7 +231,8 @@ func TestGetRobotsTxt_Success(t *testing.T) {
 	if gotMethod != http.MethodGet || gotPath != "/v2/sites/"+testSiteID+"/robots_txt" {
 		t.Errorf("unexpected request %s %s", gotMethod, gotPath)
 	}
-	if len(response.Rules) != 1 || response.Rules[0].UserAgent != "*" || response.Sitemap != "https://example.com/sitemap.xml" {
+	if len(response.Rules) != 1 || response.Rules[0].UserAgent != "*" ||
+		response.Sitemap != "https://example.com/sitemap.xml" {
 		t.Errorf("unexpected response: %+v", response)
 	}
 }
@@ -284,7 +306,12 @@ func TestPutRobotsTxt_SendsBody(t *testing.T) {
 	server := mockWebflowAPI(t, func(w http.ResponseWriter, r *http.Request) {
 		gotMethod, gotPath, gotContentType = r.Method, r.URL.Path, r.Header.Get("Content-Type")
 		gotBody = readJSONBody(t, r)
-		writeJSON(t, w, http.StatusOK, `{"rules":[{"userAgent":"*","allows":["/"]}],"sitemap":"https://example.com/sitemap.xml"}`)
+		writeJSON(
+			t,
+			w,
+			http.StatusOK,
+			`{"rules":[{"userAgent":"*","allows":["/"]}],"sitemap":"https://example.com/sitemap.xml"}`,
+		)
 	})
 	client := useMockAPI(t, server)
 
@@ -293,11 +320,13 @@ func TestPutRobotsTxt_SendsBody(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if gotMethod != http.MethodPut || gotPath != "/v2/sites/"+testSiteID+"/robots_txt" || gotContentType != "application/json" {
+	if gotMethod != http.MethodPut || gotPath != "/v2/sites/"+testSiteID+"/robots_txt" ||
+		gotContentType != "application/json" {
 		t.Errorf("unexpected request %s %s (%s)", gotMethod, gotPath, gotContentType)
 	}
 	sent, _ := gotBody["rules"].([]any)
-	if len(sent) != 1 || sent[0].(map[string]any)["userAgent"] != "*" || gotBody["sitemap"] != "https://example.com/sitemap.xml" {
+	if len(sent) != 1 || sent[0].(map[string]any)["userAgent"] != "*" ||
+		gotBody["sitemap"] != "https://example.com/sitemap.xml" {
 		t.Errorf("unexpected body: %v", gotBody)
 	}
 	if len(response.Rules) != 1 {
@@ -316,7 +345,9 @@ func TestDeleteRobotsTxt_SendsRulesAndAccepts200(t *testing.T) {
 	client := useMockAPI(t, server)
 
 	rules := []RobotsTxtRule{{UserAgent: "*", Allows: []string{}, Disallows: []string{"/bubbles"}}}
-	if err := DeleteRobotsTxt(context.Background(), client, testSiteID, rules, "https://example.com/sitemap.xml"); err != nil {
+	if err := DeleteRobotsTxt(
+		context.Background(), client, testSiteID, rules, "https://example.com/sitemap.xml",
+	); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if gotMethod != http.MethodDelete || gotPath != "/v2/sites/"+testSiteID+"/robots_txt" {
@@ -328,7 +359,8 @@ func TestDeleteRobotsTxt_SendsRulesAndAccepts200(t *testing.T) {
 	}
 	rule := sent[0].(map[string]any)
 	disallows, _ := rule["disallows"].([]any)
-	if rule["userAgent"] != "*" || len(disallows) != 1 || disallows[0] != "/bubbles" || gotBody["sitemap"] != "https://example.com/sitemap.xml" {
+	if rule["userAgent"] != "*" || len(disallows) != 1 || disallows[0] != "/bubbles" ||
+		gotBody["sitemap"] != "https://example.com/sitemap.xml" {
 		t.Errorf("unexpected DELETE body: %v", gotBody)
 	}
 }
@@ -410,7 +442,11 @@ func TestRobotsTxt_Create_ValidationErrors(t *testing.T) {
 		want []string
 	}{
 		{"empty siteId", RobotsTxtArgs{SiteID: "", Content: "User-agent: *\nAllow: /"}, []string{"siteId", "required"}},
-		{"invalid siteId", RobotsTxtArgs{SiteID: "invalid-format", Content: "User-agent: *\nAllow: /"}, []string{"24-character", "hexadecimal"}},
+		{
+			"invalid siteId",
+			RobotsTxtArgs{SiteID: "invalid-format", Content: "User-agent: *\nAllow: /"},
+			[]string{"24-character", "hexadecimal"},
+		},
 		{"empty content", RobotsTxtArgs{SiteID: testSiteID, Content: ""}, []string{"content", "required"}},
 	}
 	for _, tt := range tests {
@@ -440,7 +476,12 @@ func TestRobotsTxt_Create_Success_KeepsRawContent(t *testing.T) {
 	mockWebflowAPI(t, func(w http.ResponseWriter, r *http.Request) {
 		gotMethod, gotPath = r.Method, r.URL.Path
 		gotBody = readJSONBody(t, r)
-		writeJSON(t, w, http.StatusOK, `{"rules":[{"userAgent":"*","allows":["/"],"disallows":["/admin/"]}],"sitemap":"https://example.com/sitemap.xml"}`)
+		writeJSON(
+			t,
+			w,
+			http.StatusOK,
+			`{"rules":[{"userAgent":"*","allows":["/"],"disallows":["/admin/"]}],"sitemap":"https://example.com/sitemap.xml"}`,
+		)
 	})
 	resource := &RobotsTxt{}
 
@@ -482,7 +523,12 @@ func TestRobotsTxt_Read_PreservesRawContentWhenEquivalent(t *testing.T) {
 		if r.Method != http.MethodGet || r.URL.Path != "/v2/sites/"+testSiteID+"/robots_txt" {
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
-		writeJSON(t, w, http.StatusOK, `{"rules":[{"userAgent":"*","allows":["/"],"disallows":["/admin/"]}],"sitemap":"https://example.com/sitemap.xml"}`)
+		writeJSON(
+			t,
+			w,
+			http.StatusOK,
+			`{"rules":[{"userAgent":"*","allows":["/"],"disallows":["/admin/"]}],"sitemap":"https://example.com/sitemap.xml"}`,
+		)
 	})
 	resource := &RobotsTxt{}
 
@@ -490,7 +536,10 @@ func TestRobotsTxt_Read_PreservesRawContentWhenEquivalent(t *testing.T) {
 	readResp, err := resource.Read(context.Background(), infer.ReadRequest[RobotsTxtArgs, RobotsTxtState]{
 		ID:     testRobotsResourceID,
 		Inputs: RobotsTxtArgs{SiteID: testSiteID, Content: raw},
-		State:  RobotsTxtState{RobotsTxtArgs: RobotsTxtArgs{SiteID: testSiteID, Content: raw}, LastModified: "2025-12-10T12:00:00Z"},
+		State: RobotsTxtState{
+			RobotsTxtArgs: RobotsTxtArgs{SiteID: testSiteID, Content: raw},
+			LastModified:  "2025-12-10T12:00:00Z",
+		},
 	})
 	if err != nil {
 		t.Fatalf("Read failed: %v", err)
@@ -521,7 +570,12 @@ func TestRobotsTxt_Read_PreservesRawContentWhenEquivalent(t *testing.T) {
 
 func TestRobotsTxt_Read_ReportsDrift(t *testing.T) {
 	mockWebflowAPI(t, func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(t, w, http.StatusOK, `{"rules":[{"userAgent":"*","allows":[],"disallows":["/changed-in-ui/"]}],"sitemap":""}`)
+		writeJSON(
+			t,
+			w,
+			http.StatusOK,
+			`{"rules":[{"userAgent":"*","allows":[],"disallows":["/changed-in-ui/"]}],"sitemap":""}`,
+		)
 	})
 	resource := &RobotsTxt{}
 
@@ -553,7 +607,10 @@ func TestRobotsTxt_Read_ImportWithoutState(t *testing.T) {
 	mockWebflowAPI(t, func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(t, w, http.StatusOK, `{"rules":[{"userAgent":"*","allows":["/"],"disallows":[]}],"sitemap":""}`)
 	})
-	resp, err := (&RobotsTxt{}).Read(context.Background(), infer.ReadRequest[RobotsTxtArgs, RobotsTxtState]{ID: testRobotsResourceID})
+	resp, err := (&RobotsTxt{}).Read(
+		context.Background(),
+		infer.ReadRequest[RobotsTxtArgs, RobotsTxtState]{ID: testRobotsResourceID},
+	)
 	if err != nil {
 		t.Fatalf("Read failed: %v", err)
 	}
@@ -566,7 +623,10 @@ func TestRobotsTxt_Read_NotFoundSignalsDeletion(t *testing.T) {
 	mockWebflowAPI(t, func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(t, w, http.StatusNotFound, `{"message":"Not found"}`)
 	})
-	resp, err := (&RobotsTxt{}).Read(context.Background(), infer.ReadRequest[RobotsTxtArgs, RobotsTxtState]{ID: testRobotsResourceID})
+	resp, err := (&RobotsTxt{}).Read(
+		context.Background(),
+		infer.ReadRequest[RobotsTxtArgs, RobotsTxtState]{ID: testRobotsResourceID},
+	)
 	if err != nil || resp.ID != "" {
 		t.Errorf("expected empty ID without error for 404, got id=%q err=%v", resp.ID, err)
 	}
@@ -577,7 +637,10 @@ func TestRobotsTxt_Read_OtherErrorsAreErrors(t *testing.T) {
 		mockWebflowAPI(t, func(w http.ResponseWriter, r *http.Request) {
 			writeJSON(t, w, status, `{"message":"not found"}`)
 		})
-		_, err := (&RobotsTxt{}).Read(context.Background(), infer.ReadRequest[RobotsTxtArgs, RobotsTxtState]{ID: testRobotsResourceID})
+		_, err := (&RobotsTxt{}).Read(
+			context.Background(),
+			infer.ReadRequest[RobotsTxtArgs, RobotsTxtState]{ID: testRobotsResourceID},
+		)
 		if err == nil {
 			t.Errorf("status %d must surface as an error, not deletion", status)
 		}

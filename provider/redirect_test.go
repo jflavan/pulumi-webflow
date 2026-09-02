@@ -20,8 +20,10 @@ import (
 // ============================================================================
 
 func TestValidateSourcePath(t *testing.T) {
-	valid := []string{"/old-page", "/blog/2023", "/old_page", "/", "/products/category/item-1",
-		"/files/document.pdf", "//old-page", "/old-page/", "/.hidden", "/blog/2024/my-post_v2.html"}
+	valid := []string{
+		"/old-page", "/blog/2023", "/old_page", "/", "/products/category/item-1",
+		"/files/document.pdf", "//old-page", "/old-page/", "/.hidden", "/blog/2024/my-post_v2.html",
+	}
 	for _, path := range valid {
 		if err := ValidateSourcePath(path); err != nil {
 			t.Errorf("ValidateSourcePath(%q) = %v, want nil", path, err)
@@ -125,10 +127,16 @@ func pagedRedirectServer(t *testing.T, total int, offsets *[]int) http.HandlerFu
 			limit = 100
 		}
 		*offsets = append(*offsets, offset)
-		page := RedirectResponse{Redirects: []RedirectRule{}, Pagination: RedirectPagination{Limit: limit, Offset: offset, Total: total}}
+		page := RedirectResponse{
+			Redirects:  []RedirectRule{},
+			Pagination: RedirectPagination{Limit: limit, Offset: offset, Total: total},
+		}
 		for i := offset; i < total && i < offset+limit; i++ {
 			page.Redirects = append(page.Redirects, RedirectRule{
-				ID: fmt.Sprintf("redirect-%d", i), SourcePath: fmt.Sprintf("/old-%d", i), DestinationPath: fmt.Sprintf("/new-%d", i),
+				ID: fmt.Sprintf(
+					"redirect-%d",
+					i,
+				), SourcePath: fmt.Sprintf("/old-%d", i), DestinationPath: fmt.Sprintf("/new-%d", i),
 			})
 		}
 		writeJSON(t, w, http.StatusOK, page)
@@ -197,7 +205,12 @@ func TestFindRedirect_StopsOnEmptyPageWhenAPIIgnoresOffset(t *testing.T) {
 			})
 			return
 		}
-		writeJSON(t, w, http.StatusOK, RedirectResponse{Redirects: []RedirectRule{}, Pagination: RedirectPagination{Total: 1000}})
+		writeJSON(
+			t,
+			w,
+			http.StatusOK,
+			RedirectResponse{Redirects: []RedirectRule{}, Pagination: RedirectPagination{Total: 1000}},
+		)
 	})
 	client := useMockAPI(t, server)
 

@@ -18,7 +18,7 @@ import (
 )
 
 // tokenServer serves both token endpoints; status controls the response of every request.
-func tokenServer(t *testing.T, status *int, rateLimitFirst *int) *httptest.Server {
+func tokenServer(t *testing.T, status, rateLimitFirst *int) *httptest.Server {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -40,14 +40,21 @@ func tokenServer(t *testing.T, status *int, rateLimitFirst *int) *httptest.Serve
 		case "/v2/token/introspect":
 			_ = json.NewEncoder(w).Encode(TokenIntrospectResponse{
 				Authorization: Authorization{
-					ID: "auth123", CreatedOn: "2024-01-01T00:00:00Z", LastUsed: "2024-06-15T12:00:00Z", GrantType: "authorization_code",
-					RateLimit: 60, Scope: "sites:read sites:write",
+					ID: "auth123", CreatedOn: "2024-01-01T00:00:00Z", LastUsed: "2024-06-15T12:00:00Z",
+					GrantType: "authorization_code", RateLimit: 60, Scope: "sites:read sites:write",
 					AuthorizedTo: AuthorizedTo{SiteIDs: []string{"site1", "site2"}, WorkspaceIDs: []string{"ws1"}},
 				},
-				Application: Application{ID: "app123", Description: "Test App", Homepage: "https://example.com", DisplayName: "My Test App"},
+				Application: Application{
+					ID:          "app123",
+					Description: "Test App",
+					Homepage:    "https://example.com",
+					DisplayName: "My Test App",
+				},
 			})
 		case "/v2/token/authorized_by":
-			_ = json.NewEncoder(w).Encode(AuthorizedByResponse{ID: "user123", Email: "test@example.com", FirstName: "John", LastName: "Doe"})
+			_ = json.NewEncoder(w).Encode(AuthorizedByResponse{
+				ID: "user123", Email: "test@example.com", FirstName: "John", LastName: "Doe",
+			})
 		default:
 			t.Errorf("unexpected path %s", r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
@@ -65,7 +72,8 @@ func TestGetTokenIntrospect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTokenIntrospect: %v", err)
 	}
-	if result.Authorization.ID != "auth123" || result.Authorization.RateLimit != 60 || len(result.Authorization.AuthorizedTo.SiteIDs) != 2 ||
+	if result.Authorization.ID != "auth123" || result.Authorization.RateLimit != 60 ||
+		len(result.Authorization.AuthorizedTo.SiteIDs) != 2 ||
 		result.Application.DisplayName != "My Test App" {
 		t.Errorf("unexpected result %+v", result)
 	}
@@ -128,16 +136,19 @@ func TestGetAuthorizedBy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetAuthorizedBy: %v", err)
 	}
-	if result.ID != "user123" || result.Email != "test@example.com" || result.FirstName != "John" || result.LastName != "Doe" {
+	if result.ID != "user123" || result.Email != "test@example.com" || result.FirstName != "John" ||
+		result.LastName != "Doe" {
 		t.Errorf("unexpected result %+v", result)
 	}
 
 	status = http.StatusForbidden
-	if _, err := GetAuthorizedBy(context.Background(), client); err == nil || !strings.Contains(err.Error(), "authorized_user:read") {
+	if _, err := GetAuthorizedBy(context.Background(), client); err == nil ||
+		!strings.Contains(err.Error(), "authorized_user:read") {
 		t.Errorf("expected scope guidance, got %v", err)
 	}
 	status = http.StatusUnauthorized
-	if _, err := GetAuthorizedBy(context.Background(), client); err == nil || !strings.Contains(err.Error(), "unauthorized") {
+	if _, err := GetAuthorizedBy(context.Background(), client); err == nil ||
+		!strings.Contains(err.Error(), "unauthorized") {
 		t.Errorf("expected unauthorized, got %v", err)
 	}
 }
@@ -217,7 +228,9 @@ func TestGetAuthorizedUserFunction_Invoke(t *testing.T) {
 	}
 
 	t.Setenv("WEBFLOW_API_TOKEN", "")
-	if _, err := (&GetAuthorizedUser{}).Invoke(context.Background(), infer.FunctionRequest[GetAuthorizedUserInput]{}); err == nil {
+	if _, err := (&GetAuthorizedUser{}).Invoke(
+		context.Background(), infer.FunctionRequest[GetAuthorizedUserInput]{},
+	); err == nil {
 		t.Error("expected token error")
 	}
 }

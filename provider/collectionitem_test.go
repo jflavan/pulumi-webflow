@@ -70,7 +70,13 @@ func TestExtractIDsFromCollectionItemResourceID(t *testing.T) {
 		wantErr          bool
 	}{
 		{"valid resource ID", testCollectionID + "/items/" + testItemID, testCollectionID, testItemID, false},
-		{"itemID with slashes", testCollectionID + "/items/6f1d9d0f/special/item", testCollectionID, "6f1d9d0f/special/item", false},
+		{
+			"itemID with slashes",
+			testCollectionID + "/items/6f1d9d0f/special/item",
+			testCollectionID,
+			"6f1d9d0f/special/item",
+			false,
+		},
 		{"empty resource ID", "", "", "", true},
 		{"invalid format - no items segment", testCollectionID + "/redirects/" + testItemID, "", "", true},
 		{"invalid format - too few parts", testCollectionID + "/items", "", "", true},
@@ -121,7 +127,10 @@ func TestCollectionItemResource_Create(t *testing.T) {
 		FieldData:    map[string]interface{}{"name": "Test Item", "slug": "test-item"},
 		IsDraft:      ptrBool(true),
 	}
-	resp, err := (&CollectionItemResource{}).Create(context.Background(), infer.CreateRequest[CollectionItemArgs]{Inputs: inputs})
+	resp, err := (&CollectionItemResource{}).Create(
+		context.Background(),
+		infer.CreateRequest[CollectionItemArgs]{Inputs: inputs},
+	)
 	if err != nil {
 		t.Fatalf("Create() error = %v", err)
 	}
@@ -263,7 +272,8 @@ func TestCollectionItemResource_Create_LivePublishFailure(t *testing.T) {
 			FieldData: map[string]interface{}{"name": "Test Item", "slug": "test-item"},
 		},
 	})
-	if err == nil || !strings.Contains(err.Error(), "Staging item ID not found") || !strings.Contains(err.Error(), itemResourceID) {
+	if err == nil || !strings.Contains(err.Error(), "Staging item ID not found") ||
+		!strings.Contains(err.Error(), itemResourceID) {
 		t.Fatalf("expected publish error mentioning the staged item ID, got %v", err)
 	}
 }
@@ -292,11 +302,18 @@ func TestCollectionItemResource_Create_ValidationErrors(t *testing.T) {
 		inputs CollectionItemArgs
 		want   string
 	}{
-		{"invalid collectionId", CollectionItemArgs{CollectionID: "bad", FieldData: map[string]interface{}{"name": "x"}}, "collectionId"},
+		{
+			"invalid collectionId",
+			CollectionItemArgs{CollectionID: "bad", FieldData: map[string]interface{}{"name": "x"}},
+			"collectionId",
+		},
 		{"empty fieldData", CollectionItemArgs{CollectionID: testCollectionID}, "fieldData is required"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := (&CollectionItemResource{}).Create(context.Background(), infer.CreateRequest[CollectionItemArgs]{Inputs: tt.inputs})
+			_, err := (&CollectionItemResource{}).Create(
+				context.Background(),
+				infer.CreateRequest[CollectionItemArgs]{Inputs: tt.inputs},
+			)
 			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Errorf("expected error containing %q, got %v", tt.want, err)
 			}
@@ -311,7 +328,9 @@ func TestCollectionItemResource_Create_ValidationErrors(t *testing.T) {
 // CollectionItem resource: Update
 // =============================================================================
 
-func updateRequest(stateFieldData, inputFieldData map[string]interface{}) infer.UpdateRequest[CollectionItemArgs, CollectionItemState] {
+func updateRequest(
+	stateFieldData, inputFieldData map[string]interface{},
+) infer.UpdateRequest[CollectionItemArgs, CollectionItemState] {
 	return infer.UpdateRequest[CollectionItemArgs, CollectionItemState]{
 		ID: itemResourceID,
 		State: CollectionItemState{
@@ -375,16 +394,36 @@ func TestCollectionItemResource_Update_SlugHandling(t *testing.T) {
 		wantSlugSent bool
 		wantSlug     interface{}
 	}{
-		{"changed slug is sent",
-			map[string]interface{}{"name": "n", "slug": "old-slug"}, map[string]interface{}{"name": "n", "slug": "new-slug"}, true, "new-slug"},
-		{"newly added slug is sent",
-			map[string]interface{}{"name": "n"}, map[string]interface{}{"name": "n", "slug": "new-slug"}, true, "new-slug"},
-		{"removed slug is not sent",
-			map[string]interface{}{"name": "n", "slug": "old-slug"}, map[string]interface{}{"name": "n"}, false, nil},
-		{"non-string slug is passed through",
-			map[string]interface{}{"name": "n", "slug": float64(123)}, map[string]interface{}{"name": "n", "slug": float64(123)}, true, float64(123)},
-		{"mismatched slug types are passed through",
-			map[string]interface{}{"name": "n", "slug": "old"}, map[string]interface{}{"name": "n", "slug": float64(456)}, true, float64(456)},
+		{
+			"changed slug is sent",
+			map[string]interface{}{"name": "n", "slug": "old-slug"},
+			map[string]interface{}{"name": "n", "slug": "new-slug"},
+			true, "new-slug",
+		},
+		{
+			"newly added slug is sent",
+			map[string]interface{}{"name": "n"},
+			map[string]interface{}{"name": "n", "slug": "new-slug"},
+			true, "new-slug",
+		},
+		{
+			"removed slug is not sent",
+			map[string]interface{}{"name": "n", "slug": "old-slug"},
+			map[string]interface{}{"name": "n"},
+			false, nil,
+		},
+		{
+			"non-string slug is passed through",
+			map[string]interface{}{"name": "n", "slug": float64(123)},
+			map[string]interface{}{"name": "n", "slug": float64(123)},
+			true, float64(123),
+		},
+		{
+			"mismatched slug types are passed through",
+			map[string]interface{}{"name": "n", "slug": "old"},
+			map[string]interface{}{"name": "n", "slug": float64(456)},
+			true, float64(456),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -392,7 +431,9 @@ func TestCollectionItemResource_Update_SlugHandling(t *testing.T) {
 			mock.handle(http.MethodPatch, itemPath, func(w http.ResponseWriter, r *http.Request) {
 				writeCMSJSON(w, http.StatusOK, apiItem(""))
 			})
-			if _, err := (&CollectionItemResource{}).Update(context.Background(), updateRequest(tt.stateData, tt.inputData)); err != nil {
+			if _, err := (&CollectionItemResource{}).Update(
+				context.Background(), updateRequest(tt.stateData, tt.inputData),
+			); err != nil {
 				t.Fatalf("Update() error = %v", err)
 			}
 			fd, _ := mock.callsTo(http.MethodPatch, itemPath)[0].Body["fieldData"].(map[string]interface{})
@@ -422,7 +463,10 @@ func TestCollectionItemResource_Update_LivePublishes(t *testing.T) {
 		writeCMSJSON(w, http.StatusOK, apiItem("2024-03-01T00:00:00Z"))
 	})
 
-	req := updateRequest(map[string]interface{}{"name": "n", "slug": "s"}, map[string]interface{}{"name": "n2", "slug": "s"})
+	req := updateRequest(
+		map[string]interface{}{"name": "n", "slug": "s"},
+		map[string]interface{}{"name": "n2", "slug": "s"},
+	)
 	req.Inputs.Live = true
 	resp, err := (&CollectionItemResource{}).Update(context.Background(), req)
 	if err != nil {
@@ -432,7 +476,8 @@ func TestCollectionItemResource_Update_LivePublishes(t *testing.T) {
 		t.Errorf("lastPublished should come from the live copy, got %q", resp.Output.LastPublished)
 	}
 	calls := mock.requests()
-	if len(calls) != 3 || calls[0].Method != http.MethodPatch || calls[1].Path != publishPath || calls[2].Path != itemLivePath {
+	if len(calls) != 3 || calls[0].Method != http.MethodPatch || calls[1].Path != publishPath ||
+		calls[2].Path != itemLivePath {
 		t.Errorf("expected PATCH, publish, GET live; got %+v", calls)
 	}
 }
@@ -479,16 +524,19 @@ func TestCollectionItemResource_Read(t *testing.T) {
 		writeCMSJSON(w, http.StatusOK, item)
 	})
 
-	resp, err := (&CollectionItemResource{}).Read(context.Background(), infer.ReadRequest[CollectionItemArgs, CollectionItemState]{
-		ID: itemResourceID,
-		Inputs: CollectionItemArgs{
-			CollectionID: testCollectionID,
-			FieldData:    map[string]interface{}{"name": "Stale", "slug": "test-item"},
-			IsArchived:   ptrBool(false), // explicit: refreshed from API
-			// IsDraft omitted: must stay omitted
-			CmsLocaleID: "locale-1",
+	resp, err := (&CollectionItemResource{}).Read(
+		context.Background(),
+		infer.ReadRequest[CollectionItemArgs, CollectionItemState]{
+			ID: itemResourceID,
+			Inputs: CollectionItemArgs{
+				CollectionID: testCollectionID,
+				FieldData:    map[string]interface{}{"name": "Stale", "slug": "test-item"},
+				IsArchived:   ptrBool(false), // explicit: refreshed from API
+				// IsDraft omitted: must stay omitted
+				CmsLocaleID: "locale-1",
+			},
 		},
-	})
+	)
 	if err != nil {
 		t.Fatalf("Read() error = %v", err)
 	}
@@ -517,7 +565,8 @@ func TestCollectionItemResource_Read(t *testing.T) {
 	if resp.State.IsDraft == nil || !*resp.State.IsDraft {
 		t.Errorf("state should carry the API draft flag: %+v", resp.State)
 	}
-	if resp.State.LastPublished != "2024-01-05T00:00:00Z" || resp.State.ItemID != testItemID || resp.State.CmsLocaleID != "locale-1" {
+	if resp.State.LastPublished != "2024-01-05T00:00:00Z" || resp.State.ItemID != testItemID ||
+		resp.State.CmsLocaleID != "locale-1" {
 		t.Errorf("unexpected state: %+v", resp.State)
 	}
 }
@@ -527,7 +576,10 @@ func TestCollectionItemResource_Read_ImportReturnsFullFieldData(t *testing.T) {
 	mock.handle(http.MethodGet, itemPath, func(w http.ResponseWriter, r *http.Request) {
 		writeCMSJSON(w, http.StatusOK, apiItem(""))
 	})
-	resp, err := (&CollectionItemResource{}).Read(context.Background(), infer.ReadRequest[CollectionItemArgs, CollectionItemState]{ID: itemResourceID})
+	resp, err := (&CollectionItemResource{}).Read(
+		context.Background(),
+		infer.ReadRequest[CollectionItemArgs, CollectionItemState]{ID: itemResourceID},
+	)
 	if err != nil {
 		t.Fatalf("Read() error = %v", err)
 	}
@@ -545,9 +597,12 @@ func TestCollectionItemResource_Read_Live(t *testing.T) {
 		mock.handle(http.MethodGet, itemLivePath, func(w http.ResponseWriter, r *http.Request) {
 			writeCMSJSON(w, http.StatusOK, apiItem("2024-01-05T00:00:00Z"))
 		})
-		resp, err := (&CollectionItemResource{}).Read(context.Background(), infer.ReadRequest[CollectionItemArgs, CollectionItemState]{
-			ID: itemResourceID, Inputs: CollectionItemArgs{CollectionID: testCollectionID, Live: true},
-		})
+		resp, err := (&CollectionItemResource{}).Read(
+			context.Background(),
+			infer.ReadRequest[CollectionItemArgs, CollectionItemState]{
+				ID: itemResourceID, Inputs: CollectionItemArgs{CollectionID: testCollectionID, Live: true},
+			},
+		)
 		if err != nil {
 			t.Fatalf("Read() error = %v", err)
 		}
@@ -567,9 +622,12 @@ func TestCollectionItemResource_Read_Live(t *testing.T) {
 		mock.handle(http.MethodGet, itemPath, func(w http.ResponseWriter, r *http.Request) {
 			writeCMSJSON(w, http.StatusOK, apiItem(""))
 		})
-		resp, err := (&CollectionItemResource{}).Read(context.Background(), infer.ReadRequest[CollectionItemArgs, CollectionItemState]{
-			ID: itemResourceID, Inputs: CollectionItemArgs{CollectionID: testCollectionID, Live: true},
-		})
+		resp, err := (&CollectionItemResource{}).Read(
+			context.Background(),
+			infer.ReadRequest[CollectionItemArgs, CollectionItemState]{
+				ID: itemResourceID, Inputs: CollectionItemArgs{CollectionID: testCollectionID, Live: true},
+			},
+		)
 		if err != nil {
 			t.Fatalf("Read() error = %v", err)
 		}
@@ -585,7 +643,10 @@ func TestCollectionItemResource_Read_NotFoundAndErrors(t *testing.T) {
 		mock.handle(http.MethodGet, itemPath, func(w http.ResponseWriter, r *http.Request) {
 			writeCMSJSON(w, http.StatusNotFound, map[string]string{"message": "not found"})
 		})
-		resp, err := (&CollectionItemResource{}).Read(context.Background(), infer.ReadRequest[CollectionItemArgs, CollectionItemState]{ID: itemResourceID})
+		resp, err := (&CollectionItemResource{}).Read(
+			context.Background(),
+			infer.ReadRequest[CollectionItemArgs, CollectionItemState]{ID: itemResourceID},
+		)
 		if err != nil || resp.ID != "" {
 			t.Errorf("expected empty ID and nil error, got ID=%q err=%v", resp.ID, err)
 		}
@@ -596,7 +657,9 @@ func TestCollectionItemResource_Read_NotFoundAndErrors(t *testing.T) {
 		mock.handle(http.MethodGet, itemPath, func(w http.ResponseWriter, r *http.Request) {
 			writeCMSJSON(w, http.StatusInternalServerError, map[string]string{"message": "item not found in index"})
 		})
-		if _, err := (&CollectionItemResource{}).Read(context.Background(), infer.ReadRequest[CollectionItemArgs, CollectionItemState]{ID: itemResourceID}); err == nil {
+		if _, err := (&CollectionItemResource{}).Read(
+			context.Background(), infer.ReadRequest[CollectionItemArgs, CollectionItemState]{ID: itemResourceID},
+		); err == nil {
 			t.Error("expected error")
 		}
 	})
@@ -604,7 +667,9 @@ func TestCollectionItemResource_Read_NotFoundAndErrors(t *testing.T) {
 	t.Run("invalid resource ID", func(t *testing.T) {
 		mock := newCMSMock(t)
 		for _, id := range []string{"", "bad/items/" + testItemID, testCollectionID + "/items/a/b"} {
-			if _, err := (&CollectionItemResource{}).Read(context.Background(), infer.ReadRequest[CollectionItemArgs, CollectionItemState]{ID: id}); err == nil {
+			if _, err := (&CollectionItemResource{}).Read(
+				context.Background(), infer.ReadRequest[CollectionItemArgs, CollectionItemState]{ID: id},
+			); err == nil {
 				t.Errorf("Read(%q) expected error", id)
 			}
 		}
@@ -632,7 +697,10 @@ func TestCollectionItemResource_Delete(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				mock := newCMSMock(t)
 				mock.handle(http.MethodDelete, itemPath, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(tt.status) })
-				_, err := (&CollectionItemResource{}).Delete(context.Background(), infer.DeleteRequest[CollectionItemState]{ID: itemResourceID})
+				_, err := (&CollectionItemResource{}).Delete(
+					context.Background(),
+					infer.DeleteRequest[CollectionItemState]{ID: itemResourceID},
+				)
 				if (err != nil) != tt.wantErr {
 					t.Fatalf("Delete() error = %v, wantErr %v", err, tt.wantErr)
 				}
@@ -645,8 +713,16 @@ func TestCollectionItemResource_Delete(t *testing.T) {
 
 	t.Run("live item is unpublished first", func(t *testing.T) {
 		mock := newCMSMock(t)
-		mock.handle(http.MethodDelete, itemLivePath, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
-		mock.handle(http.MethodDelete, itemPath, func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+		mock.handle(
+			http.MethodDelete,
+			itemLivePath,
+			func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) },
+		)
+		mock.handle(
+			http.MethodDelete,
+			itemPath,
+			func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) },
+		)
 		_, err := (&CollectionItemResource{}).Delete(context.Background(), infer.DeleteRequest[CollectionItemState]{
 			ID: itemResourceID, State: CollectionItemState{CollectionItemArgs: CollectionItemArgs{Live: true}},
 		})
@@ -704,57 +780,84 @@ func TestCollectionItemDiff(t *testing.T) {
 		inputs    CollectionItemArgs
 		wantKinds map[string]p.DiffKind
 	}{
-		{"omitted flags and locale after refresh do not diff",
-			state(func(s *CollectionItemState) {}), inputs(func(a *CollectionItemArgs) {}), nil},
-		{"fieldData value change updates",
+		{
+			"omitted flags and locale after refresh do not diff",
+			state(func(s *CollectionItemState) {}), inputs(func(a *CollectionItemArgs) {}), nil,
+		},
+		{
+			"fieldData value change updates",
 			state(func(s *CollectionItemState) {}),
 			inputs(func(a *CollectionItemArgs) { a.FieldData["name"] = "Renamed" }),
-			map[string]p.DiffKind{"fieldData": p.Update}},
-		{"fieldData added key updates",
+			map[string]p.DiffKind{"fieldData": p.Update},
+		},
+		{
+			"fieldData added key updates",
 			state(func(s *CollectionItemState) {}),
 			inputs(func(a *CollectionItemArgs) { a.FieldData["body"] = "text" }),
-			map[string]p.DiffKind{"fieldData": p.Update}},
-		{"fieldData removed key updates",
+			map[string]p.DiffKind{"fieldData": p.Update},
+		},
+		{
+			"fieldData removed key updates",
 			state(func(s *CollectionItemState) {}),
 			inputs(func(a *CollectionItemArgs) { delete(a.FieldData, "views") }),
-			map[string]p.DiffKind{"fieldData": p.Update}},
-		{"nil and empty fieldData are equal",
+			map[string]p.DiffKind{"fieldData": p.Update},
+		},
+		{
+			"nil and empty fieldData are equal",
 			state(func(s *CollectionItemState) { s.FieldData = nil }),
-			inputs(func(a *CollectionItemArgs) { a.FieldData = map[string]interface{}{} }), nil},
-		{"omitted isDraft after refresh does not diff",
+			inputs(func(a *CollectionItemArgs) { a.FieldData = map[string]interface{}{} }), nil,
+		},
+		{
+			"omitted isDraft after refresh does not diff",
 			state(func(s *CollectionItemState) { s.IsDraft = ptrBool(false) }),
-			inputs(func(a *CollectionItemArgs) { a.IsDraft = nil }), nil},
-		{"explicit isDraft change updates",
+			inputs(func(a *CollectionItemArgs) { a.IsDraft = nil }), nil,
+		},
+		{
+			"explicit isDraft change updates",
 			state(func(s *CollectionItemState) {}),
 			inputs(func(a *CollectionItemArgs) { a.IsDraft = ptrBool(false) }),
-			map[string]p.DiffKind{"isDraft": p.Update}},
-		{"explicit isDraft against nil state updates",
+			map[string]p.DiffKind{"isDraft": p.Update},
+		},
+		{
+			"explicit isDraft against nil state updates",
 			state(func(s *CollectionItemState) { s.IsDraft = nil }),
 			inputs(func(a *CollectionItemArgs) { a.IsDraft = ptrBool(false) }),
-			map[string]p.DiffKind{"isDraft": p.Update}},
-		{"explicit isArchived change updates",
+			map[string]p.DiffKind{"isDraft": p.Update},
+		},
+		{
+			"explicit isArchived change updates",
 			state(func(s *CollectionItemState) {}),
 			inputs(func(a *CollectionItemArgs) { a.IsArchived = ptrBool(true) }),
-			map[string]p.DiffKind{"isArchived": p.Update}},
-		{"explicit cmsLocaleId change updates",
+			map[string]p.DiffKind{"isArchived": p.Update},
+		},
+		{
+			"explicit cmsLocaleId change updates",
 			state(func(s *CollectionItemState) {}),
 			inputs(func(a *CollectionItemArgs) { a.CmsLocaleID = "locale-2" }),
-			map[string]p.DiffKind{"cmsLocaleId": p.Update}},
-		{"live change updates",
+			map[string]p.DiffKind{"cmsLocaleId": p.Update},
+		},
+		{
+			"live change updates",
 			state(func(s *CollectionItemState) {}),
 			inputs(func(a *CollectionItemArgs) { a.Live = true }),
-			map[string]p.DiffKind{"live": p.Update}},
-		{"collectionId change replaces",
+			map[string]p.DiffKind{"live": p.Update},
+		},
+		{
+			"collectionId change replaces",
 			state(func(s *CollectionItemState) {}),
 			inputs(func(a *CollectionItemArgs) { a.CollectionID = testSiteID }),
-			map[string]p.DiffKind{"collectionId": p.UpdateReplace}},
+			map[string]p.DiffKind{"collectionId": p.UpdateReplace},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := (&CollectionItemResource{}).Diff(context.Background(), infer.DiffRequest[CollectionItemArgs, CollectionItemState]{
-				State: tt.state, Inputs: tt.inputs,
-			})
+			resp, err := (&CollectionItemResource{}).Diff(
+				context.Background(),
+				infer.DiffRequest[CollectionItemArgs, CollectionItemState]{
+					State: tt.state, Inputs: tt.inputs,
+				},
+			)
 			if err != nil {
 				t.Fatalf("Diff() error = %v", err)
 			}
@@ -799,9 +902,12 @@ func TestCollectionItemDrift_OptionalCmsLocaleId_ShouldNotTriggerChange(t *testi
 		ItemID: testItemID,
 	}
 
-	diffResp, err := (&CollectionItemResource{}).Diff(context.Background(), infer.DiffRequest[CollectionItemArgs, CollectionItemState]{
-		Inputs: userInputs, State: stateFromRead,
-	})
+	diffResp, err := (&CollectionItemResource{}).Diff(
+		context.Background(),
+		infer.DiffRequest[CollectionItemArgs, CollectionItemState]{
+			Inputs: userInputs, State: stateFromRead,
+		},
+	)
 	if err != nil {
 		t.Fatalf("Diff() error = %v", err)
 	}

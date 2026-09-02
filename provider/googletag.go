@@ -46,9 +46,6 @@ type GoogleTagsRequest struct {
 // The UA- prefix (Universal Analytics) is explicitly rejected by the API.
 var googleTagIDPattern = regexp.MustCompile(`^(G|GT|AW|DC)-[A-Za-z0-9]+$`)
 
-// maxGoogleTagsPerSite is the documented cap on tags per site.
-const maxGoogleTagsPerSite = 25
-
 // ValidateGoogleTagID validates a Google Tag ID.
 // Webflow accepts G-, GT-, AW- and DC- prefixed IDs and rejects UA- IDs.
 func ValidateGoogleTagID(tagID string) error {

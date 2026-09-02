@@ -18,13 +18,14 @@ import (
 // Collection represents a Webflow CMS collection.
 // This struct matches the Webflow API v2 response format for collections.
 type Collection struct {
-	ID           string                    `json:"id,omitempty"`          // Webflow-assigned collection ID (read-only)
-	DisplayName  string                    `json:"displayName"`           // Human-readable name of the collection
-	SingularName string                    `json:"singularName"`          // Singular form of the collection name
-	Slug         string                    `json:"slug,omitempty"`        // URL-friendly slug for the collection
-	CreatedOn    string                    `json:"createdOn,omitempty"`   // Creation timestamp (read-only)
-	LastUpdated  string                    `json:"lastUpdated,omitempty"` // Last update timestamp (read-only)
-	Fields       []CollectionFieldResponse `json:"fields,omitempty"`      // Field definitions (GET /v2/collections/{id} only)
+	ID           string `json:"id,omitempty"`          // Webflow-assigned collection ID (read-only)
+	DisplayName  string `json:"displayName"`           // Human-readable name of the collection
+	SingularName string `json:"singularName"`          // Singular form of the collection name
+	Slug         string `json:"slug,omitempty"`        // URL-friendly slug for the collection
+	CreatedOn    string `json:"createdOn,omitempty"`   // Creation timestamp (read-only)
+	LastUpdated  string `json:"lastUpdated,omitempty"` // Last update timestamp (read-only)
+	// Field definitions (GET /v2/collections/{id} only)
+	Fields []CollectionFieldResponse `json:"fields,omitempty"`
 }
 
 // CollectionRequest represents the request body for POST collection.

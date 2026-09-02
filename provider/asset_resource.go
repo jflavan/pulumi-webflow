@@ -162,7 +162,7 @@ func (r *Asset) Diff(
 		}
 		expectedHash = ComputeFileHash(data)
 	}
-	if expectedHash != "" && req.State.FileHash != "" && expectedHash != strings.ToLower(req.State.FileHash) {
+	if expectedHash != "" && req.State.FileHash != "" && !strings.EqualFold(expectedHash, req.State.FileHash) {
 		return replace("fileHash"), nil
 	}
 
@@ -223,7 +223,14 @@ func (r *Asset) Create(
 	}
 
 	log.Debug("Registering asset metadata with Webflow")
-	uploadResp, err := PostAssetUploadURL(ctx, client, req.Inputs.SiteID, req.Inputs.FileName, hash, req.Inputs.ParentFolder)
+	uploadResp, err := PostAssetUploadURL(
+		ctx,
+		client,
+		req.Inputs.SiteID,
+		req.Inputs.FileName,
+		hash,
+		req.Inputs.ParentFolder,
+	)
 	if err != nil {
 		return infer.CreateResponse[AssetState]{}, fmt.Errorf("failed to create asset: %w", err)
 	}

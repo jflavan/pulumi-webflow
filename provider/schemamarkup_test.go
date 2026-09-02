@@ -379,12 +379,21 @@ func TestPageSchemaMarkupDiff(t *testing.T) {
 		wantKey     string
 	}{
 		{"identical", base, false, false, ""},
-		{"reordered keys", PageSchemaMarkupArgs{PageID: testSchemaPageID, SchemaMarkup: testSchemaReordered},
-			false, false, ""},
-		{"content change", PageSchemaMarkupArgs{PageID: testSchemaPageID, SchemaMarkup: `{"@type":"Thing"}`},
-			true, false, "schemaMarkup"},
-		{"page change", PageSchemaMarkupArgs{PageID: "6596da6045e56dee495bcbbb", SchemaMarkup: testSchemaPretty},
-			true, true, "pageId"},
+		{
+			"reordered keys",
+			PageSchemaMarkupArgs{PageID: testSchemaPageID, SchemaMarkup: testSchemaReordered},
+			false, false, "",
+		},
+		{
+			"content change",
+			PageSchemaMarkupArgs{PageID: testSchemaPageID, SchemaMarkup: `{"@type":"Thing"}`},
+			true, false, "schemaMarkup",
+		},
+		{
+			"page change",
+			PageSchemaMarkupArgs{PageID: "6596da6045e56dee495bcbbb", SchemaMarkup: testSchemaPretty},
+			true, true, "pageId",
+		},
 		{"locale change", PageSchemaMarkupArgs{
 			PageID: testSchemaPageID, LocaleID: testSchemaLocaleID, SchemaMarkup: testSchemaPretty,
 		}, true, true, "localeId"},

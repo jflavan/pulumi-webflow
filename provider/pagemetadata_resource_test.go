@@ -83,7 +83,9 @@ func TestPageMetadataResourceIDRoundTrip(t *testing.T) {
 	if err != nil || pageID != testPageID || localeID != "" {
 		t.Errorf("extract: %q %q %v", pageID, localeID, err)
 	}
-	for _, bad := range []string{"", "/metadata", testPageID, testPageID + "/content", testPageID + "/metadata/", testPageID + "/metadata/a/b"} {
+	for _, bad := range []string{
+		"", "/metadata", testPageID, testPageID + "/content", testPageID + "/metadata/", testPageID + "/metadata/a/b",
+	} {
 		if _, _, err := ExtractIDsFromPageMetadataResourceID(bad); err == nil {
 			t.Errorf("expected error for %q", bad)
 		}
@@ -158,7 +160,11 @@ func TestPageMetadataCreate_DryRunThenValidation(t *testing.T) {
 	}{
 		{"invalid pageId", PageMetadataArgs{PageID: "bad", Title: "x"}, "pageId has invalid format"},
 		{"invalid localeId", PageMetadataArgs{PageID: testPageID, LocaleID: "en", Title: "x"}, "localeId has invalid format"},
-		{"nothing managed", PageMetadataArgs{PageID: testPageID, SEO: &PageSEOArgs{}, OpenGraph: &PageOpenGraphArgs{}}, "set at least one of"},
+		{
+			"nothing managed",
+			PageMetadataArgs{PageID: testPageID, SEO: &PageSEOArgs{}, OpenGraph: &PageOpenGraphArgs{}},
+			"set at least one of",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -200,7 +206,8 @@ func TestPageMetadataRead_ReportsManagedFieldsOnly(t *testing.T) {
 	if in.Slug != "" || in.SEO != nil {
 		t.Errorf("unmanaged fields must stay unset: slug=%q seo=%+v", in.Slug, in.SEO)
 	}
-	if in.OpenGraph == nil || in.OpenGraph.TitleCopied == nil || *in.OpenGraph.TitleCopied != false || in.OpenGraph.Title != "" {
+	if in.OpenGraph == nil || in.OpenGraph.TitleCopied == nil || *in.OpenGraph.TitleCopied != false ||
+		in.OpenGraph.Title != "" {
 		t.Errorf("only the managed openGraph field should be read: %+v", in.OpenGraph)
 	}
 	if resp.State.CurrentSlug != "about" || resp.State.SiteID != testPageSiteID {
@@ -218,7 +225,8 @@ func TestPageMetadataRead_ImportCapturesEverything(t *testing.T) {
 	}
 	in := resp.Inputs
 	if in.Title != "About" || in.Slug != "about" || in.SEO == nil || in.SEO.Title != "SEO About" ||
-		in.OpenGraph == nil || in.OpenGraph.Description != "OG desc" || in.OpenGraph.DescriptionCopied == nil || !*in.OpenGraph.DescriptionCopied {
+		in.OpenGraph == nil || in.OpenGraph.Description != "OG desc" || in.OpenGraph.DescriptionCopied == nil ||
+		!*in.OpenGraph.DescriptionCopied {
 		t.Errorf("import should capture all fields: %+v", in)
 	}
 }
@@ -228,19 +236,26 @@ func TestPageMetadataRead_NotFoundAndErrors(t *testing.T) {
 	id := GeneratePageMetadataResourceID(testPageID, "")
 
 	m.getStatus = http.StatusNotFound
-	resp, err := (&PageMetadata{}).Read(context.Background(), infer.ReadRequest[PageMetadataArgs, PageMetadataState]{ID: id})
+	resp, err := (&PageMetadata{}).Read(
+		context.Background(),
+		infer.ReadRequest[PageMetadataArgs, PageMetadataState]{ID: id},
+	)
 	if err != nil || resp.ID != "" {
 		t.Errorf("404 should clear the resource: id=%q err=%v", resp.ID, err)
 	}
 
 	m.getStatus = http.StatusForbidden
-	if _, err := (&PageMetadata{}).Read(context.Background(), infer.ReadRequest[PageMetadataArgs, PageMetadataState]{ID: id}); err == nil {
+	if _, err := (&PageMetadata{}).Read(
+		context.Background(), infer.ReadRequest[PageMetadataArgs, PageMetadataState]{ID: id},
+	); err == nil {
 		t.Error("403 must propagate")
 	}
 
 	calls := m.getCalls
 	for _, bad := range []string{"", "bad/metadata", testPageID + "/metadata/en"} {
-		if _, err := (&PageMetadata{}).Read(context.Background(), infer.ReadRequest[PageMetadataArgs, PageMetadataState]{ID: bad}); err == nil {
+		if _, err := (&PageMetadata{}).Read(
+			context.Background(), infer.ReadRequest[PageMetadataArgs, PageMetadataState]{ID: bad},
+		); err == nil {
 			t.Errorf("expected invalid ID error for %q", bad)
 		}
 	}
@@ -260,7 +275,10 @@ func TestPageMetadataUpdate(t *testing.T) {
 		t.Fatalf("dry run update: %+v %v calls=%d", dry.Output, err, m.putCalls)
 	}
 
-	resp, err := (&PageMetadata{}).Update(context.Background(), infer.UpdateRequest[PageMetadataArgs, PageMetadataState]{Inputs: args})
+	resp, err := (&PageMetadata{}).Update(
+		context.Background(),
+		infer.UpdateRequest[PageMetadataArgs, PageMetadataState]{Inputs: args},
+	)
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -283,7 +301,10 @@ func TestPageMetadataDiff(t *testing.T) {
 	}
 	state := PageMetadataState{PageMetadataArgs: base}
 
-	resp, err := (&PageMetadata{}).Diff(context.Background(), infer.DiffRequest[PageMetadataArgs, PageMetadataState]{Inputs: base, State: state})
+	resp, err := (&PageMetadata{}).Diff(
+		context.Background(),
+		infer.DiffRequest[PageMetadataArgs, PageMetadataState]{Inputs: base, State: state},
+	)
 	if err != nil || resp.HasChanges {
 		t.Fatalf("expected no changes: %+v %v", resp, err)
 	}
@@ -293,14 +314,18 @@ func TestPageMetadataDiff(t *testing.T) {
 	in.SEO = &PageSEOArgs{Title: "SEO"}
 	st := state
 	st.OpenGraph = &PageOpenGraphArgs{TitleCopied: ptr(true)}
-	if resp, _ := (&PageMetadata{}).Diff(context.Background(), infer.DiffRequest[PageMetadataArgs, PageMetadataState]{Inputs: in, State: st}); resp.HasChanges {
+	if resp, _ := (&PageMetadata{}).Diff(
+		context.Background(), infer.DiffRequest[PageMetadataArgs, PageMetadataState]{Inputs: in, State: st},
+	); resp.HasChanges {
 		t.Errorf("equal nested blocks must not diff: %+v", resp)
 	}
 	noSEO := base
 	noSEO.SEO = nil
 	emptySEO := state
 	emptySEO.SEO = &PageSEOArgs{}
-	if resp, _ := (&PageMetadata{}).Diff(context.Background(), infer.DiffRequest[PageMetadataArgs, PageMetadataState]{Inputs: noSEO, State: emptySEO}); resp.HasChanges {
+	if resp, _ := (&PageMetadata{}).Diff(
+		context.Background(), infer.DiffRequest[PageMetadataArgs, PageMetadataState]{Inputs: noSEO, State: emptySEO},
+	); resp.HasChanges {
 		t.Errorf("nil vs empty seo must not diff: %+v", resp)
 	}
 
@@ -320,7 +345,10 @@ func TestPageMetadataDiff(t *testing.T) {
 		t.Run(tt.field, func(t *testing.T) {
 			in := base
 			tt.modify(&in)
-			resp, err := (&PageMetadata{}).Diff(context.Background(), infer.DiffRequest[PageMetadataArgs, PageMetadataState]{Inputs: in, State: state})
+			resp, err := (&PageMetadata{}).Diff(
+				context.Background(),
+				infer.DiffRequest[PageMetadataArgs, PageMetadataState]{Inputs: in, State: state},
+			)
 			if err != nil {
 				t.Fatal(err)
 			}

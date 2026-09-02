@@ -294,8 +294,10 @@ func TestPageCustomCodeDiff(t *testing.T) {
 			inputs: args(scriptB, scriptA),
 		},
 		{
-			name:   "nil and empty attributes are not a change",
-			state:  args(PageCustomCodeScript{ID: "b", Version: "2.0.0", Location: "footer", Attributes: map[string]interface{}{}}),
+			name: "nil and empty attributes are not a change",
+			state: args(
+				PageCustomCodeScript{ID: "b", Version: "2.0.0", Location: "footer", Attributes: map[string]interface{}{}},
+			),
 			inputs: args(scriptB),
 		},
 		{

@@ -138,7 +138,8 @@ func TestReadAssetSource_LocalFile(t *testing.T) {
 }
 
 func TestReadAssetSource_Errors(t *testing.T) {
-	if _, err := ReadAssetSource(context.Background(), ""); err == nil || !strings.Contains(err.Error(), "fileSource is required") {
+	if _, err := ReadAssetSource(context.Background(), ""); err == nil ||
+		!strings.Contains(err.Error(), "fileSource is required") {
 		t.Errorf("expected empty-path error, got %v", err)
 	}
 	if _, err := ReadAssetSource(context.Background(), "   "); err == nil {
@@ -147,7 +148,8 @@ func TestReadAssetSource_Errors(t *testing.T) {
 	if _, err := ReadAssetSource(context.Background(), filepath.Join(t.TempDir(), "missing.png")); err == nil {
 		t.Error("expected missing file error")
 	}
-	if _, err := ReadAssetSource(context.Background(), t.TempDir()); err == nil || !strings.Contains(err.Error(), "directory") {
+	if _, err := ReadAssetSource(context.Background(), t.TempDir()); err == nil ||
+		!strings.Contains(err.Error(), "directory") {
 		t.Errorf("expected directory error, got %v", err)
 	}
 }
@@ -174,7 +176,8 @@ func TestReadAssetSource_RemoteURL(t *testing.T) {
 	if gotAuth != "" {
 		t.Errorf("remote fileSource must be fetched without credentials, got Authorization=%q", gotAuth)
 	}
-	if _, err := ReadAssetSource(context.Background(), server.URL+"/missing.png"); err == nil || !strings.Contains(err.Error(), "HTTP 404") {
+	if _, err := ReadAssetSource(context.Background(), server.URL+"/missing.png"); err == nil ||
+		!strings.Contains(err.Error(), "HTTP 404") {
 		t.Errorf("expected HTTP 404 error, got %v", err)
 	}
 }
@@ -263,7 +266,9 @@ func TestListAssets(t *testing.T) {
 		t.Errorf("unexpected response %+v", resp)
 	}
 
-	if _, err := ListAssets(context.Background(), client, "5f0c8c9e1c9d440000e8d8c3", "5f0c8c9e1c9d440000e8d8c9"); err != nil {
+	if _, err := ListAssets(
+		context.Background(), client, "5f0c8c9e1c9d440000e8d8c3", "5f0c8c9e1c9d440000e8d8c9",
+	); err != nil {
 		t.Fatalf("ListAssets with folder: %v", err)
 	}
 	if gotQuery != "folderId=5f0c8c9e1c9d440000e8d8c9" {
@@ -285,7 +290,8 @@ func TestPostAssetUploadURL(t *testing.T) {
 				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 					t.Errorf("decode body: %v", err)
 				}
-				if req.FileName != "logo.png" || req.FileHash != "d41d8cd98f00b204e9800998ecf8427e" || req.ParentFolder != "5f0c8c9e1c9d440000e8d8c9" {
+				if req.FileName != "logo.png" || req.FileHash != "d41d8cd98f00b204e9800998ecf8427e" ||
+					req.ParentFolder != "5f0c8c9e1c9d440000e8d8c9" {
 					t.Errorf("unexpected body %+v", req)
 				}
 				w.WriteHeader(status)
@@ -304,7 +310,8 @@ func TestPostAssetUploadURL(t *testing.T) {
 			if err != nil {
 				t.Fatalf("PostAssetUploadURL: %v", err)
 			}
-			if resp.ID != "5f0c8c9e1c9d440000e8d8c4" || resp.UploadDetails["acl"] != "public-read" || resp.ParentFolder != "5f0c8c9e1c9d440000e8d8c9" {
+			if resp.ID != "5f0c8c9e1c9d440000e8d8c4" || resp.UploadDetails["acl"] != "public-read" ||
+				resp.ParentFolder != "5f0c8c9e1c9d440000e8d8c9" {
 				t.Errorf("unexpected response %+v", resp)
 			}
 		})
@@ -312,7 +319,10 @@ func TestPostAssetUploadURL(t *testing.T) {
 }
 
 // readMultipartParts returns the parts of a multipart request in wire order.
-func readMultipartParts(t *testing.T, r *http.Request) (fields map[string]string, order []string, fileName string, fileData []byte) {
+func readMultipartParts(
+	t *testing.T,
+	r *http.Request,
+) (fields map[string]string, order []string, fileName string, fileData []byte) {
 	t.Helper()
 	_, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil {
@@ -378,7 +388,9 @@ func TestUploadAssetFile(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if err := UploadAssetFile(context.Background(), server.URL+"/upload", details, "logo.png", []byte("png-bytes")); err != nil {
+	if err := UploadAssetFile(
+		context.Background(), server.URL+"/upload", details, "logo.png", []byte("png-bytes"),
+	); err != nil {
 		t.Fatalf("UploadAssetFile: %v", err)
 	}
 	if !called {

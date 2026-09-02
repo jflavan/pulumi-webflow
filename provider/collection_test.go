@@ -241,11 +241,19 @@ func TestCollectionErrorMessagesAreActionable(t *testing.T) {
 		testFunc func() error
 		contains []string
 	}{
-		{"ValidateCollectionID empty", func() error { return ValidateCollectionID("") }, []string{"required", "24-character"}},
-		{"ValidateCollectionID invalid format", func() error { return ValidateCollectionID("invalid") },
-			[]string{"invalid format", "24-character", "hexadecimal"}},
-		{"ValidateCollectionDisplayName empty", func() error { return ValidateCollectionDisplayName("") },
-			[]string{"required", "name"}},
+		{
+			"ValidateCollectionID empty",
+			func() error { return ValidateCollectionID("") },
+			[]string{"required", "24-character"},
+		},
+		{
+			"ValidateCollectionID invalid format", func() error { return ValidateCollectionID("invalid") },
+			[]string{"invalid format", "24-character", "hexadecimal"},
+		},
+		{
+			"ValidateCollectionDisplayName empty", func() error { return ValidateCollectionDisplayName("") },
+			[]string{"required", "name"},
+		},
 		{"ValidateSingularName empty", func() error { return ValidateSingularName("") }, []string{"required", "singular"}},
 	}
 
@@ -486,7 +494,10 @@ func TestCollectionResource_Read_ServerErrorIsNotTreatedAsMissing(t *testing.T) 
 func TestCollectionResource_Read_InvalidResourceID(t *testing.T) {
 	mock := newCMSMock(t)
 	for _, id := range []string{"", "bad/collections/" + testCollectionID, testSiteID + "/collections/../x"} {
-		_, err := (&CollectionResource{}).Read(context.Background(), infer.ReadRequest[CollectionArgs, CollectionState]{ID: id})
+		_, err := (&CollectionResource{}).Read(
+			context.Background(),
+			infer.ReadRequest[CollectionArgs, CollectionState]{ID: id},
+		)
 		if err == nil {
 			t.Errorf("Read(%q) expected error", id)
 		}
@@ -549,8 +560,13 @@ func TestCollectionResource_Delete_InvalidResourceID(t *testing.T) {
 func TestCollectionDiff_OmittedSlugAfterRefreshDoesNotReplace(t *testing.T) {
 	// State as recorded by Create/Read: Webflow generated the slug.
 	state := CollectionState{
-		CollectionArgs: CollectionArgs{SiteID: testSiteID, DisplayName: "Blog Posts", SingularName: "Blog Post", Slug: "blog-posts"},
-		CollectionID:   testCollectionID,
+		CollectionArgs: CollectionArgs{
+			SiteID:       testSiteID,
+			DisplayName:  "Blog Posts",
+			SingularName: "Blog Post",
+			Slug:         "blog-posts",
+		},
+		CollectionID: testCollectionID,
 	}
 	// Program inputs: slug omitted.
 	inputs := CollectionArgs{SiteID: testSiteID, DisplayName: "Blog Posts", SingularName: "Blog Post"}
@@ -568,7 +584,12 @@ func TestCollectionDiff_OmittedSlugAfterRefreshDoesNotReplace(t *testing.T) {
 
 func TestCollectionDiff_ExplicitSlugChangeReplaces(t *testing.T) {
 	state := CollectionState{
-		CollectionArgs: CollectionArgs{SiteID: testSiteID, DisplayName: "Blog Posts", SingularName: "Blog Post", Slug: "blog-posts"},
+		CollectionArgs: CollectionArgs{
+			SiteID:       testSiteID,
+			DisplayName:  "Blog Posts",
+			SingularName: "Blog Post",
+			Slug:         "blog-posts",
+		},
 	}
 	inputs := CollectionArgs{SiteID: testSiteID, DisplayName: "Blog Posts", SingularName: "Blog Post", Slug: "posts"}
 
@@ -635,7 +656,12 @@ func TestCollectionDiff_MultipleChanges(t *testing.T) {
 				t.Fatalf("Diff() error = %v, want nil", err)
 			}
 			if len(result.DetailedDiff) != len(tt.expectedKeys) {
-				t.Errorf("Expected %d changes in DetailedDiff, got %d: %v", len(tt.expectedKeys), len(result.DetailedDiff), result.DetailedDiff)
+				t.Errorf(
+					"Expected %d changes in DetailedDiff, got %d: %v",
+					len(tt.expectedKeys),
+					len(result.DetailedDiff),
+					result.DetailedDiff,
+				)
 			}
 			if len(tt.expectedKeys) > 0 {
 				if !result.HasChanges || !result.DeleteBeforeReplace {
