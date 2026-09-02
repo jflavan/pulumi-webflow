@@ -38,14 +38,14 @@ public class EcommerceSettings extends com.pulumi.resources.CustomResource {
      * 
      */
     @Export(name="defaultCurrency", refs={String.class}, tree="[0]")
-    private Output<String> defaultCurrency;
+    private Output</* @Nullable */ String> defaultCurrency;
 
     /**
      * @return The three-letter ISO 4217 currency code for the site (e.g., &#39;USD&#39;, &#39;EUR&#39;, &#39;GBP&#39;). This is the default currency used for ecommerce transactions on this site. This value is set in the Webflow dashboard and is read-only.
      * 
      */
-    public Output<String> defaultCurrency() {
-        return this.defaultCurrency;
+    public Output<Optional<String>> defaultCurrency() {
+        return Codegen.optional(this.defaultCurrency);
     }
     /**
      * The Webflow site ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c3&#39;). The site must have ecommerce enabled through the Webflow dashboard. You can find your site ID in the Webflow dashboard under Site Settings.

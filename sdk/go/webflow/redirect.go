@@ -16,15 +16,15 @@ import (
 type Redirect struct {
 	pulumi.CustomResourceState
 
-	// The timestamp when the redirect was created (RFC3339 format). This is automatically set when the redirect is created and is read-only.
+	// The timestamp when the redirect was created (RFC3339 format), when reported by the Webflow API. Read-only; empty when the API does not return it.
 	CreatedOn pulumi.StringPtrOutput `pulumi:"createdOn"`
-	// The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path.
+	// The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
 	DestinationPath pulumi.StringOutput `pulumi:"destinationPath"`
 	// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
 	SiteId pulumi.StringOutput `pulumi:"siteId"`
-	// The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path.
+	// The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
 	SourcePath pulumi.StringOutput `pulumi:"sourcePath"`
-	// The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves).
+	// The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
 	StatusCode pulumi.IntOutput `pulumi:"statusCode"`
 }
 
@@ -80,25 +80,25 @@ func (RedirectState) ElementType() reflect.Type {
 }
 
 type redirectArgs struct {
-	// The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path.
+	// The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
 	DestinationPath string `pulumi:"destinationPath"`
 	// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
 	SiteId string `pulumi:"siteId"`
-	// The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path.
+	// The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
 	SourcePath string `pulumi:"sourcePath"`
-	// The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves).
+	// The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
 	StatusCode int `pulumi:"statusCode"`
 }
 
 // The set of arguments for constructing a Redirect resource.
 type RedirectArgs struct {
-	// The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path.
+	// The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
 	DestinationPath pulumi.StringInput
 	// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
 	SiteId pulumi.StringInput
-	// The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path.
+	// The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
 	SourcePath pulumi.StringInput
-	// The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves).
+	// The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
 	StatusCode pulumi.IntInput
 }
 
@@ -139,12 +139,12 @@ func (o RedirectOutput) ToRedirectOutputWithContext(ctx context.Context) Redirec
 	return o
 }
 
-// The timestamp when the redirect was created (RFC3339 format). This is automatically set when the redirect is created and is read-only.
+// The timestamp when the redirect was created (RFC3339 format), when reported by the Webflow API. Read-only; empty when the API does not return it.
 func (o RedirectOutput) CreatedOn() pulumi.StringPtrOutput {
 	return o.ApplyT(func(v *Redirect) pulumi.StringPtrOutput { return v.CreatedOn }).(pulumi.StringPtrOutput)
 }
 
-// The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path.
+// The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
 func (o RedirectOutput) DestinationPath() pulumi.StringOutput {
 	return o.ApplyT(func(v *Redirect) pulumi.StringOutput { return v.DestinationPath }).(pulumi.StringOutput)
 }
@@ -154,12 +154,12 @@ func (o RedirectOutput) SiteId() pulumi.StringOutput {
 	return o.ApplyT(func(v *Redirect) pulumi.StringOutput { return v.SiteId }).(pulumi.StringOutput)
 }
 
-// The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path.
+// The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
 func (o RedirectOutput) SourcePath() pulumi.StringOutput {
 	return o.ApplyT(func(v *Redirect) pulumi.StringOutput { return v.SourcePath }).(pulumi.StringOutput)
 }
 
-// The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves).
+// The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
 func (o RedirectOutput) StatusCode() pulumi.IntOutput {
 	return o.ApplyT(func(v *Redirect) pulumi.IntOutput { return v.StatusCode }).(pulumi.IntOutput)
 }

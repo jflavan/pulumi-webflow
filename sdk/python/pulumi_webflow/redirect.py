@@ -25,10 +25,11 @@ class RedirectArgs:
                  status_code: pulumi.Input[_builtins.int]):
         """
         The set of arguments for constructing a Redirect resource.
-        :param pulumi.Input[_builtins.str] destination_path: The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path.
+
+        :param pulumi.Input[_builtins.str] destination_path: The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
-        :param pulumi.Input[_builtins.str] source_path: The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path.
-        :param pulumi.Input[_builtins.int] status_code: The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves).
+        :param pulumi.Input[_builtins.str] source_path: The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
+        :param pulumi.Input[_builtins.int] status_code: The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
         """
         pulumi.set(__self__, "destination_path", destination_path)
         pulumi.set(__self__, "site_id", site_id)
@@ -39,7 +40,7 @@ class RedirectArgs:
     @pulumi.getter(name="destinationPath")
     def destination_path(self) -> pulumi.Input[_builtins.str]:
         """
-        The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path.
+        The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
         """
         return pulumi.get(self, "destination_path")
 
@@ -63,7 +64,7 @@ class RedirectArgs:
     @pulumi.getter(name="sourcePath")
     def source_path(self) -> pulumi.Input[_builtins.str]:
         """
-        The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path.
+        The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
         """
         return pulumi.get(self, "source_path")
 
@@ -75,7 +76,7 @@ class RedirectArgs:
     @pulumi.getter(name="statusCode")
     def status_code(self) -> pulumi.Input[_builtins.int]:
         """
-        The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves).
+        The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
         """
         return pulumi.get(self, "status_code")
 
@@ -90,20 +91,20 @@ class Redirect(pulumi.CustomResource):
     def __init__(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 destination_path: Optional[pulumi.Input[_builtins.str]] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
-                 source_path: Optional[pulumi.Input[_builtins.str]] = None,
-                 status_code: Optional[pulumi.Input[_builtins.int]] = None,
+                 destination_path: pulumi.Input[Optional[_builtins.str]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
+                 source_path: pulumi.Input[Optional[_builtins.str]] = None,
+                 status_code: pulumi.Input[Optional[_builtins.int]] = None,
                  __props__=None):
         """
         Manages HTTP redirects for a Webflow site. This resource allows you to define redirect rules for old URLs to new locations, supporting both permanent (301) and temporary (302) redirects.
 
         :param str resource_name: The name of the resource.
         :param pulumi.ResourceOptions opts: Options for the resource.
-        :param pulumi.Input[_builtins.str] destination_path: The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path.
+        :param pulumi.Input[_builtins.str] destination_path: The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
-        :param pulumi.Input[_builtins.str] source_path: The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path.
-        :param pulumi.Input[_builtins.int] status_code: The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves).
+        :param pulumi.Input[_builtins.str] source_path: The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
+        :param pulumi.Input[_builtins.int] status_code: The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
         """
         ...
     @overload
@@ -129,10 +130,10 @@ class Redirect(pulumi.CustomResource):
     def _internal_init(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 destination_path: Optional[pulumi.Input[_builtins.str]] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
-                 source_path: Optional[pulumi.Input[_builtins.str]] = None,
-                 status_code: Optional[pulumi.Input[_builtins.int]] = None,
+                 destination_path: pulumi.Input[Optional[_builtins.str]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
+                 source_path: pulumi.Input[Optional[_builtins.str]] = None,
+                 status_code: pulumi.Input[Optional[_builtins.int]] = None,
                  __props__=None):
         opts = pulumi.ResourceOptions.merge(_utilities.get_resource_opts_defaults(), opts)
         if not isinstance(opts, pulumi.ResourceOptions):
@@ -188,7 +189,7 @@ class Redirect(pulumi.CustomResource):
     @pulumi.getter(name="createdOn")
     def created_on(self) -> pulumi.Output[Optional[_builtins.str]]:
         """
-        The timestamp when the redirect was created (RFC3339 format). This is automatically set when the redirect is created and is read-only.
+        The timestamp when the redirect was created (RFC3339 format), when reported by the Webflow API. Read-only; empty when the API does not return it.
         """
         return pulumi.get(self, "created_on")
 
@@ -196,7 +197,7 @@ class Redirect(pulumi.CustomResource):
     @pulumi.getter(name="destinationPath")
     def destination_path(self) -> pulumi.Output[_builtins.str]:
         """
-        The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path.
+        The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
         """
         return pulumi.get(self, "destination_path")
 
@@ -212,7 +213,7 @@ class Redirect(pulumi.CustomResource):
     @pulumi.getter(name="sourcePath")
     def source_path(self) -> pulumi.Output[_builtins.str]:
         """
-        The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path.
+        The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
         """
         return pulumi.get(self, "source_path")
 
@@ -220,7 +221,7 @@ class Redirect(pulumi.CustomResource):
     @pulumi.getter(name="statusCode")
     def status_code(self) -> pulumi.Output[_builtins.int]:
         """
-        The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves).
+        The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
         """
         return pulumi.get(self, "status_code")
 

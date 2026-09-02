@@ -53,7 +53,7 @@ namespace Community.Pulumi.Webflow
         public Output<string> SiteId { get; private set; } = null!;
 
         /// <summary>
-        /// The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName. The slug determines the URL path for collection items.
+        /// The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation.
         /// </summary>
         [Output("slug")]
         public Output<string?> Slug { get; private set; } = null!;
@@ -123,7 +123,7 @@ namespace Community.Pulumi.Webflow
         public Input<string> SiteId { get; set; } = null!;
 
         /// <summary>
-        /// The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName. The slug determines the URL path for collection items.
+        /// The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation.
         /// </summary>
         [Input("slug")]
         public Input<string>? Slug { get; set; }

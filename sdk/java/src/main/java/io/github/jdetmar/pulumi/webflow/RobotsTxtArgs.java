@@ -15,14 +15,14 @@ public final class RobotsTxtArgs extends com.pulumi.resources.ResourceArgs {
     public static final RobotsTxtArgs Empty = new RobotsTxtArgs();
 
     /**
-     * The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives.
+     * The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives. Comments and other directives are not stored by Webflow and are dropped with a warning. Formatting differences (blank lines, spacing, directive casing) do not cause a diff.
      * 
      */
     @Import(name="content", required=true)
     private Output<String> content;
 
     /**
-     * @return The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives.
+     * @return The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives. Comments and other directives are not stored by Webflow and are dropped with a warning. Formatting differences (blank lines, spacing, directive casing) do not cause a diff.
      * 
      */
     public Output<String> content() {
@@ -70,7 +70,7 @@ public final class RobotsTxtArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param content The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives.
+         * @param content The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives. Comments and other directives are not stored by Webflow and are dropped with a warning. Formatting differences (blank lines, spacing, directive casing) do not cause a diff.
          * 
          * @return builder
          * 
@@ -81,7 +81,7 @@ public final class RobotsTxtArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param content The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives.
+         * @param content The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives. Comments and other directives are not stored by Webflow and are dropped with a warning. Formatting differences (blank lines, spacing, directive casing) do not cause a diff.
          * 
          * @return builder
          * 

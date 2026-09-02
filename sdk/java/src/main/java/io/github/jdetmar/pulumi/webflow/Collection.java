@@ -104,14 +104,14 @@ public class Collection extends com.pulumi.resources.CustomResource {
         return this.siteId;
     }
     /**
-     * The URL-friendly slug for the collection (optional, e.g., &#39;blog-posts&#39;, &#39;products&#39;). If not provided, Webflow will auto-generate a slug from the displayName. The slug determines the URL path for collection items.
+     * The URL-friendly slug for the collection (optional, e.g., &#39;blog-posts&#39;, &#39;products&#39;). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation.
      * 
      */
     @Export(name="slug", refs={String.class}, tree="[0]")
     private Output</* @Nullable */ String> slug;
 
     /**
-     * @return The URL-friendly slug for the collection (optional, e.g., &#39;blog-posts&#39;, &#39;products&#39;). If not provided, Webflow will auto-generate a slug from the displayName. The slug determines the URL path for collection items.
+     * @return The URL-friendly slug for the collection (optional, e.g., &#39;blog-posts&#39;, &#39;products&#39;). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation.
      * 
      */
     public Output<Optional<String>> slug() {

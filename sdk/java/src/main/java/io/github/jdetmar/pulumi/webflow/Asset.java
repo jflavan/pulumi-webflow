@@ -11,207 +11,222 @@ import io.github.jdetmar.pulumi.webflow.AssetArgs;
 import io.github.jdetmar.pulumi.webflow.Utilities;
 import java.lang.Integer;
 import java.lang.String;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import javax.annotation.Nullable;
 
 /**
- * Manages assets (images, files, documents) for a Webflow site. This resource allows you to upload and manage files that can be used in your Webflow site. Note: Assets are immutable - changing any property will delete and recreate the asset.
+ * Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow&#39;s storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset.
  * 
  */
 @ResourceType(type="webflow:index:Asset")
 public class Asset extends com.pulumi.resources.CustomResource {
     /**
-     * The Webflow-assigned asset ID (read-only). This unique identifier can be used to reference the asset in API calls.
+     * The Webflow-assigned asset ID (read-only).
      * 
      */
     @Export(name="assetId", refs={String.class}, tree="[0]")
     private Output</* @Nullable */ String> assetId;
 
     /**
-     * @return The Webflow-assigned asset ID (read-only). This unique identifier can be used to reference the asset in API calls.
+     * @return The Webflow-assigned asset ID (read-only).
      * 
      */
     public Output<Optional<String>> assetId() {
         return Codegen.optional(this.assetId);
     }
     /**
-     * The direct S3 URL for the asset (read-only). This is the raw S3 location where the file is stored.
+     * The direct S3 URL for the asset (read-only).
      * 
      */
     @Export(name="assetUrl", refs={String.class}, tree="[0]")
     private Output</* @Nullable */ String> assetUrl;
 
     /**
-     * @return The direct S3 URL for the asset (read-only). This is the raw S3 location where the file is stored.
+     * @return The direct S3 URL for the asset (read-only).
      * 
      */
     public Output<Optional<String>> assetUrl() {
         return Codegen.optional(this.assetUrl);
     }
     /**
-     * The MIME type of the asset (read-only). Examples: &#39;image/png&#39;, &#39;image/jpeg&#39;, &#39;application/pdf&#39;. Determined by the fileName extension.
+     * The MIME type of the asset (read-only), e.g., &#39;image/png&#39;, &#39;application/pdf&#39;.
      * 
      */
     @Export(name="contentType", refs={String.class}, tree="[0]")
     private Output</* @Nullable */ String> contentType;
 
     /**
-     * @return The MIME type of the asset (read-only). Examples: &#39;image/png&#39;, &#39;image/jpeg&#39;, &#39;application/pdf&#39;. Determined by the fileName extension.
+     * @return The MIME type of the asset (read-only), e.g., &#39;image/png&#39;, &#39;application/pdf&#39;.
      * 
      */
     public Output<Optional<String>> contentType() {
         return Codegen.optional(this.contentType);
     }
     /**
-     * The timestamp when the asset metadata was created (RFC3339 format, read-only). This is set when the asset is registered with Webflow.
+     * The timestamp when the asset metadata was created (RFC3339 format, read-only).
      * 
      */
     @Export(name="createdOn", refs={String.class}, tree="[0]")
     private Output</* @Nullable */ String> createdOn;
 
     /**
-     * @return The timestamp when the asset metadata was created (RFC3339 format, read-only). This is set when the asset is registered with Webflow.
+     * @return The timestamp when the asset metadata was created (RFC3339 format, read-only).
      * 
      */
     public Output<Optional<String>> createdOn() {
         return Codegen.optional(this.createdOn);
     }
     /**
-     * MD5 hash of the file content (required). Webflow uses this hash to identify and deduplicate assets. Generate using: md5sum &lt;filename&gt; (Linux) or md5 &lt;filename&gt; (macOS). Example: &#39;d41d8cd98f00b204e9800998ecf8427e&#39;.
+     * MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
      * 
      */
     @Export(name="fileHash", refs={String.class}, tree="[0]")
-    private Output<String> fileHash;
+    private Output</* @Nullable */ String> fileHash;
 
     /**
-     * @return MD5 hash of the file content (required). Webflow uses this hash to identify and deduplicate assets. Generate using: md5sum &lt;filename&gt; (Linux) or md5 &lt;filename&gt; (macOS). Example: &#39;d41d8cd98f00b204e9800998ecf8427e&#39;.
+     * @return MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
      * 
      */
-    public Output<String> fileHash() {
-        return this.fileHash;
+    public Output<Optional<String>> fileHash() {
+        return Codegen.optional(this.fileHash);
     }
     /**
-     * The name of the file to upload, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. The file name must not exceed 255 characters and should not contain invalid characters (&lt;, &gt;, :, &#34;, |, ?, *).
+     * The name of the file as it will appear in Webflow, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. Must not exceed 255 characters or contain &lt;, &gt;, :, &#34;, |, ?, *.
      * 
      */
     @Export(name="fileName", refs={String.class}, tree="[0]")
     private Output<String> fileName;
 
     /**
-     * @return The name of the file to upload, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. The file name must not exceed 255 characters and should not contain invalid characters (&lt;, &gt;, :, &#34;, |, ?, *).
+     * @return The name of the file as it will appear in Webflow, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. Must not exceed 255 characters or contain &lt;, &gt;, :, &#34;, |, ?, *.
      * 
      */
     public Output<String> fileName() {
         return this.fileName;
     }
     /**
-     * The source of the file to upload. For the current implementation, this is a reference field. In future versions, this may support URLs or local file paths for automatic upload. Examples: &#39;https://example.com/logo.png&#39;, &#39;/path/to/local/file.png&#39;.
+     * Where the file bytes come from: a local file path (resolved relative to the Pulumi program&#39;s working directory, e.g., &#39;./assets/logo.png&#39;) or an http(s) URL (e.g., &#39;https://example.com/logo.png&#39;). The content is read at apply time, MD5-hashed and uploaded to Webflow.
      * 
      */
     @Export(name="fileSource", refs={String.class}, tree="[0]")
-    private Output</* @Nullable */ String> fileSource;
+    private Output<String> fileSource;
 
     /**
-     * @return The source of the file to upload. For the current implementation, this is a reference field. In future versions, this may support URLs or local file paths for automatic upload. Examples: &#39;https://example.com/logo.png&#39;, &#39;/path/to/local/file.png&#39;.
+     * @return Where the file bytes come from: a local file path (resolved relative to the Pulumi program&#39;s working directory, e.g., &#39;./assets/logo.png&#39;) or an http(s) URL (e.g., &#39;https://example.com/logo.png&#39;). The content is read at apply time, MD5-hashed and uploaded to Webflow.
      * 
      */
-    public Output<Optional<String>> fileSource() {
-        return Codegen.optional(this.fileSource);
+    public Output<String> fileSource() {
+        return this.fileSource;
     }
     /**
-     * The Webflow CDN URL where the asset will be hosted (read-only). This URL becomes accessible after completing the S3 upload. Example: &#39;https://assets.website-files.com/.../logo.png&#39;.
+     * The ID of the asset folder the asset belongs to, or empty when it is at the site root (read-only).
+     * 
+     */
+    @Export(name="folderId", refs={String.class}, tree="[0]")
+    private Output</* @Nullable */ String> folderId;
+
+    /**
+     * @return The ID of the asset folder the asset belongs to, or empty when it is at the site root (read-only).
+     * 
+     */
+    public Output<Optional<String>> folderId() {
+        return Codegen.optional(this.folderId);
+    }
+    /**
+     * The Webflow CDN URL where the asset is hosted (read-only). Example: &#39;https://cdn.prod.website-files.com/.../logo.png&#39;.
      * 
      */
     @Export(name="hostedUrl", refs={String.class}, tree="[0]")
     private Output</* @Nullable */ String> hostedUrl;
 
     /**
-     * @return The Webflow CDN URL where the asset will be hosted (read-only). This URL becomes accessible after completing the S3 upload. Example: &#39;https://assets.website-files.com/.../logo.png&#39;.
+     * @return The Webflow CDN URL where the asset is hosted (read-only). Example: &#39;https://cdn.prod.website-files.com/.../logo.png&#39;.
      * 
      */
     public Output<Optional<String>> hostedUrl() {
         return Codegen.optional(this.hostedUrl);
     }
     /**
-     * The timestamp when the asset was last modified (RFC3339 format, read-only). For most assets, this will be the same as createdOn since assets are immutable.
+     * The timestamp when the asset was last modified (RFC3339 format, read-only).
      * 
      */
     @Export(name="lastUpdated", refs={String.class}, tree="[0]")
     private Output</* @Nullable */ String> lastUpdated;
 
     /**
-     * @return The timestamp when the asset was last modified (RFC3339 format, read-only). For most assets, this will be the same as createdOn since assets are immutable.
+     * @return The timestamp when the asset was last modified (RFC3339 format, read-only).
      * 
      */
     public Output<Optional<String>> lastUpdated() {
         return Codegen.optional(this.lastUpdated);
     }
     /**
-     * Optional folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset will be placed at the root level. Example: &#39;5f0c8c9e1c9d440000e8d8c4&#39;.
+     * Optional asset folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset is placed at the root level. Example: &#39;5f0c8c9e1c9d440000e8d8c4&#39;.
      * 
      */
     @Export(name="parentFolder", refs={String.class}, tree="[0]")
     private Output</* @Nullable */ String> parentFolder;
 
     /**
-     * @return Optional folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset will be placed at the root level. Example: &#39;5f0c8c9e1c9d440000e8d8c4&#39;.
+     * @return Optional asset folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset is placed at the root level. Example: &#39;5f0c8c9e1c9d440000e8d8c4&#39;.
      * 
      */
     public Output<Optional<String>> parentFolder() {
         return Codegen.optional(this.parentFolder);
     }
     /**
-     * The Webflow site ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c3&#39;). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
+     * The Webflow site ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c3&#39;). You can find your site ID in the Webflow dashboard under Site Settings.
      * 
      */
     @Export(name="siteId", refs={String.class}, tree="[0]")
     private Output<String> siteId;
 
     /**
-     * @return The Webflow site ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c3&#39;). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
+     * @return The Webflow site ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c3&#39;). You can find your site ID in the Webflow dashboard under Site Settings.
      * 
      */
     public Output<String> siteId() {
         return this.siteId;
     }
     /**
-     * The size of the asset in bytes (read-only). This is the actual size of the uploaded file.
+     * The size of the uploaded file in bytes (read-only).
      * 
      */
     @Export(name="size", refs={Integer.class}, tree="[0]")
     private Output</* @Nullable */ Integer> size;
 
     /**
-     * @return The size of the asset in bytes (read-only). This is the actual size of the uploaded file.
+     * @return The size of the uploaded file in bytes (read-only).
      * 
      */
     public Output<Optional<Integer>> size() {
         return Codegen.optional(this.size);
     }
     /**
-     * AWS S3 POST form fields required to complete the upload (read-only). Include these as form fields when POSTing the file to uploadUrl. Keys: acl, bucket, key, Content-Type, X-Amz-Algorithm, X-Amz-Credential, X-Amz-Date, Policy, X-Amz-Signature, success_action_status, Cache-Control.
+     * The signed AWS S3 POST form fields used for the upload (read-only, secret).
      * 
      */
     @Export(name="uploadDetails", refs={Map.class,String.class}, tree="[0,1,1]")
     private Output</* @Nullable */ Map<String,String>> uploadDetails;
 
     /**
-     * @return AWS S3 POST form fields required to complete the upload (read-only). Include these as form fields when POSTing the file to uploadUrl. Keys: acl, bucket, key, Content-Type, X-Amz-Algorithm, X-Amz-Credential, X-Amz-Date, Policy, X-Amz-Signature, success_action_status, Cache-Control.
+     * @return The signed AWS S3 POST form fields used for the upload (read-only, secret).
      * 
      */
     public Output<Optional<Map<String,String>>> uploadDetails() {
         return Codegen.optional(this.uploadDetails);
     }
     /**
-     * The presigned S3 URL for uploading the file content (read-only). Use this URL along with uploadDetails to complete the asset upload. See AWS S3 POST documentation: https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPOST.html
+     * The presigned S3 URL the file was uploaded to (read-only, secret). The provider performs the upload; this is recorded for reference only.
      * 
      */
     @Export(name="uploadUrl", refs={String.class}, tree="[0]")
     private Output</* @Nullable */ String> uploadUrl;
 
     /**
-     * @return The presigned S3 URL for uploading the file content (read-only). Use this URL along with uploadDetails to complete the asset upload. See AWS S3 POST documentation: https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPOST.html
+     * @return The presigned S3 URL the file was uploaded to (read-only, secret). The provider performs the upload; this is recorded for reference only.
      * 
      */
     public Output<Optional<String>> uploadUrl() {
@@ -258,6 +273,10 @@ public class Asset extends com.pulumi.resources.CustomResource {
         var defaultOptions = com.pulumi.resources.CustomResourceOptions.builder()
             .version(Utilities.getVersion())
             .pluginDownloadURL("github://api.github.com/JDetmar/pulumi-webflow")
+            .additionalSecretOutputs(List.of(
+                "uploadDetails",
+                "uploadUrl"
+            ))
             .build();
         return com.pulumi.resources.CustomResourceOptions.merge(defaultOptions, options, id);
     }

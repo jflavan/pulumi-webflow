@@ -35,15 +35,60 @@ export type EcommerceSettings = import("./ecommerceSettings").EcommerceSettings;
 export const EcommerceSettings: typeof import("./ecommerceSettings").EcommerceSettings = null as any;
 utilities.lazyLoad(exports, ["EcommerceSettings"], () => require("./ecommerceSettings"));
 
+export { GetAnalyticsTimeOnPageArgs, GetAnalyticsTimeOnPageResult, GetAnalyticsTimeOnPageOutputArgs } from "./getAnalyticsTimeOnPage";
+export const getAnalyticsTimeOnPage: typeof import("./getAnalyticsTimeOnPage").getAnalyticsTimeOnPage = null as any;
+export const getAnalyticsTimeOnPageOutput: typeof import("./getAnalyticsTimeOnPage").getAnalyticsTimeOnPageOutput = null as any;
+utilities.lazyLoad(exports, ["getAnalyticsTimeOnPage","getAnalyticsTimeOnPageOutput"], () => require("./getAnalyticsTimeOnPage"));
+
+export { GetAnalyticsTopDimensionsArgs, GetAnalyticsTopDimensionsResult, GetAnalyticsTopDimensionsOutputArgs } from "./getAnalyticsTopDimensions";
+export const getAnalyticsTopDimensions: typeof import("./getAnalyticsTopDimensions").getAnalyticsTopDimensions = null as any;
+export const getAnalyticsTopDimensionsOutput: typeof import("./getAnalyticsTopDimensions").getAnalyticsTopDimensionsOutput = null as any;
+utilities.lazyLoad(exports, ["getAnalyticsTopDimensions","getAnalyticsTopDimensionsOutput"], () => require("./getAnalyticsTopDimensions"));
+
+export { GetAnalyticsTopEventsArgs, GetAnalyticsTopEventsResult, GetAnalyticsTopEventsOutputArgs } from "./getAnalyticsTopEvents";
+export const getAnalyticsTopEvents: typeof import("./getAnalyticsTopEvents").getAnalyticsTopEvents = null as any;
+export const getAnalyticsTopEventsOutput: typeof import("./getAnalyticsTopEvents").getAnalyticsTopEventsOutput = null as any;
+utilities.lazyLoad(exports, ["getAnalyticsTopEvents","getAnalyticsTopEventsOutput"], () => require("./getAnalyticsTopEvents"));
+
+export { GetAnalyticsTopPagesArgs, GetAnalyticsTopPagesResult, GetAnalyticsTopPagesOutputArgs } from "./getAnalyticsTopPages";
+export const getAnalyticsTopPages: typeof import("./getAnalyticsTopPages").getAnalyticsTopPages = null as any;
+export const getAnalyticsTopPagesOutput: typeof import("./getAnalyticsTopPages").getAnalyticsTopPagesOutput = null as any;
+utilities.lazyLoad(exports, ["getAnalyticsTopPages","getAnalyticsTopPagesOutput"], () => require("./getAnalyticsTopPages"));
+
+export { GetAnalyticsTrafficArgs, GetAnalyticsTrafficResult, GetAnalyticsTrafficOutputArgs } from "./getAnalyticsTraffic";
+export const getAnalyticsTraffic: typeof import("./getAnalyticsTraffic").getAnalyticsTraffic = null as any;
+export const getAnalyticsTrafficOutput: typeof import("./getAnalyticsTraffic").getAnalyticsTrafficOutput = null as any;
+utilities.lazyLoad(exports, ["getAnalyticsTraffic","getAnalyticsTrafficOutput"], () => require("./getAnalyticsTraffic"));
+
 export { GetAuthorizedUserArgs, GetAuthorizedUserResult } from "./getAuthorizedUser";
 export const getAuthorizedUser: typeof import("./getAuthorizedUser").getAuthorizedUser = null as any;
 export const getAuthorizedUserOutput: typeof import("./getAuthorizedUser").getAuthorizedUserOutput = null as any;
 utilities.lazyLoad(exports, ["getAuthorizedUser","getAuthorizedUserOutput"], () => require("./getAuthorizedUser"));
 
+export { GetPageArgs, GetPageResult, GetPageOutputArgs } from "./getPage";
+export const getPage: typeof import("./getPage").getPage = null as any;
+export const getPageOutput: typeof import("./getPage").getPageOutput = null as any;
+utilities.lazyLoad(exports, ["getPage","getPageOutput"], () => require("./getPage"));
+
+export { GetPageSchemaMarkupArgs, GetPageSchemaMarkupResult, GetPageSchemaMarkupOutputArgs } from "./getPageSchemaMarkup";
+export const getPageSchemaMarkup: typeof import("./getPageSchemaMarkup").getPageSchemaMarkup = null as any;
+export const getPageSchemaMarkupOutput: typeof import("./getPageSchemaMarkup").getPageSchemaMarkupOutput = null as any;
+utilities.lazyLoad(exports, ["getPageSchemaMarkup","getPageSchemaMarkupOutput"], () => require("./getPageSchemaMarkup"));
+
+export { GetPagesArgs, GetPagesResult, GetPagesOutputArgs } from "./getPages";
+export const getPages: typeof import("./getPages").getPages = null as any;
+export const getPagesOutput: typeof import("./getPages").getPagesOutput = null as any;
+utilities.lazyLoad(exports, ["getPages","getPagesOutput"], () => require("./getPages"));
+
 export { GetTokenInfoArgs, GetTokenInfoResult } from "./getTokenInfo";
 export const getTokenInfo: typeof import("./getTokenInfo").getTokenInfo = null as any;
 export const getTokenInfoOutput: typeof import("./getTokenInfo").getTokenInfoOutput = null as any;
 utilities.lazyLoad(exports, ["getTokenInfo","getTokenInfoOutput"], () => require("./getTokenInfo"));
+
+export { GoogleTagArgs } from "./googleTag";
+export type GoogleTag = import("./googleTag").GoogleTag;
+export const GoogleTag: typeof import("./googleTag").GoogleTag = null as any;
+utilities.lazyLoad(exports, ["GoogleTag"], () => require("./googleTag"));
 
 export { InlineScriptArgs } from "./inlineScript";
 export type InlineScript = import("./inlineScript").InlineScript;
@@ -60,10 +105,15 @@ export type PageCustomCode = import("./pageCustomCode").PageCustomCode;
 export const PageCustomCode: typeof import("./pageCustomCode").PageCustomCode = null as any;
 utilities.lazyLoad(exports, ["PageCustomCode"], () => require("./pageCustomCode"));
 
-export { PageDataArgs } from "./pageData";
-export type PageData = import("./pageData").PageData;
-export const PageData: typeof import("./pageData").PageData = null as any;
-utilities.lazyLoad(exports, ["PageData"], () => require("./pageData"));
+export { PageMetadataArgs } from "./pageMetadata";
+export type PageMetadata = import("./pageMetadata").PageMetadata;
+export const PageMetadata: typeof import("./pageMetadata").PageMetadata = null as any;
+utilities.lazyLoad(exports, ["PageMetadata"], () => require("./pageMetadata"));
+
+export { PageSchemaMarkupArgs } from "./pageSchemaMarkup";
+export type PageSchemaMarkup = import("./pageSchemaMarkup").PageSchemaMarkup;
+export const PageSchemaMarkup: typeof import("./pageSchemaMarkup").PageSchemaMarkup = null as any;
+utilities.lazyLoad(exports, ["PageSchemaMarkup"], () => require("./pageSchemaMarkup"));
 
 export { ProviderArgs } from "./provider";
 export type Provider = import("./provider").Provider;
@@ -126,14 +176,18 @@ const _module = {
                 return new CollectionItem(name, <any>undefined, { urn })
             case "webflow:index:EcommerceSettings":
                 return new EcommerceSettings(name, <any>undefined, { urn })
+            case "webflow:index:GoogleTag":
+                return new GoogleTag(name, <any>undefined, { urn })
             case "webflow:index:InlineScript":
                 return new InlineScript(name, <any>undefined, { urn })
             case "webflow:index:PageContent":
                 return new PageContent(name, <any>undefined, { urn })
             case "webflow:index:PageCustomCode":
                 return new PageCustomCode(name, <any>undefined, { urn })
-            case "webflow:index:PageData":
-                return new PageData(name, <any>undefined, { urn })
+            case "webflow:index:PageMetadata":
+                return new PageMetadata(name, <any>undefined, { urn })
+            case "webflow:index:PageSchemaMarkup":
+                return new PageSchemaMarkup(name, <any>undefined, { urn })
             case "webflow:index:Redirect":
                 return new Redirect(name, <any>undefined, { urn })
             case "webflow:index:RegisteredScript":

@@ -62,14 +62,14 @@ public final class CollectionArgs extends com.pulumi.resources.ResourceArgs {
     }
 
     /**
-     * The URL-friendly slug for the collection (optional, e.g., &#39;blog-posts&#39;, &#39;products&#39;). If not provided, Webflow will auto-generate a slug from the displayName. The slug determines the URL path for collection items.
+     * The URL-friendly slug for the collection (optional, e.g., &#39;blog-posts&#39;, &#39;products&#39;). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation.
      * 
      */
     @Import(name="slug")
     private @Nullable Output<String> slug;
 
     /**
-     * @return The URL-friendly slug for the collection (optional, e.g., &#39;blog-posts&#39;, &#39;products&#39;). If not provided, Webflow will auto-generate a slug from the displayName. The slug determines the URL path for collection items.
+     * @return The URL-friendly slug for the collection (optional, e.g., &#39;blog-posts&#39;, &#39;products&#39;). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation.
      * 
      */
     public Optional<Output<String>> slug() {
@@ -167,7 +167,7 @@ public final class CollectionArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param slug The URL-friendly slug for the collection (optional, e.g., &#39;blog-posts&#39;, &#39;products&#39;). If not provided, Webflow will auto-generate a slug from the displayName. The slug determines the URL path for collection items.
+         * @param slug The URL-friendly slug for the collection (optional, e.g., &#39;blog-posts&#39;, &#39;products&#39;). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation.
          * 
          * @return builder
          * 
@@ -178,7 +178,7 @@ public final class CollectionArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param slug The URL-friendly slug for the collection (optional, e.g., &#39;blog-posts&#39;, &#39;products&#39;). If not provided, Webflow will auto-generate a slug from the displayName. The slug determines the URL path for collection items.
+         * @param slug The URL-friendly slug for the collection (optional, e.g., &#39;blog-posts&#39;, &#39;products&#39;). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation.
          * 
          * @return builder
          * 

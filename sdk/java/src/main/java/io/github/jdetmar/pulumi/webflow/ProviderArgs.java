@@ -5,6 +5,7 @@ package io.github.jdetmar.pulumi.webflow;
 
 import com.pulumi.core.Output;
 import com.pulumi.core.annotations.Import;
+import com.pulumi.core.internal.Codegen;
 import java.lang.String;
 import java.util.Objects;
 import java.util.Optional;
@@ -16,14 +17,14 @@ public final class ProviderArgs extends com.pulumi.resources.ResourceArgs {
     public static final ProviderArgs Empty = new ProviderArgs();
 
     /**
-     * Webflow API v2 bearer token for authentication. Can also be set via WEBFLOW_API_TOKEN environment variable.
+     * Webflow API v2 bearer token for authentication. Explicit configuration takes precedence over the WEBFLOW_API_TOKEN environment variable, which is used as a fallback when no token is configured.
      * 
      */
     @Import(name="apiToken")
     private @Nullable Output<String> apiToken;
 
     /**
-     * @return Webflow API v2 bearer token for authentication. Can also be set via WEBFLOW_API_TOKEN environment variable.
+     * @return Webflow API v2 bearer token for authentication. Explicit configuration takes precedence over the WEBFLOW_API_TOKEN environment variable, which is used as a fallback when no token is configured.
      * 
      */
     public Optional<Output<String>> apiToken() {
@@ -55,7 +56,7 @@ public final class ProviderArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param apiToken Webflow API v2 bearer token for authentication. Can also be set via WEBFLOW_API_TOKEN environment variable.
+         * @param apiToken Webflow API v2 bearer token for authentication. Explicit configuration takes precedence over the WEBFLOW_API_TOKEN environment variable, which is used as a fallback when no token is configured.
          * 
          * @return builder
          * 
@@ -66,7 +67,7 @@ public final class ProviderArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param apiToken Webflow API v2 bearer token for authentication. Can also be set via WEBFLOW_API_TOKEN environment variable.
+         * @param apiToken Webflow API v2 bearer token for authentication. Explicit configuration takes precedence over the WEBFLOW_API_TOKEN environment variable, which is used as a fallback when no token is configured.
          * 
          * @return builder
          * 
@@ -76,6 +77,7 @@ public final class ProviderArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         public ProviderArgs build() {
+            $.apiToken = Codegen.stringProp("apiToken").secret().arg($.apiToken).env("WEBFLOW_API_TOKEN").getNullable();
             return $;
         }
     }

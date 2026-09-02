@@ -23,10 +23,11 @@ class InlineScriptArgs:
                  script_version: pulumi.Input[_builtins.str],
                  site_id: pulumi.Input[_builtins.str],
                  source_code: pulumi.Input[_builtins.str],
-                 can_copy: Optional[pulumi.Input[_builtins.bool]] = None,
-                 integrity_hash: Optional[pulumi.Input[_builtins.str]] = None):
+                 can_copy: pulumi.Input[Optional[_builtins.bool]] = None,
+                 integrity_hash: pulumi.Input[Optional[_builtins.str]] = None):
         """
         The set of arguments for constructing a InlineScript resource.
+
         :param pulumi.Input[_builtins.str] display_name: The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'.
         :param pulumi.Input[_builtins.str] script_version: The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
@@ -93,26 +94,26 @@ class InlineScriptArgs:
 
     @_builtins.property
     @pulumi.getter(name="canCopy")
-    def can_copy(self) -> Optional[pulumi.Input[_builtins.bool]]:
+    def can_copy(self) -> pulumi.Input[Optional[_builtins.bool]]:
         """
         Indicates whether the script can be copied when the site is duplicated. Default: false. When true, the script will be included when creating a copy of the site.
         """
         return pulumi.get(self, "can_copy")
 
     @can_copy.setter
-    def can_copy(self, value: Optional[pulumi.Input[_builtins.bool]]):
+    def can_copy(self, value: pulumi.Input[Optional[_builtins.bool]]):
         pulumi.set(self, "can_copy", value)
 
     @_builtins.property
     @pulumi.getter(name="integrityHash")
-    def integrity_hash(self) -> Optional[pulumi.Input[_builtins.str]]:
+    def integrity_hash(self) -> pulumi.Input[Optional[_builtins.str]]:
         """
         The Sub-Resource Integrity (SRI) hash for the script (optional). Format: 'sha384-<hash>', 'sha256-<hash>', or 'sha512-<hash>'. SRI hashes help ensure that the script hasn't been modified in transit. You can generate an SRI hash using https://www.srihash.org/
         """
         return pulumi.get(self, "integrity_hash")
 
     @integrity_hash.setter
-    def integrity_hash(self, value: Optional[pulumi.Input[_builtins.str]]):
+    def integrity_hash(self, value: pulumi.Input[Optional[_builtins.str]]):
         pulumi.set(self, "integrity_hash", value)
 
 
@@ -122,12 +123,12 @@ class InlineScript(pulumi.CustomResource):
     def __init__(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 can_copy: Optional[pulumi.Input[_builtins.bool]] = None,
-                 display_name: Optional[pulumi.Input[_builtins.str]] = None,
-                 integrity_hash: Optional[pulumi.Input[_builtins.str]] = None,
-                 script_version: Optional[pulumi.Input[_builtins.str]] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
-                 source_code: Optional[pulumi.Input[_builtins.str]] = None,
+                 can_copy: pulumi.Input[Optional[_builtins.bool]] = None,
+                 display_name: pulumi.Input[Optional[_builtins.str]] = None,
+                 integrity_hash: pulumi.Input[Optional[_builtins.str]] = None,
+                 script_version: pulumi.Input[Optional[_builtins.str]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
+                 source_code: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         """
         Manages inline custom code scripts in the Webflow script registry. This resource allows you to register and manage inline JavaScript code that can be deployed across your Webflow site with version control.
@@ -165,12 +166,12 @@ class InlineScript(pulumi.CustomResource):
     def _internal_init(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 can_copy: Optional[pulumi.Input[_builtins.bool]] = None,
-                 display_name: Optional[pulumi.Input[_builtins.str]] = None,
-                 integrity_hash: Optional[pulumi.Input[_builtins.str]] = None,
-                 script_version: Optional[pulumi.Input[_builtins.str]] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
-                 source_code: Optional[pulumi.Input[_builtins.str]] = None,
+                 can_copy: pulumi.Input[Optional[_builtins.bool]] = None,
+                 display_name: pulumi.Input[Optional[_builtins.str]] = None,
+                 integrity_hash: pulumi.Input[Optional[_builtins.str]] = None,
+                 script_version: pulumi.Input[Optional[_builtins.str]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
+                 source_code: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         opts = pulumi.ResourceOptions.merge(_utilities.get_resource_opts_defaults(), opts)
         if not isinstance(opts, pulumi.ResourceOptions):

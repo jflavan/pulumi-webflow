@@ -23,10 +23,11 @@ class RegisteredScriptArgs:
                  hosted_location: pulumi.Input[_builtins.str],
                  integrity_hash: pulumi.Input[_builtins.str],
                  site_id: pulumi.Input[_builtins.str],
-                 can_copy: Optional[pulumi.Input[_builtins.bool]] = None,
-                 script_version: Optional[pulumi.Input[_builtins.str]] = None):
+                 can_copy: pulumi.Input[Optional[_builtins.bool]] = None,
+                 script_version: pulumi.Input[Optional[_builtins.str]] = None):
         """
         The set of arguments for constructing a RegisteredScript resource.
+
         :param pulumi.Input[_builtins.str] display_name: The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'.
         :param pulumi.Input[_builtins.str] hosted_location: The URI for the externally hosted script (e.g., 'https://cdn.example.com/my-script.js'). Must be a valid HTTP or HTTPS URL. The script should be publicly accessible and properly configured for cross-origin requests.
         :param pulumi.Input[_builtins.str] integrity_hash: The Sub-Resource Integrity (SRI) hash for the script. Format: 'sha384-<hash>', 'sha256-<hash>', or 'sha512-<hash>'. SRI hashes help ensure that the script hasn't been modified in transit. You can generate an SRI hash using https://www.srihash.org/
@@ -93,26 +94,26 @@ class RegisteredScriptArgs:
 
     @_builtins.property
     @pulumi.getter(name="canCopy")
-    def can_copy(self) -> Optional[pulumi.Input[_builtins.bool]]:
+    def can_copy(self) -> pulumi.Input[Optional[_builtins.bool]]:
         """
         Indicates whether the script can be copied when the site is duplicated. Default: false. When true, the script will be included when creating a copy of the site.
         """
         return pulumi.get(self, "can_copy")
 
     @can_copy.setter
-    def can_copy(self, value: Optional[pulumi.Input[_builtins.bool]]):
+    def can_copy(self, value: pulumi.Input[Optional[_builtins.bool]]):
         pulumi.set(self, "can_copy", value)
 
     @_builtins.property
     @pulumi.getter(name="scriptVersion")
-    def script_version(self) -> Optional[pulumi.Input[_builtins.str]]:
+    def script_version(self) -> pulumi.Input[Optional[_builtins.str]]:
         """
         The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
         """
         return pulumi.get(self, "script_version")
 
     @script_version.setter
-    def script_version(self, value: Optional[pulumi.Input[_builtins.str]]):
+    def script_version(self, value: pulumi.Input[Optional[_builtins.str]]):
         pulumi.set(self, "script_version", value)
 
 
@@ -122,12 +123,12 @@ class RegisteredScript(pulumi.CustomResource):
     def __init__(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 can_copy: Optional[pulumi.Input[_builtins.bool]] = None,
-                 display_name: Optional[pulumi.Input[_builtins.str]] = None,
-                 hosted_location: Optional[pulumi.Input[_builtins.str]] = None,
-                 integrity_hash: Optional[pulumi.Input[_builtins.str]] = None,
-                 script_version: Optional[pulumi.Input[_builtins.str]] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
+                 can_copy: pulumi.Input[Optional[_builtins.bool]] = None,
+                 display_name: pulumi.Input[Optional[_builtins.str]] = None,
+                 hosted_location: pulumi.Input[Optional[_builtins.str]] = None,
+                 integrity_hash: pulumi.Input[Optional[_builtins.str]] = None,
+                 script_version: pulumi.Input[Optional[_builtins.str]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         """
         Manages custom code scripts in the Webflow script registry. This resource allows you to register and manage externally hosted scripts that can be deployed across your Webflow site with version control and integrity verification.
@@ -165,12 +166,12 @@ class RegisteredScript(pulumi.CustomResource):
     def _internal_init(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 can_copy: Optional[pulumi.Input[_builtins.bool]] = None,
-                 display_name: Optional[pulumi.Input[_builtins.str]] = None,
-                 hosted_location: Optional[pulumi.Input[_builtins.str]] = None,
-                 integrity_hash: Optional[pulumi.Input[_builtins.str]] = None,
-                 script_version: Optional[pulumi.Input[_builtins.str]] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
+                 can_copy: pulumi.Input[Optional[_builtins.bool]] = None,
+                 display_name: pulumi.Input[Optional[_builtins.str]] = None,
+                 hosted_location: pulumi.Input[Optional[_builtins.str]] = None,
+                 integrity_hash: pulumi.Input[Optional[_builtins.str]] = None,
+                 script_version: pulumi.Input[Optional[_builtins.str]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         opts = pulumi.ResourceOptions.merge(_utilities.get_resource_opts_defaults(), opts)
         if not isinstance(opts, pulumi.ResourceOptions):

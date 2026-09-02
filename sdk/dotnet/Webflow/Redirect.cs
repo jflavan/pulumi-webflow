@@ -17,13 +17,13 @@ namespace Community.Pulumi.Webflow
     public partial class Redirect : global::Pulumi.CustomResource
     {
         /// <summary>
-        /// The timestamp when the redirect was created (RFC3339 format). This is automatically set when the redirect is created and is read-only.
+        /// The timestamp when the redirect was created (RFC3339 format), when reported by the Webflow API. Read-only; empty when the API does not return it.
         /// </summary>
         [Output("createdOn")]
         public Output<string?> CreatedOn { get; private set; } = null!;
 
         /// <summary>
-        /// The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path.
+        /// The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
         /// </summary>
         [Output("destinationPath")]
         public Output<string> DestinationPath { get; private set; } = null!;
@@ -35,13 +35,13 @@ namespace Community.Pulumi.Webflow
         public Output<string> SiteId { get; private set; } = null!;
 
         /// <summary>
-        /// The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path.
+        /// The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
         /// </summary>
         [Output("sourcePath")]
         public Output<string> SourcePath { get; private set; } = null!;
 
         /// <summary>
-        /// The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves).
+        /// The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
         /// </summary>
         [Output("statusCode")]
         public Output<int> StatusCode { get; private set; } = null!;
@@ -93,7 +93,7 @@ namespace Community.Pulumi.Webflow
     public sealed class RedirectArgs : global::Pulumi.ResourceArgs
     {
         /// <summary>
-        /// The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path.
+        /// The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
         /// </summary>
         [Input("destinationPath", required: true)]
         public Input<string> DestinationPath { get; set; } = null!;
@@ -105,13 +105,13 @@ namespace Community.Pulumi.Webflow
         public Input<string> SiteId { get; set; } = null!;
 
         /// <summary>
-        /// The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path.
+        /// The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
         /// </summary>
         [Input("sourcePath", required: true)]
         public Input<string> SourcePath { get; set; } = null!;
 
         /// <summary>
-        /// The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves).
+        /// The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
         /// </summary>
         [Input("statusCode", required: true)]
         public Input<int> StatusCode { get; set; } = null!;

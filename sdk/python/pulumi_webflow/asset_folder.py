@@ -21,9 +21,10 @@ class AssetFolderArgs:
     def __init__(__self__, *,
                  display_name: pulumi.Input[_builtins.str],
                  site_id: pulumi.Input[_builtins.str],
-                 parent_folder: Optional[pulumi.Input[_builtins.str]] = None):
+                 parent_folder: pulumi.Input[Optional[_builtins.str]] = None):
         """
         The set of arguments for constructing a AssetFolder resource.
+
         :param pulumi.Input[_builtins.str] display_name: The human-readable name for the asset folder. This name appears in the Webflow Assets panel and helps organize your files. Examples: 'Images', 'Documents', 'Icons', 'Hero Backgrounds'. Maximum length: 255 characters.
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
         :param pulumi.Input[_builtins.str] parent_folder: Optional ID of the parent folder for creating nested folder structures. If not specified, the folder will be created at the root level of the Assets panel. Example: '5f0c8c9e1c9d440000e8d8c4'.
@@ -59,14 +60,14 @@ class AssetFolderArgs:
 
     @_builtins.property
     @pulumi.getter(name="parentFolder")
-    def parent_folder(self) -> Optional[pulumi.Input[_builtins.str]]:
+    def parent_folder(self) -> pulumi.Input[Optional[_builtins.str]]:
         """
         Optional ID of the parent folder for creating nested folder structures. If not specified, the folder will be created at the root level of the Assets panel. Example: '5f0c8c9e1c9d440000e8d8c4'.
         """
         return pulumi.get(self, "parent_folder")
 
     @parent_folder.setter
-    def parent_folder(self, value: Optional[pulumi.Input[_builtins.str]]):
+    def parent_folder(self, value: pulumi.Input[Optional[_builtins.str]]):
         pulumi.set(self, "parent_folder", value)
 
 
@@ -76,12 +77,12 @@ class AssetFolder(pulumi.CustomResource):
     def __init__(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 display_name: Optional[pulumi.Input[_builtins.str]] = None,
-                 parent_folder: Optional[pulumi.Input[_builtins.str]] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
+                 display_name: pulumi.Input[Optional[_builtins.str]] = None,
+                 parent_folder: pulumi.Input[Optional[_builtins.str]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         """
-        Manages asset folders for organizing files in a Webflow site. This resource allows you to create folders to organize your assets (images, documents, etc.) in the Webflow Assets panel. NOTE: The Webflow API does not support deleting or updating asset folders. Deleting this resource will only remove it from Pulumi state, not from Webflow. Any changes to folder properties will require creating a new folder.
+        Manages asset folders for organizing files in a Webflow site. This resource allows you to create folders to organize your assets (images, documents, etc.) in the Webflow Assets panel. NOTE: The Webflow API does not support deleting or updating asset folders. Deleting this resource only removes it from Pulumi state; the folder remains in Webflow. Changing displayName, parentFolder or siteId creates a new folder and leaves the old one behind.
 
         :param str resource_name: The name of the resource.
         :param pulumi.ResourceOptions opts: Options for the resource.
@@ -96,7 +97,7 @@ class AssetFolder(pulumi.CustomResource):
                  args: AssetFolderArgs,
                  opts: Optional[pulumi.ResourceOptions] = None):
         """
-        Manages asset folders for organizing files in a Webflow site. This resource allows you to create folders to organize your assets (images, documents, etc.) in the Webflow Assets panel. NOTE: The Webflow API does not support deleting or updating asset folders. Deleting this resource will only remove it from Pulumi state, not from Webflow. Any changes to folder properties will require creating a new folder.
+        Manages asset folders for organizing files in a Webflow site. This resource allows you to create folders to organize your assets (images, documents, etc.) in the Webflow Assets panel. NOTE: The Webflow API does not support deleting or updating asset folders. Deleting this resource only removes it from Pulumi state; the folder remains in Webflow. Changing displayName, parentFolder or siteId creates a new folder and leaves the old one behind.
 
         :param str resource_name: The name of the resource.
         :param AssetFolderArgs args: The arguments to use to populate this resource's properties.
@@ -113,9 +114,9 @@ class AssetFolder(pulumi.CustomResource):
     def _internal_init(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 display_name: Optional[pulumi.Input[_builtins.str]] = None,
-                 parent_folder: Optional[pulumi.Input[_builtins.str]] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
+                 display_name: pulumi.Input[Optional[_builtins.str]] = None,
+                 parent_folder: pulumi.Input[Optional[_builtins.str]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         opts = pulumi.ResourceOptions.merge(_utilities.get_resource_opts_defaults(), opts)
         if not isinstance(opts, pulumi.ResourceOptions):

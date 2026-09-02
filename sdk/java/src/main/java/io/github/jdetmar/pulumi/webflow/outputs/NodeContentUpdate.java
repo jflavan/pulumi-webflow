@@ -11,26 +11,26 @@ import java.util.Objects;
 @CustomType
 public final class NodeContentUpdate {
     /**
-     * @return The unique identifier for the DOM node to update. This ID comes from the page&#39;s DOM structure and must exist on the page. Retrieve node IDs using GET /pages/{page_id}/dom endpoint.
+     * @return The unique identifier for the DOM node to update. Retrieve node IDs using GET /pages/{page_id}/dom.
      * 
      */
     private String nodeId;
     /**
-     * @return The new text content for the node. This will replace the existing text content in the specified node. Only applicable to text nodes or elements containing text.
+     * @return The new text content for the node (HTML is allowed). An empty string clears the node&#39;s text.
      * 
      */
     private String text;
 
     private NodeContentUpdate() {}
     /**
-     * @return The unique identifier for the DOM node to update. This ID comes from the page&#39;s DOM structure and must exist on the page. Retrieve node IDs using GET /pages/{page_id}/dom endpoint.
+     * @return The unique identifier for the DOM node to update. Retrieve node IDs using GET /pages/{page_id}/dom.
      * 
      */
     public String nodeId() {
         return this.nodeId;
     }
     /**
-     * @return The new text content for the node. This will replace the existing text content in the specified node. Only applicable to text nodes or elements containing text.
+     * @return The new text content for the node (HTML is allowed). An empty string clears the node&#39;s text.
      * 
      */
     public String text() {

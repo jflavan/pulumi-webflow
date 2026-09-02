@@ -25,6 +25,7 @@ class SiteCustomCodeArgs:
                  site_id: pulumi.Input[_builtins.str]):
         """
         The set of arguments for constructing a SiteCustomCode resource.
+
         :param pulumi.Input[Sequence[pulumi.Input['CustomScriptArgsArgs']]] scripts: A list of custom scripts to apply to the site. Each script must be registered to the site first. To remove individual scripts, simply exclude them from this list on the next update. If you have multiple scripts your app manages, ensure they are always included in this list.
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
         """
@@ -62,8 +63,8 @@ class SiteCustomCode(pulumi.CustomResource):
     def __init__(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 scripts: Optional[pulumi.Input[Sequence[pulumi.Input[Union['CustomScriptArgsArgs', 'CustomScriptArgsArgsDict']]]]] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
+                 scripts: pulumi.Input[Optional[Sequence[pulumi.Input[Union['CustomScriptArgsArgs', 'CustomScriptArgsArgsDict']]]]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         """
         Manages custom JavaScript code applied to a Webflow site. This resource allows you to apply registered custom scripts to a site and control where they are placed (header or footer). Custom scripts must be registered to the site first via the RegisterScript resource.
@@ -97,8 +98,8 @@ class SiteCustomCode(pulumi.CustomResource):
     def _internal_init(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 scripts: Optional[pulumi.Input[Sequence[pulumi.Input[Union['CustomScriptArgsArgs', 'CustomScriptArgsArgsDict']]]]] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
+                 scripts: pulumi.Input[Optional[Sequence[pulumi.Input[Union['CustomScriptArgsArgs', 'CustomScriptArgsArgsDict']]]]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         opts = pulumi.ResourceOptions.merge(_utilities.get_resource_opts_defaults(), opts)
         if not isinstance(opts, pulumi.ResourceOptions):

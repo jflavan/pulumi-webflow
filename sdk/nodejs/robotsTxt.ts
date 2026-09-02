@@ -35,7 +35,7 @@ export class RobotsTxt extends pulumi.CustomResource {
     }
 
     /**
-     * The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives.
+     * The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives. Comments and other directives are not stored by Webflow and are dropped with a warning. Formatting differences (blank lines, spacing, directive casing) do not cause a diff.
      */
     declare public readonly content: pulumi.Output<string>;
     /**
@@ -82,7 +82,7 @@ export class RobotsTxt extends pulumi.CustomResource {
  */
 export interface RobotsTxtArgs {
     /**
-     * The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives.
+     * The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives. Comments and other directives are not stored by Webflow and are dropped with a warning. Formatting differences (blank lines, spacing, directive casing) do not cause a diff.
      */
     content: pulumi.Input<string>;
     /**

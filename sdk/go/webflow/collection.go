@@ -28,7 +28,7 @@ type Collection struct {
 	SingularName pulumi.StringOutput `pulumi:"singularName"`
 	// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
 	SiteId pulumi.StringOutput `pulumi:"siteId"`
-	// The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName. The slug determines the URL path for collection items.
+	// The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation.
 	Slug pulumi.StringPtrOutput `pulumi:"slug"`
 }
 
@@ -87,7 +87,7 @@ type collectionArgs struct {
 	SingularName string `pulumi:"singularName"`
 	// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
 	SiteId string `pulumi:"siteId"`
-	// The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName. The slug determines the URL path for collection items.
+	// The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation.
 	Slug *string `pulumi:"slug"`
 }
 
@@ -99,7 +99,7 @@ type CollectionArgs struct {
 	SingularName pulumi.StringInput
 	// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
 	SiteId pulumi.StringInput
-	// The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName. The slug determines the URL path for collection items.
+	// The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation.
 	Slug pulumi.StringPtrInput
 }
 
@@ -170,7 +170,7 @@ func (o CollectionOutput) SiteId() pulumi.StringOutput {
 	return o.ApplyT(func(v *Collection) pulumi.StringOutput { return v.SiteId }).(pulumi.StringOutput)
 }
 
-// The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName. The slug determines the URL path for collection items.
+// The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation.
 func (o CollectionOutput) Slug() pulumi.StringPtrOutput {
 	return o.ApplyT(func(v *Collection) pulumi.StringPtrOutput { return v.Slug }).(pulumi.StringPtrOutput)
 }

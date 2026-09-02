@@ -8,6 +8,7 @@ import com.pulumi.core.annotations.Import;
 import com.pulumi.exceptions.MissingRequiredPropertyException;
 import java.lang.Boolean;
 import java.lang.String;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import javax.annotation.Nullable;
@@ -33,14 +34,14 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
     }
 
     /**
-     * The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. This is useful for organizing multiple sites into logical groups within your workspace.
+     * The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
      * 
      */
     @Import(name="parentFolderId")
     private @Nullable Output<String> parentFolderId;
 
     /**
-     * @return The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. This is useful for organizing multiple sites into logical groups within your workspace.
+     * @return The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
      * 
      */
     public Optional<Output<String>> parentFolderId() {
@@ -48,18 +49,63 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
     }
 
     /**
-     * Automatically publish the site after creation or updates. When set to true, the provider will publish the site to production after successfully creating or updating it. Default: false (manual publishing required). Note: Site must have at least one published version before automatic publishing will work. If publishing fails, the entire operation will fail with an error (site may exist but Pulumi will report failure). Recommendation: Set to false for initial site creation, then enable after first manual publish.
+     * Automatically publish the site after creation or updates. When set to true, the provider calls the Webflow publish endpoint after successfully creating or updating the site, using `publishToWebflowSubdomain`, `publishCustomDomains` and `publishPageId` to build the publish request. If neither `publishToWebflowSubdomain` nor `publishCustomDomains` is set, the site is published to its webflow.io subdomain. Default: false (manual publishing required). If publishing fails, the operation fails with an error (the site may exist but Pulumi will report failure).
      * 
      */
     @Import(name="publish")
     private @Nullable Output<Boolean> publish;
 
     /**
-     * @return Automatically publish the site after creation or updates. When set to true, the provider will publish the site to production after successfully creating or updating it. Default: false (manual publishing required). Note: Site must have at least one published version before automatic publishing will work. If publishing fails, the entire operation will fail with an error (site may exist but Pulumi will report failure). Recommendation: Set to false for initial site creation, then enable after first manual publish.
+     * @return Automatically publish the site after creation or updates. When set to true, the provider calls the Webflow publish endpoint after successfully creating or updating the site, using `publishToWebflowSubdomain`, `publishCustomDomains` and `publishPageId` to build the publish request. If neither `publishToWebflowSubdomain` nor `publishCustomDomains` is set, the site is published to its webflow.io subdomain. Default: false (manual publishing required). If publishing fails, the operation fails with an error (the site may exist but Pulumi will report failure).
      * 
      */
     public Optional<Output<Boolean>> publish() {
         return Optional.ofNullable(this.publish);
+    }
+
+    /**
+     * When `publish` is true, the list of custom domain IDs (not host names) to publish to. Maps to the `customDomains` field of the Webflow publish endpoint. Custom domain IDs can be read from the Webflow site settings or the sites API.
+     * 
+     */
+    @Import(name="publishCustomDomains")
+    private @Nullable Output<List<String>> publishCustomDomains;
+
+    /**
+     * @return When `publish` is true, the list of custom domain IDs (not host names) to publish to. Maps to the `customDomains` field of the Webflow publish endpoint. Custom domain IDs can be read from the Webflow site settings or the sites API.
+     * 
+     */
+    public Optional<Output<List<String>>> publishCustomDomains() {
+        return Optional.ofNullable(this.publishCustomDomains);
+    }
+
+    /**
+     * When `publish` is true, publish only the page with this ID instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
+     * 
+     */
+    @Import(name="publishPageId")
+    private @Nullable Output<String> publishPageId;
+
+    /**
+     * @return When `publish` is true, publish only the page with this ID instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
+     * 
+     */
+    public Optional<Output<String>> publishPageId() {
+        return Optional.ofNullable(this.publishPageId);
+    }
+
+    /**
+     * When `publish` is true, publish to the site&#39;s default webflow.io subdomain. Maps to the `publishToWebflowSubdomain` field of the Webflow publish endpoint. Default: false.
+     * 
+     */
+    @Import(name="publishToWebflowSubdomain")
+    private @Nullable Output<Boolean> publishToWebflowSubdomain;
+
+    /**
+     * @return When `publish` is true, publish to the site&#39;s default webflow.io subdomain. Maps to the `publishToWebflowSubdomain` field of the Webflow publish endpoint. Default: false.
+     * 
+     */
+    public Optional<Output<Boolean>> publishToWebflowSubdomain() {
+        return Optional.ofNullable(this.publishToWebflowSubdomain);
     }
 
     /**
@@ -98,6 +144,9 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
         this.displayName = $.displayName;
         this.parentFolderId = $.parentFolderId;
         this.publish = $.publish;
+        this.publishCustomDomains = $.publishCustomDomains;
+        this.publishPageId = $.publishPageId;
+        this.publishToWebflowSubdomain = $.publishToWebflowSubdomain;
         this.templateName = $.templateName;
         this.workspaceId = $.workspaceId;
     }
@@ -142,7 +191,7 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param parentFolderId The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. This is useful for organizing multiple sites into logical groups within your workspace.
+         * @param parentFolderId The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
          * 
          * @return builder
          * 
@@ -153,7 +202,7 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param parentFolderId The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. This is useful for organizing multiple sites into logical groups within your workspace.
+         * @param parentFolderId The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
          * 
          * @return builder
          * 
@@ -163,7 +212,7 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param publish Automatically publish the site after creation or updates. When set to true, the provider will publish the site to production after successfully creating or updating it. Default: false (manual publishing required). Note: Site must have at least one published version before automatic publishing will work. If publishing fails, the entire operation will fail with an error (site may exist but Pulumi will report failure). Recommendation: Set to false for initial site creation, then enable after first manual publish.
+         * @param publish Automatically publish the site after creation or updates. When set to true, the provider calls the Webflow publish endpoint after successfully creating or updating the site, using `publishToWebflowSubdomain`, `publishCustomDomains` and `publishPageId` to build the publish request. If neither `publishToWebflowSubdomain` nor `publishCustomDomains` is set, the site is published to its webflow.io subdomain. Default: false (manual publishing required). If publishing fails, the operation fails with an error (the site may exist but Pulumi will report failure).
          * 
          * @return builder
          * 
@@ -174,13 +223,86 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param publish Automatically publish the site after creation or updates. When set to true, the provider will publish the site to production after successfully creating or updating it. Default: false (manual publishing required). Note: Site must have at least one published version before automatic publishing will work. If publishing fails, the entire operation will fail with an error (site may exist but Pulumi will report failure). Recommendation: Set to false for initial site creation, then enable after first manual publish.
+         * @param publish Automatically publish the site after creation or updates. When set to true, the provider calls the Webflow publish endpoint after successfully creating or updating the site, using `publishToWebflowSubdomain`, `publishCustomDomains` and `publishPageId` to build the publish request. If neither `publishToWebflowSubdomain` nor `publishCustomDomains` is set, the site is published to its webflow.io subdomain. Default: false (manual publishing required). If publishing fails, the operation fails with an error (the site may exist but Pulumi will report failure).
          * 
          * @return builder
          * 
          */
         public Builder publish(Boolean publish) {
             return publish(Output.of(publish));
+        }
+
+        /**
+         * @param publishCustomDomains When `publish` is true, the list of custom domain IDs (not host names) to publish to. Maps to the `customDomains` field of the Webflow publish endpoint. Custom domain IDs can be read from the Webflow site settings or the sites API.
+         * 
+         * @return builder
+         * 
+         */
+        public Builder publishCustomDomains(@Nullable Output<List<String>> publishCustomDomains) {
+            $.publishCustomDomains = publishCustomDomains;
+            return this;
+        }
+
+        /**
+         * @param publishCustomDomains When `publish` is true, the list of custom domain IDs (not host names) to publish to. Maps to the `customDomains` field of the Webflow publish endpoint. Custom domain IDs can be read from the Webflow site settings or the sites API.
+         * 
+         * @return builder
+         * 
+         */
+        public Builder publishCustomDomains(List<String> publishCustomDomains) {
+            return publishCustomDomains(Output.of(publishCustomDomains));
+        }
+
+        /**
+         * @param publishCustomDomains When `publish` is true, the list of custom domain IDs (not host names) to publish to. Maps to the `customDomains` field of the Webflow publish endpoint. Custom domain IDs can be read from the Webflow site settings or the sites API.
+         * 
+         * @return builder
+         * 
+         */
+        public Builder publishCustomDomains(String... publishCustomDomains) {
+            return publishCustomDomains(List.of(publishCustomDomains));
+        }
+
+        /**
+         * @param publishPageId When `publish` is true, publish only the page with this ID instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
+         * 
+         * @return builder
+         * 
+         */
+        public Builder publishPageId(@Nullable Output<String> publishPageId) {
+            $.publishPageId = publishPageId;
+            return this;
+        }
+
+        /**
+         * @param publishPageId When `publish` is true, publish only the page with this ID instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
+         * 
+         * @return builder
+         * 
+         */
+        public Builder publishPageId(String publishPageId) {
+            return publishPageId(Output.of(publishPageId));
+        }
+
+        /**
+         * @param publishToWebflowSubdomain When `publish` is true, publish to the site&#39;s default webflow.io subdomain. Maps to the `publishToWebflowSubdomain` field of the Webflow publish endpoint. Default: false.
+         * 
+         * @return builder
+         * 
+         */
+        public Builder publishToWebflowSubdomain(@Nullable Output<Boolean> publishToWebflowSubdomain) {
+            $.publishToWebflowSubdomain = publishToWebflowSubdomain;
+            return this;
+        }
+
+        /**
+         * @param publishToWebflowSubdomain When `publish` is true, publish to the site&#39;s default webflow.io subdomain. Maps to the `publishToWebflowSubdomain` field of the Webflow publish endpoint. Default: false.
+         * 
+         * @return builder
+         * 
+         */
+        public Builder publishToWebflowSubdomain(Boolean publishToWebflowSubdomain) {
+            return publishToWebflowSubdomain(Output.of(publishToWebflowSubdomain));
         }
 
         /**

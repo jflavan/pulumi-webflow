@@ -1,16 +1,22 @@
 {
     "compilerOptions": {
+        // Output
         "outDir": "bin",
-        "target": "ES2020",
-        "module": "commonjs",
-        "moduleResolution": "node",
         "declaration": true,
+        "declarationMap": true,
         "sourceMap": true,
         "stripInternal": true,
-        "experimentalDecorators": true,
+        // Environment
+        "target": "ES2022",
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "moduleDetection": "force",
+        "types": ["node"],
+        // Type Checking
+        "strict": true,
         "noFallthroughCasesInSwitch": true,
-        "forceConsistentCasingInFileNames": true,
-        "strict": true
+        "noImplicitReturns": true,
+        "skipLibCheck": true
     },
     "files": [
         "asset.ts",
@@ -21,13 +27,23 @@
         "config/index.ts",
         "config/vars.ts",
         "ecommerceSettings.ts",
+        "getAnalyticsTimeOnPage.ts",
+        "getAnalyticsTopDimensions.ts",
+        "getAnalyticsTopEvents.ts",
+        "getAnalyticsTopPages.ts",
+        "getAnalyticsTraffic.ts",
         "getAuthorizedUser.ts",
+        "getPage.ts",
+        "getPageSchemaMarkup.ts",
+        "getPages.ts",
         "getTokenInfo.ts",
+        "googleTag.ts",
         "index.ts",
         "inlineScript.ts",
         "pageContent.ts",
         "pageCustomCode.ts",
-        "pageData.ts",
+        "pageMetadata.ts",
+        "pageSchemaMarkup.ts",
         "provider.ts",
         "redirect.ts",
         "registeredScript.ts",

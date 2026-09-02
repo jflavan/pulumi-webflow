@@ -33,14 +33,18 @@ func (m *module) Construct(ctx *pulumi.Context, name, typ, urn string) (r pulumi
 		r = &CollectionItem{}
 	case "webflow:index:EcommerceSettings":
 		r = &EcommerceSettings{}
+	case "webflow:index:GoogleTag":
+		r = &GoogleTag{}
 	case "webflow:index:InlineScript":
 		r = &InlineScript{}
 	case "webflow:index:PageContent":
 		r = &PageContent{}
 	case "webflow:index:PageCustomCode":
 		r = &PageCustomCode{}
-	case "webflow:index:PageData":
-		r = &PageData{}
+	case "webflow:index:PageMetadata":
+		r = &PageMetadata{}
+	case "webflow:index:PageSchemaMarkup":
+		r = &PageSchemaMarkup{}
 	case "webflow:index:Redirect":
 		r = &Redirect{}
 	case "webflow:index:RegisteredScript":

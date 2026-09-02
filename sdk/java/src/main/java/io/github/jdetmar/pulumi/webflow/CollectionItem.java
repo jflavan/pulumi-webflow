@@ -17,20 +17,20 @@ import java.util.Optional;
 import javax.annotation.Nullable;
 
 /**
- * Manages CMS collection items for a Webflow collection. Collection items represent individual content entries (blog posts, products, etc.) within a CMS collection. Each item has dynamic field data based on the collection schema.
+ * Manages CMS collection items for a Webflow collection. Collection items represent individual content entries (blog posts, products, etc.) within a CMS collection. Each item has dynamic field data based on the collection schema. Items are created and updated in staging; set live=true to publish them to the live site as part of every create and update.
  * 
  */
 @ResourceType(type="webflow:index:CollectionItem")
 public class CollectionItem extends com.pulumi.resources.CustomResource {
     /**
-     * The locale ID for localized sites (optional, e.g., &#39;en-US&#39;). Only required if your site uses Webflow&#39;s localization features. Leave empty for non-localized sites.
+     * The CMS locale ID for localized sites (optional). Only required if your site uses Webflow&#39;s localization features; it is sent with every request for this item, including reads. Leave empty for non-localized sites.
      * 
      */
     @Export(name="cmsLocaleId", refs={String.class}, tree="[0]")
     private Output</* @Nullable */ String> cmsLocaleId;
 
     /**
-     * @return The locale ID for localized sites (optional, e.g., &#39;en-US&#39;). Only required if your site uses Webflow&#39;s localization features. Leave empty for non-localized sites.
+     * @return The CMS locale ID for localized sites (optional). Only required if your site uses Webflow&#39;s localization features; it is sent with every request for this item, including reads. Leave empty for non-localized sites.
      * 
      */
     public Output<Optional<String>> cmsLocaleId() {
@@ -65,42 +65,42 @@ public class CollectionItem extends com.pulumi.resources.CustomResource {
         return Codegen.optional(this.createdOn);
     }
     /**
-     * A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include &#39;name&#39; (required), &#39;slug&#39; (required, URL-friendly), and any custom fields you&#39;ve added to the collection. Example: {&#34;name&#34;: &#34;My Blog Post&#34;, &#34;slug&#34;: &#34;my-blog-post&#34;, &#34;content&#34;: &#34;Post content...&#34;}
+     * A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include &#39;name&#39; (required), &#39;slug&#39; (required, URL-friendly), and any custom fields you&#39;ve added to the collection. Only the fields listed here are managed; other fields of the item are left untouched. Example: {&#34;name&#34;: &#34;My Blog Post&#34;, &#34;slug&#34;: &#34;my-blog-post&#34;, &#34;content&#34;: &#34;Post content...&#34;}
      * 
      */
     @Export(name="fieldData", refs={Map.class,String.class,Object.class}, tree="[0,1,2]")
     private Output<Map<String,Object>> fieldData;
 
     /**
-     * @return A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include &#39;name&#39; (required), &#39;slug&#39; (required, URL-friendly), and any custom fields you&#39;ve added to the collection. Example: {&#34;name&#34;: &#34;My Blog Post&#34;, &#34;slug&#34;: &#34;my-blog-post&#34;, &#34;content&#34;: &#34;Post content...&#34;}
+     * @return A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include &#39;name&#39; (required), &#39;slug&#39; (required, URL-friendly), and any custom fields you&#39;ve added to the collection. Only the fields listed here are managed; other fields of the item are left untouched. Example: {&#34;name&#34;: &#34;My Blog Post&#34;, &#34;slug&#34;: &#34;my-blog-post&#34;, &#34;content&#34;: &#34;Post content...&#34;}
      * 
      */
     public Output<Map<String,Object>> fieldData() {
         return this.fieldData;
     }
     /**
-     * Whether the item is archived (optional, defaults to false). Archived items are not visible on the published site but remain in the CMS.
+     * Whether the item is archived (optional). Archived items are not visible on the published site but remain in the CMS. When omitted, the archived state is not managed and never causes a diff.
      * 
      */
     @Export(name="isArchived", refs={Boolean.class}, tree="[0]")
     private Output</* @Nullable */ Boolean> isArchived;
 
     /**
-     * @return Whether the item is archived (optional, defaults to false). Archived items are not visible on the published site but remain in the CMS.
+     * @return Whether the item is archived (optional). Archived items are not visible on the published site but remain in the CMS. When omitted, the archived state is not managed and never causes a diff.
      * 
      */
     public Output<Optional<Boolean>> isArchived() {
         return Codegen.optional(this.isArchived);
     }
     /**
-     * Whether the item is a draft (optional, defaults to true). Draft items are not published to the live site. Set to false to publish the item immediately upon creation.
+     * Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff.
      * 
      */
     @Export(name="isDraft", refs={Boolean.class}, tree="[0]")
     private Output</* @Nullable */ Boolean> isDraft;
 
     /**
-     * @return Whether the item is a draft (optional, defaults to true). Draft items are not published to the live site. Set to false to publish the item immediately upon creation.
+     * @return Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff.
      * 
      */
     public Output<Optional<Boolean>> isDraft() {
@@ -147,6 +147,20 @@ public class CollectionItem extends com.pulumi.resources.CustomResource {
      */
     public Output<Optional<String>> lastUpdated() {
         return Codegen.optional(this.lastUpdated);
+    }
+    /**
+     * Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+     * 
+     */
+    @Export(name="live", refs={Boolean.class}, tree="[0]")
+    private Output</* @Nullable */ Boolean> live;
+
+    /**
+     * @return Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+     * 
+     */
+    public Output<Optional<Boolean>> live() {
+        return Codegen.optional(this.live);
     }
 
     /**

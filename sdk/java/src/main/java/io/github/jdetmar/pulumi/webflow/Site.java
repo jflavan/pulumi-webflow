@@ -106,14 +106,14 @@ public class Site extends com.pulumi.resources.CustomResource {
         return Codegen.optional(this.lastUpdated);
     }
     /**
-     * The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. This is useful for organizing multiple sites into logical groups within your workspace.
+     * The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
      * 
      */
     @Export(name="parentFolderId", refs={String.class}, tree="[0]")
     private Output</* @Nullable */ String> parentFolderId;
 
     /**
-     * @return The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. This is useful for organizing multiple sites into logical groups within your workspace.
+     * @return The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
      * 
      */
     public Output<Optional<String>> parentFolderId() {
@@ -134,18 +134,74 @@ public class Site extends com.pulumi.resources.CustomResource {
         return Codegen.optional(this.previewUrl);
     }
     /**
-     * Automatically publish the site after creation or updates. When set to true, the provider will publish the site to production after successfully creating or updating it. Default: false (manual publishing required). Note: Site must have at least one published version before automatic publishing will work. If publishing fails, the entire operation will fail with an error (site may exist but Pulumi will report failure). Recommendation: Set to false for initial site creation, then enable after first manual publish.
+     * Automatically publish the site after creation or updates. When set to true, the provider calls the Webflow publish endpoint after successfully creating or updating the site, using `publishToWebflowSubdomain`, `publishCustomDomains` and `publishPageId` to build the publish request. If neither `publishToWebflowSubdomain` nor `publishCustomDomains` is set, the site is published to its webflow.io subdomain. Default: false (manual publishing required). If publishing fails, the operation fails with an error (the site may exist but Pulumi will report failure).
      * 
      */
     @Export(name="publish", refs={Boolean.class}, tree="[0]")
     private Output</* @Nullable */ Boolean> publish;
 
     /**
-     * @return Automatically publish the site after creation or updates. When set to true, the provider will publish the site to production after successfully creating or updating it. Default: false (manual publishing required). Note: Site must have at least one published version before automatic publishing will work. If publishing fails, the entire operation will fail with an error (site may exist but Pulumi will report failure). Recommendation: Set to false for initial site creation, then enable after first manual publish.
+     * @return Automatically publish the site after creation or updates. When set to true, the provider calls the Webflow publish endpoint after successfully creating or updating the site, using `publishToWebflowSubdomain`, `publishCustomDomains` and `publishPageId` to build the publish request. If neither `publishToWebflowSubdomain` nor `publishCustomDomains` is set, the site is published to its webflow.io subdomain. Default: false (manual publishing required). If publishing fails, the operation fails with an error (the site may exist but Pulumi will report failure).
      * 
      */
     public Output<Optional<Boolean>> publish() {
         return Codegen.optional(this.publish);
+    }
+    /**
+     * When `publish` is true, the list of custom domain IDs (not host names) to publish to. Maps to the `customDomains` field of the Webflow publish endpoint. Custom domain IDs can be read from the Webflow site settings or the sites API.
+     * 
+     */
+    @Export(name="publishCustomDomains", refs={List.class,String.class}, tree="[0,1]")
+    private Output</* @Nullable */ List<String>> publishCustomDomains;
+
+    /**
+     * @return When `publish` is true, the list of custom domain IDs (not host names) to publish to. Maps to the `customDomains` field of the Webflow publish endpoint. Custom domain IDs can be read from the Webflow site settings or the sites API.
+     * 
+     */
+    public Output<Optional<List<String>>> publishCustomDomains() {
+        return Codegen.optional(this.publishCustomDomains);
+    }
+    /**
+     * When `publish` is true, publish only the page with this ID instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
+     * 
+     */
+    @Export(name="publishPageId", refs={String.class}, tree="[0]")
+    private Output</* @Nullable */ String> publishPageId;
+
+    /**
+     * @return When `publish` is true, publish only the page with this ID instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
+     * 
+     */
+    public Output<Optional<String>> publishPageId() {
+        return Codegen.optional(this.publishPageId);
+    }
+    /**
+     * Scope of the last publish triggered by this provider (read-only): &#39;site&#39; when the whole site was published, &#39;page&#39; when only `publishPageId` was published. Empty when the provider has not published the site.
+     * 
+     */
+    @Export(name="publishScope", refs={String.class}, tree="[0]")
+    private Output</* @Nullable */ String> publishScope;
+
+    /**
+     * @return Scope of the last publish triggered by this provider (read-only): &#39;site&#39; when the whole site was published, &#39;page&#39; when only `publishPageId` was published. Empty when the provider has not published the site.
+     * 
+     */
+    public Output<Optional<String>> publishScope() {
+        return Codegen.optional(this.publishScope);
+    }
+    /**
+     * When `publish` is true, publish to the site&#39;s default webflow.io subdomain. Maps to the `publishToWebflowSubdomain` field of the Webflow publish endpoint. Default: false.
+     * 
+     */
+    @Export(name="publishToWebflowSubdomain", refs={Boolean.class}, tree="[0]")
+    private Output</* @Nullable */ Boolean> publishToWebflowSubdomain;
+
+    /**
+     * @return When `publish` is true, publish to the site&#39;s default webflow.io subdomain. Maps to the `publishToWebflowSubdomain` field of the Webflow publish endpoint. Default: false.
+     * 
+     */
+    public Output<Optional<Boolean>> publishToWebflowSubdomain() {
+        return Codegen.optional(this.publishToWebflowSubdomain);
     }
     /**
      * The slugified version of the site name used in URLs (read-only). Auto-generated by Webflow from the displayName. Cannot be set via API. Examples: &#39;my-site&#39;, &#39;company-blog-2024&#39;, &#39;product-landing&#39;.

@@ -21,28 +21,28 @@ import javax.annotation.Nullable;
 @ResourceType(type="webflow:index:Redirect")
 public class Redirect extends com.pulumi.resources.CustomResource {
     /**
-     * The timestamp when the redirect was created (RFC3339 format). This is automatically set when the redirect is created and is read-only.
+     * The timestamp when the redirect was created (RFC3339 format), when reported by the Webflow API. Read-only; empty when the API does not return it.
      * 
      */
     @Export(name="createdOn", refs={String.class}, tree="[0]")
     private Output</* @Nullable */ String> createdOn;
 
     /**
-     * @return The timestamp when the redirect was created (RFC3339 format). This is automatically set when the redirect is created and is read-only.
+     * @return The timestamp when the redirect was created (RFC3339 format), when reported by the Webflow API. Read-only; empty when the API does not return it.
      * 
      */
     public Output<Optional<String>> createdOn() {
         return Codegen.optional(this.createdOn);
     }
     /**
-     * The URL path to redirect to (e.g., &#39;/new-page&#39;, &#39;/home&#39;). Must start with &#39;/&#39; and contain only valid URL characters. This is the location where users will be redirected when they visit the source path.
+     * The URL path to redirect to (e.g., &#39;/new-page&#39;, &#39;/home&#39;). Must start with &#39;/&#39; and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
      * 
      */
     @Export(name="destinationPath", refs={String.class}, tree="[0]")
     private Output<String> destinationPath;
 
     /**
-     * @return The URL path to redirect to (e.g., &#39;/new-page&#39;, &#39;/home&#39;). Must start with &#39;/&#39; and contain only valid URL characters. This is the location where users will be redirected when they visit the source path.
+     * @return The URL path to redirect to (e.g., &#39;/new-page&#39;, &#39;/home&#39;). Must start with &#39;/&#39; and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
      * 
      */
     public Output<String> destinationPath() {
@@ -63,28 +63,28 @@ public class Redirect extends com.pulumi.resources.CustomResource {
         return this.siteId;
     }
     /**
-     * The URL path to redirect from (e.g., &#39;/old-page&#39;, &#39;/blog/2023&#39;). Must start with &#39;/&#39; and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path.
+     * The URL path to redirect from (e.g., &#39;/old-page&#39;, &#39;/blog/2023&#39;). Must start with &#39;/&#39; and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
      * 
      */
     @Export(name="sourcePath", refs={String.class}, tree="[0]")
     private Output<String> sourcePath;
 
     /**
-     * @return The URL path to redirect from (e.g., &#39;/old-page&#39;, &#39;/blog/2023&#39;). Must start with &#39;/&#39; and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path.
+     * @return The URL path to redirect from (e.g., &#39;/old-page&#39;, &#39;/blog/2023&#39;). Must start with &#39;/&#39; and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
      * 
      */
     public Output<String> sourcePath() {
         return this.sourcePath;
     }
     /**
-     * The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves).
+     * The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
      * 
      */
     @Export(name="statusCode", refs={Integer.class}, tree="[0]")
     private Output<Integer> statusCode;
 
     /**
-     * @return The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves).
+     * @return The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
      * 
      */
     public Output<Integer> statusCode() {

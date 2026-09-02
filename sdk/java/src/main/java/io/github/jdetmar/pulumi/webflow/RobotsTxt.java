@@ -19,14 +19,14 @@ import javax.annotation.Nullable;
 @ResourceType(type="webflow:index:RobotsTxt")
 public class RobotsTxt extends com.pulumi.resources.CustomResource {
     /**
-     * The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives.
+     * The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives. Comments and other directives are not stored by Webflow and are dropped with a warning. Formatting differences (blank lines, spacing, directive casing) do not cause a diff.
      * 
      */
     @Export(name="content", refs={String.class}, tree="[0]")
     private Output<String> content;
 
     /**
-     * @return The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives.
+     * @return The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives. Comments and other directives are not stored by Webflow and are dropped with a warning. Formatting differences (blank lines, spacing, directive casing) do not cause a diff.
      * 
      */
     public Output<String> content() {

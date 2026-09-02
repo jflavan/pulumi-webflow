@@ -12,17 +12,17 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-// Manages static content (text) for a Webflow page. This resource allows you to update text content within existing DOM nodes on a page. It does NOT manage page structure or layout - only content within existing nodes. To find node IDs, you must first retrieve the page DOM structure using the Webflow API.
+// Manages static text content of a Webflow page (POST /v2/pages/{page_id}/dom). This resource updates text within existing DOM nodes; it does NOT manage page structure or layout. Find node IDs by fetching the page DOM (GET /v2/pages/{page_id}/dom). Set localeId to update a secondary locale; when omitted, Webflow targets the primary locale. Webflow reports per-node failures in the response; the update fails if any node was rejected.
 //
-// **IMPORTANT LIMITATION:** This resource does NOT support drift detection for content changes. If content is modified outside of Pulumi (via Webflow UI or API), those changes will NOT be detected during 'pulumi refresh' or 'pulumi up'. The resource only verifies that the page still exists. This is due to the complexity of extracting and comparing specific node text from the full DOM structure.
+// **IMPORTANT LIMITATION:** This resource does NOT detect drift for content changed outside of Pulumi; refresh only verifies that the page still exists. Destroying the resource leaves the content in place.
 type PageContent struct {
 	pulumi.CustomResourceState
 
-	// The timestamp when the page content was last updated (RFC3339 format). This is automatically set when content is updated and is read-only.
-	LastUpdated pulumi.StringPtrOutput `pulumi:"lastUpdated"`
-	// List of node content updates to apply. Each update specifies the nodeId (from the page's DOM structure) and the new text content. Node IDs can be retrieved by fetching the page DOM using GET /pages/{page_id}/dom. Only text content in existing nodes can be updated via this resource.
+	// Optional locale ID to update a secondary locale. When omitted the localeId query parameter is not sent and Webflow updates the primary locale.
+	LocaleId pulumi.StringPtrOutput `pulumi:"localeId"`
+	// List of node content updates to apply. Each entry names a nodeId from the page's DOM and the new text (HTML allowed). Node IDs must be unique within the list.
 	Nodes NodeContentUpdateArrayOutput `pulumi:"nodes"`
-	// The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). You can find page IDs using the Pages API list endpoint or in the Webflow designer. This field will be validated before making any API calls.
+	// The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs.
 	PageId pulumi.StringOutput `pulumi:"pageId"`
 }
 
@@ -72,17 +72,21 @@ func (PageContentState) ElementType() reflect.Type {
 }
 
 type pageContentArgs struct {
-	// List of node content updates to apply. Each update specifies the nodeId (from the page's DOM structure) and the new text content. Node IDs can be retrieved by fetching the page DOM using GET /pages/{page_id}/dom. Only text content in existing nodes can be updated via this resource.
+	// Optional locale ID to update a secondary locale. When omitted the localeId query parameter is not sent and Webflow updates the primary locale.
+	LocaleId *string `pulumi:"localeId"`
+	// List of node content updates to apply. Each entry names a nodeId from the page's DOM and the new text (HTML allowed). Node IDs must be unique within the list.
 	Nodes []NodeContentUpdate `pulumi:"nodes"`
-	// The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). You can find page IDs using the Pages API list endpoint or in the Webflow designer. This field will be validated before making any API calls.
+	// The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs.
 	PageId string `pulumi:"pageId"`
 }
 
 // The set of arguments for constructing a PageContent resource.
 type PageContentArgs struct {
-	// List of node content updates to apply. Each update specifies the nodeId (from the page's DOM structure) and the new text content. Node IDs can be retrieved by fetching the page DOM using GET /pages/{page_id}/dom. Only text content in existing nodes can be updated via this resource.
+	// Optional locale ID to update a secondary locale. When omitted the localeId query parameter is not sent and Webflow updates the primary locale.
+	LocaleId pulumi.StringPtrInput
+	// List of node content updates to apply. Each entry names a nodeId from the page's DOM and the new text (HTML allowed). Node IDs must be unique within the list.
 	Nodes NodeContentUpdateArrayInput
-	// The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). You can find page IDs using the Pages API list endpoint or in the Webflow designer. This field will be validated before making any API calls.
+	// The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs.
 	PageId pulumi.StringInput
 }
 
@@ -123,17 +127,17 @@ func (o PageContentOutput) ToPageContentOutputWithContext(ctx context.Context) P
 	return o
 }
 
-// The timestamp when the page content was last updated (RFC3339 format). This is automatically set when content is updated and is read-only.
-func (o PageContentOutput) LastUpdated() pulumi.StringPtrOutput {
-	return o.ApplyT(func(v *PageContent) pulumi.StringPtrOutput { return v.LastUpdated }).(pulumi.StringPtrOutput)
+// Optional locale ID to update a secondary locale. When omitted the localeId query parameter is not sent and Webflow updates the primary locale.
+func (o PageContentOutput) LocaleId() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v *PageContent) pulumi.StringPtrOutput { return v.LocaleId }).(pulumi.StringPtrOutput)
 }
 
-// List of node content updates to apply. Each update specifies the nodeId (from the page's DOM structure) and the new text content. Node IDs can be retrieved by fetching the page DOM using GET /pages/{page_id}/dom. Only text content in existing nodes can be updated via this resource.
+// List of node content updates to apply. Each entry names a nodeId from the page's DOM and the new text (HTML allowed). Node IDs must be unique within the list.
 func (o PageContentOutput) Nodes() NodeContentUpdateArrayOutput {
 	return o.ApplyT(func(v *PageContent) NodeContentUpdateArrayOutput { return v.Nodes }).(NodeContentUpdateArrayOutput)
 }
 
-// The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). You can find page IDs using the Pages API list endpoint or in the Webflow designer. This field will be validated before making any API calls.
+// The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs.
 func (o PageContentOutput) PageId() pulumi.StringOutput {
 	return o.ApplyT(func(v *PageContent) pulumi.StringOutput { return v.PageId }).(pulumi.StringOutput)
 }

@@ -22,19 +22,22 @@ class CollectionFieldArgs:
                  collection_id: pulumi.Input[_builtins.str],
                  display_name: pulumi.Input[_builtins.str],
                  type: pulumi.Input[_builtins.str],
-                 help_text: Optional[pulumi.Input[_builtins.str]] = None,
-                 is_required: Optional[pulumi.Input[_builtins.bool]] = None,
-                 slug: Optional[pulumi.Input[_builtins.str]] = None,
-                 validations: Optional[pulumi.Input[Mapping[str, Any]]] = None):
+                 help_text: pulumi.Input[Optional[_builtins.str]] = None,
+                 is_required: pulumi.Input[Optional[_builtins.bool]] = None,
+                 metadata: pulumi.Input[Optional[Mapping[str, Any]]] = None,
+                 slug: pulumi.Input[Optional[_builtins.str]] = None,
+                 validations: pulumi.Input[Optional[Mapping[str, Any]]] = None):
         """
         The set of arguments for constructing a CollectionField resource.
+
         :param pulumi.Input[_builtins.str] collection_id: The Webflow collection ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find collection IDs via the Webflow API or dashboard. This field will be validated before making any API calls.
         :param pulumi.Input[_builtins.str] display_name: The human-readable name of the field (e.g., 'Title', 'Description', 'Author'). This name appears in the Webflow CMS interface. Maximum length: 255 characters.
-        :param pulumi.Input[_builtins.str] type: The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: PlainText, RichText, Image, MultiImage, Video, Link, Email, Phone, Number, DateTime, Switch, Color, Option, File, Reference, MultiReference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
+        :param pulumi.Input[_builtins.str] type: The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: Color, DateTime, Email, File, Image, Link, MultiImage, Number, Phone, PlainText, RichText, Switch, VideoLink, Option, MultiReference, Reference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
         :param pulumi.Input[_builtins.str] help_text: Optional help text shown in the CMS interface (e.g., 'Enter the article title'). Helps content editors understand what to enter in this field.
         :param pulumi.Input[_builtins.bool] is_required: Whether the field is required (optional, defaults to false). When true, content items must provide a value for this field.
-        :param pulumi.Input[_builtins.str] slug: The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName. The slug is used in API requests and exports.
-        :param pulumi.Input[Mapping[str, Any]] validations: Type-specific validation rules (optional). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Refer to Webflow API documentation for validation options for each field type.
+        :param pulumi.Input[Mapping[str, Any]] metadata: Type-specific configuration (create-only). Required for Option fields: {"options": [{"name": "Draft"}, {"name": "Published"}]}. Required for Reference and MultiReference fields: {"collectionId": "<referenced collection ID>"}. Not accepted for other field types. Changing metadata requires replacement.
+        :param pulumi.Input[_builtins.str] slug: The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the outputs without causing a diff. The slug is used in API requests and exports and cannot be changed after creation - changing an explicit slug requires replacement.
+        :param pulumi.Input[Mapping[str, Any]] validations: Type-specific validation rules (optional, create-only). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Changing validations requires replacement. Refer to Webflow API documentation for validation options for each field type.
         """
         pulumi.set(__self__, "collection_id", collection_id)
         pulumi.set(__self__, "display_name", display_name)
@@ -43,6 +46,8 @@ class CollectionFieldArgs:
             pulumi.set(__self__, "help_text", help_text)
         if is_required is not None:
             pulumi.set(__self__, "is_required", is_required)
+        if metadata is not None:
+            pulumi.set(__self__, "metadata", metadata)
         if slug is not None:
             pulumi.set(__self__, "slug", slug)
         if validations is not None:
@@ -76,7 +81,7 @@ class CollectionFieldArgs:
     @pulumi.getter
     def type(self) -> pulumi.Input[_builtins.str]:
         """
-        The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: PlainText, RichText, Image, MultiImage, Video, Link, Email, Phone, Number, DateTime, Switch, Color, Option, File, Reference, MultiReference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
+        The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: Color, DateTime, Email, File, Image, Link, MultiImage, Number, Phone, PlainText, RichText, Switch, VideoLink, Option, MultiReference, Reference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
         """
         return pulumi.get(self, "type")
 
@@ -86,50 +91,62 @@ class CollectionFieldArgs:
 
     @_builtins.property
     @pulumi.getter(name="helpText")
-    def help_text(self) -> Optional[pulumi.Input[_builtins.str]]:
+    def help_text(self) -> pulumi.Input[Optional[_builtins.str]]:
         """
         Optional help text shown in the CMS interface (e.g., 'Enter the article title'). Helps content editors understand what to enter in this field.
         """
         return pulumi.get(self, "help_text")
 
     @help_text.setter
-    def help_text(self, value: Optional[pulumi.Input[_builtins.str]]):
+    def help_text(self, value: pulumi.Input[Optional[_builtins.str]]):
         pulumi.set(self, "help_text", value)
 
     @_builtins.property
     @pulumi.getter(name="isRequired")
-    def is_required(self) -> Optional[pulumi.Input[_builtins.bool]]:
+    def is_required(self) -> pulumi.Input[Optional[_builtins.bool]]:
         """
         Whether the field is required (optional, defaults to false). When true, content items must provide a value for this field.
         """
         return pulumi.get(self, "is_required")
 
     @is_required.setter
-    def is_required(self, value: Optional[pulumi.Input[_builtins.bool]]):
+    def is_required(self, value: pulumi.Input[Optional[_builtins.bool]]):
         pulumi.set(self, "is_required", value)
 
     @_builtins.property
     @pulumi.getter
-    def slug(self) -> Optional[pulumi.Input[_builtins.str]]:
+    def metadata(self) -> pulumi.Input[Optional[Mapping[str, Any]]]:
         """
-        The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName. The slug is used in API requests and exports.
+        Type-specific configuration (create-only). Required for Option fields: {"options": [{"name": "Draft"}, {"name": "Published"}]}. Required for Reference and MultiReference fields: {"collectionId": "<referenced collection ID>"}. Not accepted for other field types. Changing metadata requires replacement.
+        """
+        return pulumi.get(self, "metadata")
+
+    @metadata.setter
+    def metadata(self, value: pulumi.Input[Optional[Mapping[str, Any]]]):
+        pulumi.set(self, "metadata", value)
+
+    @_builtins.property
+    @pulumi.getter
+    def slug(self) -> pulumi.Input[Optional[_builtins.str]]:
+        """
+        The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the outputs without causing a diff. The slug is used in API requests and exports and cannot be changed after creation - changing an explicit slug requires replacement.
         """
         return pulumi.get(self, "slug")
 
     @slug.setter
-    def slug(self, value: Optional[pulumi.Input[_builtins.str]]):
+    def slug(self, value: pulumi.Input[Optional[_builtins.str]]):
         pulumi.set(self, "slug", value)
 
     @_builtins.property
     @pulumi.getter
-    def validations(self) -> Optional[pulumi.Input[Mapping[str, Any]]]:
+    def validations(self) -> pulumi.Input[Optional[Mapping[str, Any]]]:
         """
-        Type-specific validation rules (optional). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Refer to Webflow API documentation for validation options for each field type.
+        Type-specific validation rules (optional, create-only). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Changing validations requires replacement. Refer to Webflow API documentation for validation options for each field type.
         """
         return pulumi.get(self, "validations")
 
     @validations.setter
-    def validations(self, value: Optional[pulumi.Input[Mapping[str, Any]]]):
+    def validations(self, value: pulumi.Input[Optional[Mapping[str, Any]]]):
         pulumi.set(self, "validations", value)
 
 
@@ -139,16 +156,17 @@ class CollectionField(pulumi.CustomResource):
     def __init__(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 collection_id: Optional[pulumi.Input[_builtins.str]] = None,
-                 display_name: Optional[pulumi.Input[_builtins.str]] = None,
-                 help_text: Optional[pulumi.Input[_builtins.str]] = None,
-                 is_required: Optional[pulumi.Input[_builtins.bool]] = None,
-                 slug: Optional[pulumi.Input[_builtins.str]] = None,
-                 type: Optional[pulumi.Input[_builtins.str]] = None,
-                 validations: Optional[pulumi.Input[Mapping[str, Any]]] = None,
+                 collection_id: pulumi.Input[Optional[_builtins.str]] = None,
+                 display_name: pulumi.Input[Optional[_builtins.str]] = None,
+                 help_text: pulumi.Input[Optional[_builtins.str]] = None,
+                 is_required: pulumi.Input[Optional[_builtins.bool]] = None,
+                 metadata: pulumi.Input[Optional[Mapping[str, Any]]] = None,
+                 slug: pulumi.Input[Optional[_builtins.str]] = None,
+                 type: pulumi.Input[Optional[_builtins.str]] = None,
+                 validations: pulumi.Input[Optional[Mapping[str, Any]]] = None,
                  __props__=None):
         """
-        Manages fields for a Webflow CMS collection. Collection fields define the structure of content items in a collection. Note: The field type cannot be changed after creation - changing it requires replacement (delete + recreate).
+        Manages fields for a Webflow CMS collection. Collection fields define the structure of content items in a collection. Only displayName, helpText and isRequired can be updated in place; type, slug, validations and metadata cannot be changed after creation and changing them requires replacement (delete + recreate).
 
         :param str resource_name: The name of the resource.
         :param pulumi.ResourceOptions opts: Options for the resource.
@@ -156,9 +174,10 @@ class CollectionField(pulumi.CustomResource):
         :param pulumi.Input[_builtins.str] display_name: The human-readable name of the field (e.g., 'Title', 'Description', 'Author'). This name appears in the Webflow CMS interface. Maximum length: 255 characters.
         :param pulumi.Input[_builtins.str] help_text: Optional help text shown in the CMS interface (e.g., 'Enter the article title'). Helps content editors understand what to enter in this field.
         :param pulumi.Input[_builtins.bool] is_required: Whether the field is required (optional, defaults to false). When true, content items must provide a value for this field.
-        :param pulumi.Input[_builtins.str] slug: The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName. The slug is used in API requests and exports.
-        :param pulumi.Input[_builtins.str] type: The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: PlainText, RichText, Image, MultiImage, Video, Link, Email, Phone, Number, DateTime, Switch, Color, Option, File, Reference, MultiReference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
-        :param pulumi.Input[Mapping[str, Any]] validations: Type-specific validation rules (optional). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Refer to Webflow API documentation for validation options for each field type.
+        :param pulumi.Input[Mapping[str, Any]] metadata: Type-specific configuration (create-only). Required for Option fields: {"options": [{"name": "Draft"}, {"name": "Published"}]}. Required for Reference and MultiReference fields: {"collectionId": "<referenced collection ID>"}. Not accepted for other field types. Changing metadata requires replacement.
+        :param pulumi.Input[_builtins.str] slug: The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the outputs without causing a diff. The slug is used in API requests and exports and cannot be changed after creation - changing an explicit slug requires replacement.
+        :param pulumi.Input[_builtins.str] type: The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: Color, DateTime, Email, File, Image, Link, MultiImage, Number, Phone, PlainText, RichText, Switch, VideoLink, Option, MultiReference, Reference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
+        :param pulumi.Input[Mapping[str, Any]] validations: Type-specific validation rules (optional, create-only). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Changing validations requires replacement. Refer to Webflow API documentation for validation options for each field type.
         """
         ...
     @overload
@@ -167,7 +186,7 @@ class CollectionField(pulumi.CustomResource):
                  args: CollectionFieldArgs,
                  opts: Optional[pulumi.ResourceOptions] = None):
         """
-        Manages fields for a Webflow CMS collection. Collection fields define the structure of content items in a collection. Note: The field type cannot be changed after creation - changing it requires replacement (delete + recreate).
+        Manages fields for a Webflow CMS collection. Collection fields define the structure of content items in a collection. Only displayName, helpText and isRequired can be updated in place; type, slug, validations and metadata cannot be changed after creation and changing them requires replacement (delete + recreate).
 
         :param str resource_name: The name of the resource.
         :param CollectionFieldArgs args: The arguments to use to populate this resource's properties.
@@ -184,13 +203,14 @@ class CollectionField(pulumi.CustomResource):
     def _internal_init(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 collection_id: Optional[pulumi.Input[_builtins.str]] = None,
-                 display_name: Optional[pulumi.Input[_builtins.str]] = None,
-                 help_text: Optional[pulumi.Input[_builtins.str]] = None,
-                 is_required: Optional[pulumi.Input[_builtins.bool]] = None,
-                 slug: Optional[pulumi.Input[_builtins.str]] = None,
-                 type: Optional[pulumi.Input[_builtins.str]] = None,
-                 validations: Optional[pulumi.Input[Mapping[str, Any]]] = None,
+                 collection_id: pulumi.Input[Optional[_builtins.str]] = None,
+                 display_name: pulumi.Input[Optional[_builtins.str]] = None,
+                 help_text: pulumi.Input[Optional[_builtins.str]] = None,
+                 is_required: pulumi.Input[Optional[_builtins.bool]] = None,
+                 metadata: pulumi.Input[Optional[Mapping[str, Any]]] = None,
+                 slug: pulumi.Input[Optional[_builtins.str]] = None,
+                 type: pulumi.Input[Optional[_builtins.str]] = None,
+                 validations: pulumi.Input[Optional[Mapping[str, Any]]] = None,
                  __props__=None):
         opts = pulumi.ResourceOptions.merge(_utilities.get_resource_opts_defaults(), opts)
         if not isinstance(opts, pulumi.ResourceOptions):
@@ -208,6 +228,7 @@ class CollectionField(pulumi.CustomResource):
             __props__.__dict__["display_name"] = display_name
             __props__.__dict__["help_text"] = help_text
             __props__.__dict__["is_required"] = is_required
+            __props__.__dict__["metadata"] = metadata
             __props__.__dict__["slug"] = slug
             if type is None and not opts.urn:
                 raise TypeError("Missing required property 'type'")
@@ -243,6 +264,7 @@ class CollectionField(pulumi.CustomResource):
         __props__.__dict__["help_text"] = None
         __props__.__dict__["is_editable"] = None
         __props__.__dict__["is_required"] = None
+        __props__.__dict__["metadata"] = None
         __props__.__dict__["slug"] = None
         __props__.__dict__["type"] = None
         __props__.__dict__["validations"] = None
@@ -298,9 +320,17 @@ class CollectionField(pulumi.CustomResource):
 
     @_builtins.property
     @pulumi.getter
+    def metadata(self) -> pulumi.Output[Optional[Mapping[str, Any]]]:
+        """
+        Type-specific configuration (create-only). Required for Option fields: {"options": [{"name": "Draft"}, {"name": "Published"}]}. Required for Reference and MultiReference fields: {"collectionId": "<referenced collection ID>"}. Not accepted for other field types. Changing metadata requires replacement.
+        """
+        return pulumi.get(self, "metadata")
+
+    @_builtins.property
+    @pulumi.getter
     def slug(self) -> pulumi.Output[Optional[_builtins.str]]:
         """
-        The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName. The slug is used in API requests and exports.
+        The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the outputs without causing a diff. The slug is used in API requests and exports and cannot be changed after creation - changing an explicit slug requires replacement.
         """
         return pulumi.get(self, "slug")
 
@@ -308,7 +338,7 @@ class CollectionField(pulumi.CustomResource):
     @pulumi.getter
     def type(self) -> pulumi.Output[_builtins.str]:
         """
-        The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: PlainText, RichText, Image, MultiImage, Video, Link, Email, Phone, Number, DateTime, Switch, Color, Option, File, Reference, MultiReference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
+        The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: Color, DateTime, Email, File, Image, Link, MultiImage, Number, Phone, PlainText, RichText, Switch, VideoLink, Option, MultiReference, Reference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
         """
         return pulumi.get(self, "type")
 
@@ -316,7 +346,7 @@ class CollectionField(pulumi.CustomResource):
     @pulumi.getter
     def validations(self) -> pulumi.Output[Optional[Mapping[str, Any]]]:
         """
-        Type-specific validation rules (optional). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Refer to Webflow API documentation for validation options for each field type.
+        Type-specific validation rules (optional, create-only). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Changing validations requires replacement. Refer to Webflow API documentation for validation options for each field type.
         """
         return pulumi.get(self, "validations")
 

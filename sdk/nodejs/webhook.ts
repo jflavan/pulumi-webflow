@@ -105,7 +105,7 @@ export interface WebhookArgs {
     /**
      * Optional filter for webhook events. The structure depends on the triggerType and allows you to receive only specific events. For example, for collection_item_created, you can filter by collection ID. Refer to Webflow API documentation for filter options for each trigger type.
      */
-    filter?: pulumi.Input<{[key: string]: any}>;
+    filter?: pulumi.Input<{[key: string]: any} | undefined>;
     /**
      * The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
      */

@@ -35,11 +35,11 @@ export class Redirect extends pulumi.CustomResource {
     }
 
     /**
-     * The timestamp when the redirect was created (RFC3339 format). This is automatically set when the redirect is created and is read-only.
+     * The timestamp when the redirect was created (RFC3339 format), when reported by the Webflow API. Read-only; empty when the API does not return it.
      */
     declare public /*out*/ readonly createdOn: pulumi.Output<string | undefined>;
     /**
-     * The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path.
+     * The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
      */
     declare public readonly destinationPath: pulumi.Output<string>;
     /**
@@ -47,11 +47,11 @@ export class Redirect extends pulumi.CustomResource {
      */
     declare public readonly siteId: pulumi.Output<string>;
     /**
-     * The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path.
+     * The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
      */
     declare public readonly sourcePath: pulumi.Output<string>;
     /**
-     * The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves).
+     * The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
      */
     declare public readonly statusCode: pulumi.Output<number>;
 
@@ -100,7 +100,7 @@ export class Redirect extends pulumi.CustomResource {
  */
 export interface RedirectArgs {
     /**
-     * The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path.
+     * The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
      */
     destinationPath: pulumi.Input<string>;
     /**
@@ -108,11 +108,11 @@ export interface RedirectArgs {
      */
     siteId: pulumi.Input<string>;
     /**
-     * The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path.
+     * The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
      */
     sourcePath: pulumi.Input<string>;
     /**
-     * The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves).
+     * The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
      */
     statusCode: pulumi.Input<number>;
 }

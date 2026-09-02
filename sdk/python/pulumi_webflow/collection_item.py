@@ -21,16 +21,19 @@ class CollectionItemArgs:
     def __init__(__self__, *,
                  collection_id: pulumi.Input[_builtins.str],
                  field_data: pulumi.Input[Mapping[str, Any]],
-                 cms_locale_id: Optional[pulumi.Input[_builtins.str]] = None,
-                 is_archived: Optional[pulumi.Input[_builtins.bool]] = None,
-                 is_draft: Optional[pulumi.Input[_builtins.bool]] = None):
+                 cms_locale_id: pulumi.Input[Optional[_builtins.str]] = None,
+                 is_archived: pulumi.Input[Optional[_builtins.bool]] = None,
+                 is_draft: pulumi.Input[Optional[_builtins.bool]] = None,
+                 live: pulumi.Input[Optional[_builtins.bool]] = None):
         """
         The set of arguments for constructing a CollectionItem resource.
+
         :param pulumi.Input[_builtins.str] collection_id: The Webflow collection ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find collection IDs via the Webflow API or dashboard. This field will be validated before making any API calls.
-        :param pulumi.Input[Mapping[str, Any]] field_data: A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Example: {"name": "My Blog Post", "slug": "my-blog-post", "content": "Post content..."}
-        :param pulumi.Input[_builtins.str] cms_locale_id: The locale ID for localized sites (optional, e.g., 'en-US'). Only required if your site uses Webflow's localization features. Leave empty for non-localized sites.
-        :param pulumi.Input[_builtins.bool] is_archived: Whether the item is archived (optional, defaults to false). Archived items are not visible on the published site but remain in the CMS.
-        :param pulumi.Input[_builtins.bool] is_draft: Whether the item is a draft (optional, defaults to true). Draft items are not published to the live site. Set to false to publish the item immediately upon creation.
+        :param pulumi.Input[Mapping[str, Any]] field_data: A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Only the fields listed here are managed; other fields of the item are left untouched. Example: {"name": "My Blog Post", "slug": "my-blog-post", "content": "Post content..."}
+        :param pulumi.Input[_builtins.str] cms_locale_id: The CMS locale ID for localized sites (optional). Only required if your site uses Webflow's localization features; it is sent with every request for this item, including reads. Leave empty for non-localized sites.
+        :param pulumi.Input[_builtins.bool] is_archived: Whether the item is archived (optional). Archived items are not visible on the published site but remain in the CMS. When omitted, the archived state is not managed and never causes a diff.
+        :param pulumi.Input[_builtins.bool] is_draft: Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff.
+        :param pulumi.Input[_builtins.bool] live: Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
         """
         pulumi.set(__self__, "collection_id", collection_id)
         pulumi.set(__self__, "field_data", field_data)
@@ -40,6 +43,8 @@ class CollectionItemArgs:
             pulumi.set(__self__, "is_archived", is_archived)
         if is_draft is not None:
             pulumi.set(__self__, "is_draft", is_draft)
+        if live is not None:
+            pulumi.set(__self__, "live", live)
 
     @_builtins.property
     @pulumi.getter(name="collectionId")
@@ -57,7 +62,7 @@ class CollectionItemArgs:
     @pulumi.getter(name="fieldData")
     def field_data(self) -> pulumi.Input[Mapping[str, Any]]:
         """
-        A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Example: {"name": "My Blog Post", "slug": "my-blog-post", "content": "Post content..."}
+        A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Only the fields listed here are managed; other fields of the item are left untouched. Example: {"name": "My Blog Post", "slug": "my-blog-post", "content": "Post content..."}
         """
         return pulumi.get(self, "field_data")
 
@@ -67,39 +72,51 @@ class CollectionItemArgs:
 
     @_builtins.property
     @pulumi.getter(name="cmsLocaleId")
-    def cms_locale_id(self) -> Optional[pulumi.Input[_builtins.str]]:
+    def cms_locale_id(self) -> pulumi.Input[Optional[_builtins.str]]:
         """
-        The locale ID for localized sites (optional, e.g., 'en-US'). Only required if your site uses Webflow's localization features. Leave empty for non-localized sites.
+        The CMS locale ID for localized sites (optional). Only required if your site uses Webflow's localization features; it is sent with every request for this item, including reads. Leave empty for non-localized sites.
         """
         return pulumi.get(self, "cms_locale_id")
 
     @cms_locale_id.setter
-    def cms_locale_id(self, value: Optional[pulumi.Input[_builtins.str]]):
+    def cms_locale_id(self, value: pulumi.Input[Optional[_builtins.str]]):
         pulumi.set(self, "cms_locale_id", value)
 
     @_builtins.property
     @pulumi.getter(name="isArchived")
-    def is_archived(self) -> Optional[pulumi.Input[_builtins.bool]]:
+    def is_archived(self) -> pulumi.Input[Optional[_builtins.bool]]:
         """
-        Whether the item is archived (optional, defaults to false). Archived items are not visible on the published site but remain in the CMS.
+        Whether the item is archived (optional). Archived items are not visible on the published site but remain in the CMS. When omitted, the archived state is not managed and never causes a diff.
         """
         return pulumi.get(self, "is_archived")
 
     @is_archived.setter
-    def is_archived(self, value: Optional[pulumi.Input[_builtins.bool]]):
+    def is_archived(self, value: pulumi.Input[Optional[_builtins.bool]]):
         pulumi.set(self, "is_archived", value)
 
     @_builtins.property
     @pulumi.getter(name="isDraft")
-    def is_draft(self) -> Optional[pulumi.Input[_builtins.bool]]:
+    def is_draft(self) -> pulumi.Input[Optional[_builtins.bool]]:
         """
-        Whether the item is a draft (optional, defaults to true). Draft items are not published to the live site. Set to false to publish the item immediately upon creation.
+        Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff.
         """
         return pulumi.get(self, "is_draft")
 
     @is_draft.setter
-    def is_draft(self, value: Optional[pulumi.Input[_builtins.bool]]):
+    def is_draft(self, value: pulumi.Input[Optional[_builtins.bool]]):
         pulumi.set(self, "is_draft", value)
+
+    @_builtins.property
+    @pulumi.getter
+    def live(self) -> pulumi.Input[Optional[_builtins.bool]]:
+        """
+        Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+        """
+        return pulumi.get(self, "live")
+
+    @live.setter
+    def live(self, value: pulumi.Input[Optional[_builtins.bool]]):
+        pulumi.set(self, "live", value)
 
 
 @pulumi.type_token("webflow:index:CollectionItem")
@@ -108,22 +125,24 @@ class CollectionItem(pulumi.CustomResource):
     def __init__(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 cms_locale_id: Optional[pulumi.Input[_builtins.str]] = None,
-                 collection_id: Optional[pulumi.Input[_builtins.str]] = None,
-                 field_data: Optional[pulumi.Input[Mapping[str, Any]]] = None,
-                 is_archived: Optional[pulumi.Input[_builtins.bool]] = None,
-                 is_draft: Optional[pulumi.Input[_builtins.bool]] = None,
+                 cms_locale_id: pulumi.Input[Optional[_builtins.str]] = None,
+                 collection_id: pulumi.Input[Optional[_builtins.str]] = None,
+                 field_data: pulumi.Input[Optional[Mapping[str, Any]]] = None,
+                 is_archived: pulumi.Input[Optional[_builtins.bool]] = None,
+                 is_draft: pulumi.Input[Optional[_builtins.bool]] = None,
+                 live: pulumi.Input[Optional[_builtins.bool]] = None,
                  __props__=None):
         """
-        Manages CMS collection items for a Webflow collection. Collection items represent individual content entries (blog posts, products, etc.) within a CMS collection. Each item has dynamic field data based on the collection schema.
+        Manages CMS collection items for a Webflow collection. Collection items represent individual content entries (blog posts, products, etc.) within a CMS collection. Each item has dynamic field data based on the collection schema. Items are created and updated in staging; set live=true to publish them to the live site as part of every create and update.
 
         :param str resource_name: The name of the resource.
         :param pulumi.ResourceOptions opts: Options for the resource.
-        :param pulumi.Input[_builtins.str] cms_locale_id: The locale ID for localized sites (optional, e.g., 'en-US'). Only required if your site uses Webflow's localization features. Leave empty for non-localized sites.
+        :param pulumi.Input[_builtins.str] cms_locale_id: The CMS locale ID for localized sites (optional). Only required if your site uses Webflow's localization features; it is sent with every request for this item, including reads. Leave empty for non-localized sites.
         :param pulumi.Input[_builtins.str] collection_id: The Webflow collection ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find collection IDs via the Webflow API or dashboard. This field will be validated before making any API calls.
-        :param pulumi.Input[Mapping[str, Any]] field_data: A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Example: {"name": "My Blog Post", "slug": "my-blog-post", "content": "Post content..."}
-        :param pulumi.Input[_builtins.bool] is_archived: Whether the item is archived (optional, defaults to false). Archived items are not visible on the published site but remain in the CMS.
-        :param pulumi.Input[_builtins.bool] is_draft: Whether the item is a draft (optional, defaults to true). Draft items are not published to the live site. Set to false to publish the item immediately upon creation.
+        :param pulumi.Input[Mapping[str, Any]] field_data: A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Only the fields listed here are managed; other fields of the item are left untouched. Example: {"name": "My Blog Post", "slug": "my-blog-post", "content": "Post content..."}
+        :param pulumi.Input[_builtins.bool] is_archived: Whether the item is archived (optional). Archived items are not visible on the published site but remain in the CMS. When omitted, the archived state is not managed and never causes a diff.
+        :param pulumi.Input[_builtins.bool] is_draft: Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff.
+        :param pulumi.Input[_builtins.bool] live: Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
         """
         ...
     @overload
@@ -132,7 +151,7 @@ class CollectionItem(pulumi.CustomResource):
                  args: CollectionItemArgs,
                  opts: Optional[pulumi.ResourceOptions] = None):
         """
-        Manages CMS collection items for a Webflow collection. Collection items represent individual content entries (blog posts, products, etc.) within a CMS collection. Each item has dynamic field data based on the collection schema.
+        Manages CMS collection items for a Webflow collection. Collection items represent individual content entries (blog posts, products, etc.) within a CMS collection. Each item has dynamic field data based on the collection schema. Items are created and updated in staging; set live=true to publish them to the live site as part of every create and update.
 
         :param str resource_name: The name of the resource.
         :param CollectionItemArgs args: The arguments to use to populate this resource's properties.
@@ -149,11 +168,12 @@ class CollectionItem(pulumi.CustomResource):
     def _internal_init(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 cms_locale_id: Optional[pulumi.Input[_builtins.str]] = None,
-                 collection_id: Optional[pulumi.Input[_builtins.str]] = None,
-                 field_data: Optional[pulumi.Input[Mapping[str, Any]]] = None,
-                 is_archived: Optional[pulumi.Input[_builtins.bool]] = None,
-                 is_draft: Optional[pulumi.Input[_builtins.bool]] = None,
+                 cms_locale_id: pulumi.Input[Optional[_builtins.str]] = None,
+                 collection_id: pulumi.Input[Optional[_builtins.str]] = None,
+                 field_data: pulumi.Input[Optional[Mapping[str, Any]]] = None,
+                 is_archived: pulumi.Input[Optional[_builtins.bool]] = None,
+                 is_draft: pulumi.Input[Optional[_builtins.bool]] = None,
+                 live: pulumi.Input[Optional[_builtins.bool]] = None,
                  __props__=None):
         opts = pulumi.ResourceOptions.merge(_utilities.get_resource_opts_defaults(), opts)
         if not isinstance(opts, pulumi.ResourceOptions):
@@ -172,6 +192,7 @@ class CollectionItem(pulumi.CustomResource):
             __props__.__dict__["field_data"] = field_data
             __props__.__dict__["is_archived"] = is_archived
             __props__.__dict__["is_draft"] = is_draft
+            __props__.__dict__["live"] = live
             __props__.__dict__["created_on"] = None
             __props__.__dict__["item_id"] = None
             __props__.__dict__["last_published"] = None
@@ -207,13 +228,14 @@ class CollectionItem(pulumi.CustomResource):
         __props__.__dict__["item_id"] = None
         __props__.__dict__["last_published"] = None
         __props__.__dict__["last_updated"] = None
+        __props__.__dict__["live"] = None
         return CollectionItem(resource_name, opts=opts, __props__=__props__)
 
     @_builtins.property
     @pulumi.getter(name="cmsLocaleId")
     def cms_locale_id(self) -> pulumi.Output[Optional[_builtins.str]]:
         """
-        The locale ID for localized sites (optional, e.g., 'en-US'). Only required if your site uses Webflow's localization features. Leave empty for non-localized sites.
+        The CMS locale ID for localized sites (optional). Only required if your site uses Webflow's localization features; it is sent with every request for this item, including reads. Leave empty for non-localized sites.
         """
         return pulumi.get(self, "cms_locale_id")
 
@@ -237,7 +259,7 @@ class CollectionItem(pulumi.CustomResource):
     @pulumi.getter(name="fieldData")
     def field_data(self) -> pulumi.Output[Mapping[str, Any]]:
         """
-        A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Example: {"name": "My Blog Post", "slug": "my-blog-post", "content": "Post content..."}
+        A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Only the fields listed here are managed; other fields of the item are left untouched. Example: {"name": "My Blog Post", "slug": "my-blog-post", "content": "Post content..."}
         """
         return pulumi.get(self, "field_data")
 
@@ -245,7 +267,7 @@ class CollectionItem(pulumi.CustomResource):
     @pulumi.getter(name="isArchived")
     def is_archived(self) -> pulumi.Output[Optional[_builtins.bool]]:
         """
-        Whether the item is archived (optional, defaults to false). Archived items are not visible on the published site but remain in the CMS.
+        Whether the item is archived (optional). Archived items are not visible on the published site but remain in the CMS. When omitted, the archived state is not managed and never causes a diff.
         """
         return pulumi.get(self, "is_archived")
 
@@ -253,7 +275,7 @@ class CollectionItem(pulumi.CustomResource):
     @pulumi.getter(name="isDraft")
     def is_draft(self) -> pulumi.Output[Optional[_builtins.bool]]:
         """
-        Whether the item is a draft (optional, defaults to true). Draft items are not published to the live site. Set to false to publish the item immediately upon creation.
+        Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff.
         """
         return pulumi.get(self, "is_draft")
 
@@ -280,4 +302,12 @@ class CollectionItem(pulumi.CustomResource):
         The timestamp when the item was last updated (RFC3339 format, read-only). This is automatically updated by Webflow whenever the item is modified.
         """
         return pulumi.get(self, "last_updated")
+
+    @_builtins.property
+    @pulumi.getter
+    def live(self) -> pulumi.Output[Optional[_builtins.bool]]:
+        """
+        Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+        """
+        return pulumi.get(self, "live")
 

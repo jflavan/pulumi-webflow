@@ -5,6 +5,195 @@ import * as pulumi from "@pulumi/pulumi";
 import * as inputs from "../types/input";
 import * as outputs from "../types/output";
 
+export interface AnalyticsAverageSecondsPoint {
+    /**
+     * Average time spent on the page in seconds.
+     */
+    averageSeconds: number;
+    /**
+     * Start of the bucket as a UTC instant in ISO 8601 / RFC 3339 format.
+     */
+    timestamp: string;
+}
+
+export interface AnalyticsBucketing {
+    /**
+     * The IANA time zone used to align bucket boundaries (e.g., 'UTC', 'America/New_York').
+     */
+    bucketTimeZone: string;
+    /**
+     * The size of each time bucket: 'day' or 'week'.
+     */
+    granularityPeriod: string;
+}
+
+export interface AnalyticsCmsContext {
+    /**
+     * The CMS collection ID.
+     */
+    collectionId: string;
+    /**
+     * The CMS item ID.
+     */
+    itemId: string;
+}
+
+export interface AnalyticsComponentContext {
+    /**
+     * The Webflow component ID the event is attached to.
+     */
+    componentId: string;
+    /**
+     * The ID of the component instance the event fired from.
+     */
+    instanceId: string;
+}
+
+export interface AnalyticsCountPoint {
+    /**
+     * Number of sessions, users, pageviews or events in the bucket, per the report's metric scope.
+     */
+    count: number;
+    /**
+     * Start of the time bucket as a UTC instant in ISO 8601 / RFC 3339 format.
+     */
+    timestamp: string;
+}
+
+export interface AnalyticsDimensionFilter {
+    /**
+     * Keep only rows whose dimension value equals this value.
+     */
+    eq?: string;
+    /**
+     * Keep only rows whose dimension value is one of these values.
+     */
+    in?: string[];
+    /**
+     * Exclude rows whose dimension value equals this value.
+     */
+    ne?: string;
+    /**
+     * Exclude rows whose dimension value is one of these values.
+     */
+    nin?: string[];
+}
+
+export interface AnalyticsDimensionRow {
+    /**
+     * The raw value of the dimension (e.g., 'US-CA' for a region, 'SO' for a traffic source).
+     */
+    attributeKey: string;
+    /**
+     * Number of sessions or users with this value, per the requested metric scope.
+     */
+    count: number;
+    /**
+     * A human-readable label for the value (e.g., 'California, United States').
+     */
+    name: string;
+}
+
+export interface AnalyticsPageviewPoint {
+    /**
+     * Number of pageviews in the bucket.
+     */
+    pageviewCount: number;
+    /**
+     * Start of the daily bucket as a UTC instant in ISO 8601 / RFC 3339 format.
+     */
+    timestamp: string;
+}
+
+export interface AnalyticsTopEventRow {
+    /**
+     * CMS items the event fired from, when applicable.
+     */
+    cmsContext?: outputs.AnalyticsCmsContext[];
+    /**
+     * The CMS collection ID, for events on collection template pages.
+     */
+    collectionId?: string;
+    /**
+     * Component instances the event fired from, when applicable.
+     */
+    componentContext?: outputs.AnalyticsComponentContext[];
+    /**
+     * Number of times the event fired in the window.
+     */
+    count: number;
+    /**
+     * The event identifier.
+     */
+    eventId: string;
+    /**
+     * The CMS item slug, for events on collection template pages.
+     */
+    itemSlug?: string;
+    /**
+     * The event name, when available.
+     */
+    name?: string;
+    /**
+     * The ID of the page the event is attached to, when available.
+     */
+    pageId?: string;
+    /**
+     * The name of the page the event is attached to, when available.
+     */
+    pageName?: string;
+    /**
+     * Daily event counts; present only when 'timeseries' was requested.
+     */
+    timeseries?: outputs.AnalyticsCountPoint[];
+}
+
+export interface AnalyticsTopPageRow {
+    /**
+     * The CMS collection ID, for collection template pages.
+     */
+    collectionId?: string;
+    /**
+     * The CMS item slug, for collection template pages.
+     */
+    itemSlug?: string;
+    /**
+     * The Webflow page ID.
+     */
+    pageId: string;
+    /**
+     * Number of pageviews of this page.
+     */
+    pageviewCount: number;
+    /**
+     * Number of sessions that included a view of this page.
+     */
+    sessionCount: number;
+    /**
+     * Daily pageview counts for this page; present only when 'timeseries' was requested.
+     */
+    timeseries?: outputs.AnalyticsPageviewPoint[];
+    /**
+     * The page title.
+     */
+    title: string;
+    /**
+     * Number of unique users who viewed this page.
+     */
+    userCount: number;
+}
+
+export interface AnalyticsWindow {
+    /**
+     * Exclusive end of the reporting window, in ISO 8601 / RFC 3339 format.
+     */
+    endTime: string;
+    /**
+     * Inclusive start of the reporting window, in ISO 8601 / RFC 3339 format.
+     */
+    startTime: string;
+}
+
 export interface CustomScriptArgs {
     /**
      * Optional developer-specified key/value pairs applied as HTML attributes to the script tag. Example: {'data-config': 'my-value'}. These attributes are passed directly to the script tag.
@@ -91,11 +280,11 @@ export interface GetTokenInfoAuthorizedTo {
 
 export interface NodeContentUpdate {
     /**
-     * The unique identifier for the DOM node to update. This ID comes from the page's DOM structure and must exist on the page. Retrieve node IDs using GET /pages/{page_id}/dom endpoint.
+     * The unique identifier for the DOM node to update. Retrieve node IDs using GET /pages/{page_id}/dom.
      */
     nodeId: string;
     /**
-     * The new text content for the node. This will replace the existing text content in the specified node. Only applicable to text nodes or elements containing text.
+     * The new text content for the node (HTML is allowed). An empty string clears the node's text.
      */
     text: string;
 }
@@ -119,16 +308,134 @@ export interface PageCustomCodeScript {
     scriptVersion: string;
 }
 
-export interface PageInfo {
+export interface PageOpenGraphArgs {
+    /**
+     * The Open Graph description of the page.
+     */
+    description?: string;
+    /**
+     * Whether the Open Graph description is copied from the SEO description.
+     */
+    descriptionCopied?: boolean;
+    /**
+     * The Open Graph title of the page.
+     */
+    title?: string;
+    /**
+     * Whether the Open Graph title is copied from the SEO title.
+     */
+    titleCopied?: boolean;
+}
+
+export interface PageOpenGraphRecord {
+    /**
+     * The Open Graph description of the page.
+     */
+    description: string;
+    /**
+     * Whether the Open Graph description is copied from the SEO description.
+     */
+    descriptionCopied: boolean;
+    /**
+     * The Open Graph title of the page.
+     */
+    title: string;
+    /**
+     * Whether the Open Graph title is copied from the SEO title.
+     */
+    titleCopied: boolean;
+}
+
+export interface PageRecord {
+    /**
+     * Whether the page is archived.
+     */
     archived: boolean;
-    collectionId?: string;
+    /**
+     * The ID of the parent branch, or empty.
+     */
+    branchId: string;
+    /**
+     * Whether the page can be branched.
+     */
+    canBranch: boolean;
+    /**
+     * The CMS collection ID for collection template pages, or empty.
+     */
+    collectionId: string;
+    /**
+     * The timestamp when the page was created (RFC3339 format).
+     */
     createdOn: string;
+    /**
+     * Whether the page is a draft.
+     */
     draft: boolean;
+    /**
+     * Whether the page is a branch of another page.
+     */
+    isBranch: boolean;
+    /**
+     * The timestamp when the page was last updated (RFC3339 format).
+     */
     lastUpdated: string;
+    /**
+     * The locale ID of the returned page data, or empty for the primary locale.
+     */
+    localeId: string;
+    /**
+     * The Open Graph settings of the page.
+     */
+    openGraph: outputs.PageOpenGraphRecord;
+    /**
+     * The Webflow page ID.
+     */
     pageId: string;
-    parentId?: string;
+    /**
+     * The ID of the parent folder, or empty when the page is at the root.
+     */
+    parentId: string;
+    /**
+     * The relative URL path of the published page.
+     */
+    publishedPath: string;
+    /**
+     * The SEO title and description of the page.
+     */
+    seo: outputs.PageSEORecord;
+    /**
+     * The Webflow site ID this page belongs to.
+     */
     siteId: string;
+    /**
+     * The URL slug of the page (e.g., 'about' for '/about').
+     */
     slug: string;
+    /**
+     * The page title shown in browser tabs and search results.
+     */
+    title: string;
+}
+
+export interface PageSEOArgs {
+    /**
+     * The SEO meta description of the page.
+     */
+    description?: string;
+    /**
+     * The SEO title of the page.
+     */
+    title?: string;
+}
+
+export interface PageSEORecord {
+    /**
+     * The SEO meta description of the page.
+     */
+    description: string;
+    /**
+     * The SEO title of the page.
+     */
     title: string;
 }
 

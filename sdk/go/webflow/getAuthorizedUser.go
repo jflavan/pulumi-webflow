@@ -37,12 +37,8 @@ type GetAuthorizedUserResult struct {
 }
 
 func GetAuthorizedUserOutput(ctx *pulumi.Context, args GetAuthorizedUserOutputArgs, opts ...pulumi.InvokeOption) GetAuthorizedUserResultOutput {
-	return pulumi.ToOutputWithContext(ctx.Context(), args).
-		ApplyT(func(v interface{}) (GetAuthorizedUserResultOutput, error) {
-			args := v.(GetAuthorizedUserArgs)
-			options := pulumi.InvokeOutputOptions{InvokeOptions: internal.PkgInvokeDefaultOpts(opts)}
-			return ctx.InvokeOutput("webflow:index:getAuthorizedUser", args, GetAuthorizedUserResultOutput{}, options).(GetAuthorizedUserResultOutput), nil
-		}).(GetAuthorizedUserResultOutput)
+	options := pulumi.InvokeOutputOptions{InvokeOptions: internal.PkgInvokeDefaultOpts(opts)}
+	return ctx.InvokeOutput("webflow:index:getAuthorizedUser", args, GetAuthorizedUserResultOutput{}, options).(GetAuthorizedUserResultOutput)
 }
 
 type GetAuthorizedUserOutputArgs struct {

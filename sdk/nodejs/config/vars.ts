@@ -8,12 +8,12 @@ declare var exports: any;
 const __config = new pulumi.Config("webflow");
 
 /**
- * Webflow API v2 bearer token for authentication. Can also be set via WEBFLOW_API_TOKEN environment variable.
+ * Webflow API v2 bearer token for authentication. Explicit configuration takes precedence over the WEBFLOW_API_TOKEN environment variable, which is used as a fallback when no token is configured.
  */
 export declare const apiToken: string | undefined;
 Object.defineProperty(exports, "apiToken", {
     get() {
-        return __config.get("apiToken");
+        return __config.get("apiToken") ?? utilities.getEnv("WEBFLOW_API_TOKEN");
     },
     enumerable: true,
 });

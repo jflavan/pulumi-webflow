@@ -33,12 +33,8 @@ type GetTokenInfoResult struct {
 }
 
 func GetTokenInfoOutput(ctx *pulumi.Context, args GetTokenInfoOutputArgs, opts ...pulumi.InvokeOption) GetTokenInfoResultOutput {
-	return pulumi.ToOutputWithContext(ctx.Context(), args).
-		ApplyT(func(v interface{}) (GetTokenInfoResultOutput, error) {
-			args := v.(GetTokenInfoArgs)
-			options := pulumi.InvokeOutputOptions{InvokeOptions: internal.PkgInvokeDefaultOpts(opts)}
-			return ctx.InvokeOutput("webflow:index:getTokenInfo", args, GetTokenInfoResultOutput{}, options).(GetTokenInfoResultOutput), nil
-		}).(GetTokenInfoResultOutput)
+	options := pulumi.InvokeOutputOptions{InvokeOptions: internal.PkgInvokeDefaultOpts(opts)}
+	return ctx.InvokeOutput("webflow:index:getTokenInfo", args, GetTokenInfoResultOutput{}, options).(GetTokenInfoResultOutput)
 }
 
 type GetTokenInfoOutputArgs struct {

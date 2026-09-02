@@ -5,7 +5,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as utilities from "./utilities";
 
 /**
- * Manages asset folders for organizing files in a Webflow site. This resource allows you to create folders to organize your assets (images, documents, etc.) in the Webflow Assets panel. NOTE: The Webflow API does not support deleting or updating asset folders. Deleting this resource will only remove it from Pulumi state, not from Webflow. Any changes to folder properties will require creating a new folder.
+ * Manages asset folders for organizing files in a Webflow site. This resource allows you to create folders to organize your assets (images, documents, etc.) in the Webflow Assets panel. NOTE: The Webflow API does not support deleting or updating asset folders. Deleting this resource only removes it from Pulumi state; the folder remains in Webflow. Changing displayName, parentFolder or siteId creates a new folder and leaves the old one behind.
  */
 export class AssetFolder extends pulumi.CustomResource {
     /**
@@ -112,7 +112,7 @@ export interface AssetFolderArgs {
     /**
      * Optional ID of the parent folder for creating nested folder structures. If not specified, the folder will be created at the root level of the Assets panel. Example: '5f0c8c9e1c9d440000e8d8c4'.
      */
-    parentFolder?: pulumi.Input<string>;
+    parentFolder?: pulumi.Input<string | undefined>;
     /**
      * The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
      */

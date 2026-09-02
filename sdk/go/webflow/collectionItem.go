@@ -12,21 +12,21 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-// Manages CMS collection items for a Webflow collection. Collection items represent individual content entries (blog posts, products, etc.) within a CMS collection. Each item has dynamic field data based on the collection schema.
+// Manages CMS collection items for a Webflow collection. Collection items represent individual content entries (blog posts, products, etc.) within a CMS collection. Each item has dynamic field data based on the collection schema. Items are created and updated in staging; set live=true to publish them to the live site as part of every create and update.
 type CollectionItem struct {
 	pulumi.CustomResourceState
 
-	// The locale ID for localized sites (optional, e.g., 'en-US'). Only required if your site uses Webflow's localization features. Leave empty for non-localized sites.
+	// The CMS locale ID for localized sites (optional). Only required if your site uses Webflow's localization features; it is sent with every request for this item, including reads. Leave empty for non-localized sites.
 	CmsLocaleId pulumi.StringPtrOutput `pulumi:"cmsLocaleId"`
 	// The Webflow collection ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find collection IDs via the Webflow API or dashboard. This field will be validated before making any API calls.
 	CollectionId pulumi.StringOutput `pulumi:"collectionId"`
 	// The timestamp when the item was created (RFC3339 format, read-only). This is automatically set by Webflow and is immutable.
 	CreatedOn pulumi.StringPtrOutput `pulumi:"createdOn"`
-	// A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Example: {"name": "My Blog Post", "slug": "my-blog-post", "content": "Post content..."}
+	// A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Only the fields listed here are managed; other fields of the item are left untouched. Example: {"name": "My Blog Post", "slug": "my-blog-post", "content": "Post content..."}
 	FieldData pulumi.MapOutput `pulumi:"fieldData"`
-	// Whether the item is archived (optional, defaults to false). Archived items are not visible on the published site but remain in the CMS.
+	// Whether the item is archived (optional). Archived items are not visible on the published site but remain in the CMS. When omitted, the archived state is not managed and never causes a diff.
 	IsArchived pulumi.BoolPtrOutput `pulumi:"isArchived"`
-	// Whether the item is a draft (optional, defaults to true). Draft items are not published to the live site. Set to false to publish the item immediately upon creation.
+	// Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff.
 	IsDraft pulumi.BoolPtrOutput `pulumi:"isDraft"`
 	// The Webflow-assigned item ID (read-only). This is automatically set by Webflow when the item is created.
 	ItemId pulumi.StringPtrOutput `pulumi:"itemId"`
@@ -34,6 +34,8 @@ type CollectionItem struct {
 	LastPublished pulumi.StringPtrOutput `pulumi:"lastPublished"`
 	// The timestamp when the item was last updated (RFC3339 format, read-only). This is automatically updated by Webflow whenever the item is modified.
 	LastUpdated pulumi.StringPtrOutput `pulumi:"lastUpdated"`
+	// Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+	Live pulumi.BoolPtrOutput `pulumi:"live"`
 }
 
 // NewCollectionItem registers a new resource with the given unique name, arguments, and options.
@@ -82,30 +84,34 @@ func (CollectionItemState) ElementType() reflect.Type {
 }
 
 type collectionItemArgs struct {
-	// The locale ID for localized sites (optional, e.g., 'en-US'). Only required if your site uses Webflow's localization features. Leave empty for non-localized sites.
+	// The CMS locale ID for localized sites (optional). Only required if your site uses Webflow's localization features; it is sent with every request for this item, including reads. Leave empty for non-localized sites.
 	CmsLocaleId *string `pulumi:"cmsLocaleId"`
 	// The Webflow collection ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find collection IDs via the Webflow API or dashboard. This field will be validated before making any API calls.
 	CollectionId string `pulumi:"collectionId"`
-	// A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Example: {"name": "My Blog Post", "slug": "my-blog-post", "content": "Post content..."}
+	// A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Only the fields listed here are managed; other fields of the item are left untouched. Example: {"name": "My Blog Post", "slug": "my-blog-post", "content": "Post content..."}
 	FieldData map[string]interface{} `pulumi:"fieldData"`
-	// Whether the item is archived (optional, defaults to false). Archived items are not visible on the published site but remain in the CMS.
+	// Whether the item is archived (optional). Archived items are not visible on the published site but remain in the CMS. When omitted, the archived state is not managed and never causes a diff.
 	IsArchived *bool `pulumi:"isArchived"`
-	// Whether the item is a draft (optional, defaults to true). Draft items are not published to the live site. Set to false to publish the item immediately upon creation.
+	// Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff.
 	IsDraft *bool `pulumi:"isDraft"`
+	// Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+	Live *bool `pulumi:"live"`
 }
 
 // The set of arguments for constructing a CollectionItem resource.
 type CollectionItemArgs struct {
-	// The locale ID for localized sites (optional, e.g., 'en-US'). Only required if your site uses Webflow's localization features. Leave empty for non-localized sites.
+	// The CMS locale ID for localized sites (optional). Only required if your site uses Webflow's localization features; it is sent with every request for this item, including reads. Leave empty for non-localized sites.
 	CmsLocaleId pulumi.StringPtrInput
 	// The Webflow collection ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find collection IDs via the Webflow API or dashboard. This field will be validated before making any API calls.
 	CollectionId pulumi.StringInput
-	// A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Example: {"name": "My Blog Post", "slug": "my-blog-post", "content": "Post content..."}
+	// A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Only the fields listed here are managed; other fields of the item are left untouched. Example: {"name": "My Blog Post", "slug": "my-blog-post", "content": "Post content..."}
 	FieldData pulumi.MapInput
-	// Whether the item is archived (optional, defaults to false). Archived items are not visible on the published site but remain in the CMS.
+	// Whether the item is archived (optional). Archived items are not visible on the published site but remain in the CMS. When omitted, the archived state is not managed and never causes a diff.
 	IsArchived pulumi.BoolPtrInput
-	// Whether the item is a draft (optional, defaults to true). Draft items are not published to the live site. Set to false to publish the item immediately upon creation.
+	// Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff.
 	IsDraft pulumi.BoolPtrInput
+	// Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+	Live pulumi.BoolPtrInput
 }
 
 func (CollectionItemArgs) ElementType() reflect.Type {
@@ -145,7 +151,7 @@ func (o CollectionItemOutput) ToCollectionItemOutputWithContext(ctx context.Cont
 	return o
 }
 
-// The locale ID for localized sites (optional, e.g., 'en-US'). Only required if your site uses Webflow's localization features. Leave empty for non-localized sites.
+// The CMS locale ID for localized sites (optional). Only required if your site uses Webflow's localization features; it is sent with every request for this item, including reads. Leave empty for non-localized sites.
 func (o CollectionItemOutput) CmsLocaleId() pulumi.StringPtrOutput {
 	return o.ApplyT(func(v *CollectionItem) pulumi.StringPtrOutput { return v.CmsLocaleId }).(pulumi.StringPtrOutput)
 }
@@ -160,17 +166,17 @@ func (o CollectionItemOutput) CreatedOn() pulumi.StringPtrOutput {
 	return o.ApplyT(func(v *CollectionItem) pulumi.StringPtrOutput { return v.CreatedOn }).(pulumi.StringPtrOutput)
 }
 
-// A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Example: {"name": "My Blog Post", "slug": "my-blog-post", "content": "Post content..."}
+// A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Only the fields listed here are managed; other fields of the item are left untouched. Example: {"name": "My Blog Post", "slug": "my-blog-post", "content": "Post content..."}
 func (o CollectionItemOutput) FieldData() pulumi.MapOutput {
 	return o.ApplyT(func(v *CollectionItem) pulumi.MapOutput { return v.FieldData }).(pulumi.MapOutput)
 }
 
-// Whether the item is archived (optional, defaults to false). Archived items are not visible on the published site but remain in the CMS.
+// Whether the item is archived (optional). Archived items are not visible on the published site but remain in the CMS. When omitted, the archived state is not managed and never causes a diff.
 func (o CollectionItemOutput) IsArchived() pulumi.BoolPtrOutput {
 	return o.ApplyT(func(v *CollectionItem) pulumi.BoolPtrOutput { return v.IsArchived }).(pulumi.BoolPtrOutput)
 }
 
-// Whether the item is a draft (optional, defaults to true). Draft items are not published to the live site. Set to false to publish the item immediately upon creation.
+// Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff.
 func (o CollectionItemOutput) IsDraft() pulumi.BoolPtrOutput {
 	return o.ApplyT(func(v *CollectionItem) pulumi.BoolPtrOutput { return v.IsDraft }).(pulumi.BoolPtrOutput)
 }
@@ -188,6 +194,11 @@ func (o CollectionItemOutput) LastPublished() pulumi.StringPtrOutput {
 // The timestamp when the item was last updated (RFC3339 format, read-only). This is automatically updated by Webflow whenever the item is modified.
 func (o CollectionItemOutput) LastUpdated() pulumi.StringPtrOutput {
 	return o.ApplyT(func(v *CollectionItem) pulumi.StringPtrOutput { return v.LastUpdated }).(pulumi.StringPtrOutput)
+}
+
+// Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+func (o CollectionItemOutput) Live() pulumi.BoolPtrOutput {
+	return o.ApplyT(func(v *CollectionItem) pulumi.BoolPtrOutput { return v.Live }).(pulumi.BoolPtrOutput)
 }
 
 func init() {

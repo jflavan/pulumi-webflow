@@ -23,7 +23,8 @@ class RobotsTxtArgs:
                  site_id: pulumi.Input[_builtins.str]):
         """
         The set of arguments for constructing a RobotsTxt resource.
-        :param pulumi.Input[_builtins.str] content: The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives.
+
+        :param pulumi.Input[_builtins.str] content: The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives. Comments and other directives are not stored by Webflow and are dropped with a warning. Formatting differences (blank lines, spacing, directive casing) do not cause a diff.
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3').
         """
         pulumi.set(__self__, "content", content)
@@ -33,7 +34,7 @@ class RobotsTxtArgs:
     @pulumi.getter
     def content(self) -> pulumi.Input[_builtins.str]:
         """
-        The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives.
+        The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives. Comments and other directives are not stored by Webflow and are dropped with a warning. Formatting differences (blank lines, spacing, directive casing) do not cause a diff.
         """
         return pulumi.get(self, "content")
 
@@ -60,15 +61,15 @@ class RobotsTxt(pulumi.CustomResource):
     def __init__(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 content: Optional[pulumi.Input[_builtins.str]] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
+                 content: pulumi.Input[Optional[_builtins.str]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         """
         Manages robots.txt configuration for a Webflow site. This resource allows you to define crawler access rules and sitemap references.
 
         :param str resource_name: The name of the resource.
         :param pulumi.ResourceOptions opts: Options for the resource.
-        :param pulumi.Input[_builtins.str] content: The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives.
+        :param pulumi.Input[_builtins.str] content: The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives. Comments and other directives are not stored by Webflow and are dropped with a warning. Formatting differences (blank lines, spacing, directive casing) do not cause a diff.
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3').
         """
         ...
@@ -95,8 +96,8 @@ class RobotsTxt(pulumi.CustomResource):
     def _internal_init(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 content: Optional[pulumi.Input[_builtins.str]] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
+                 content: pulumi.Input[Optional[_builtins.str]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         opts = pulumi.ResourceOptions.merge(_utilities.get_resource_opts_defaults(), opts)
         if not isinstance(opts, pulumi.ResourceOptions):
@@ -144,7 +145,7 @@ class RobotsTxt(pulumi.CustomResource):
     @pulumi.getter
     def content(self) -> pulumi.Output[_builtins.str]:
         """
-        The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives.
+        The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives. Comments and other directives are not stored by Webflow and are dropped with a warning. Formatting differences (blank lines, spacing, directive casing) do not cause a diff.
         """
         return pulumi.get(self, "content")
 

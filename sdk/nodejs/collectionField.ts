@@ -5,7 +5,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as utilities from "./utilities";
 
 /**
- * Manages fields for a Webflow CMS collection. Collection fields define the structure of content items in a collection. Note: The field type cannot be changed after creation - changing it requires replacement (delete + recreate).
+ * Manages fields for a Webflow CMS collection. Collection fields define the structure of content items in a collection. Only displayName, helpText and isRequired can be updated in place; type, slug, validations and metadata cannot be changed after creation and changing them requires replacement (delete + recreate).
  */
 export class CollectionField extends pulumi.CustomResource {
     /**
@@ -59,15 +59,19 @@ export class CollectionField extends pulumi.CustomResource {
      */
     declare public readonly isRequired: pulumi.Output<boolean | undefined>;
     /**
-     * The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName. The slug is used in API requests and exports.
+     * Type-specific configuration (create-only). Required for Option fields: {"options": [{"name": "Draft"}, {"name": "Published"}]}. Required for Reference and MultiReference fields: {"collectionId": "<referenced collection ID>"}. Not accepted for other field types. Changing metadata requires replacement.
+     */
+    declare public readonly metadata: pulumi.Output<{[key: string]: any} | undefined>;
+    /**
+     * The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the outputs without causing a diff. The slug is used in API requests and exports and cannot be changed after creation - changing an explicit slug requires replacement.
      */
     declare public readonly slug: pulumi.Output<string | undefined>;
     /**
-     * The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: PlainText, RichText, Image, MultiImage, Video, Link, Email, Phone, Number, DateTime, Switch, Color, Option, File, Reference, MultiReference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
+     * The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: Color, DateTime, Email, File, Image, Link, MultiImage, Number, Phone, PlainText, RichText, Switch, VideoLink, Option, MultiReference, Reference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
      */
     declare public readonly type: pulumi.Output<string>;
     /**
-     * Type-specific validation rules (optional). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Refer to Webflow API documentation for validation options for each field type.
+     * Type-specific validation rules (optional, create-only). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Changing validations requires replacement. Refer to Webflow API documentation for validation options for each field type.
      */
     declare public readonly validations: pulumi.Output<{[key: string]: any} | undefined>;
 
@@ -95,6 +99,7 @@ export class CollectionField extends pulumi.CustomResource {
             resourceInputs["displayName"] = args?.displayName;
             resourceInputs["helpText"] = args?.helpText;
             resourceInputs["isRequired"] = args?.isRequired;
+            resourceInputs["metadata"] = args?.metadata;
             resourceInputs["slug"] = args?.slug;
             resourceInputs["type"] = args?.type;
             resourceInputs["validations"] = args?.validations;
@@ -107,6 +112,7 @@ export class CollectionField extends pulumi.CustomResource {
             resourceInputs["helpText"] = undefined /*out*/;
             resourceInputs["isEditable"] = undefined /*out*/;
             resourceInputs["isRequired"] = undefined /*out*/;
+            resourceInputs["metadata"] = undefined /*out*/;
             resourceInputs["slug"] = undefined /*out*/;
             resourceInputs["type"] = undefined /*out*/;
             resourceInputs["validations"] = undefined /*out*/;
@@ -131,21 +137,25 @@ export interface CollectionFieldArgs {
     /**
      * Optional help text shown in the CMS interface (e.g., 'Enter the article title'). Helps content editors understand what to enter in this field.
      */
-    helpText?: pulumi.Input<string>;
+    helpText?: pulumi.Input<string | undefined>;
     /**
      * Whether the field is required (optional, defaults to false). When true, content items must provide a value for this field.
      */
-    isRequired?: pulumi.Input<boolean>;
+    isRequired?: pulumi.Input<boolean | undefined>;
     /**
-     * The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName. The slug is used in API requests and exports.
+     * Type-specific configuration (create-only). Required for Option fields: {"options": [{"name": "Draft"}, {"name": "Published"}]}. Required for Reference and MultiReference fields: {"collectionId": "<referenced collection ID>"}. Not accepted for other field types. Changing metadata requires replacement.
      */
-    slug?: pulumi.Input<string>;
+    metadata?: pulumi.Input<{[key: string]: any} | undefined>;
     /**
-     * The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: PlainText, RichText, Image, MultiImage, Video, Link, Email, Phone, Number, DateTime, Switch, Color, Option, File, Reference, MultiReference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
+     * The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the outputs without causing a diff. The slug is used in API requests and exports and cannot be changed after creation - changing an explicit slug requires replacement.
+     */
+    slug?: pulumi.Input<string | undefined>;
+    /**
+     * The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: Color, DateTime, Email, File, Image, Link, MultiImage, Number, Phone, PlainText, RichText, Switch, VideoLink, Option, MultiReference, Reference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
      */
     type: pulumi.Input<string>;
     /**
-     * Type-specific validation rules (optional). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Refer to Webflow API documentation for validation options for each field type.
+     * Type-specific validation rules (optional, create-only). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Changing validations requires replacement. Refer to Webflow API documentation for validation options for each field type.
      */
-    validations?: pulumi.Input<{[key: string]: any}>;
+    validations?: pulumi.Input<{[key: string]: any} | undefined>;
 }

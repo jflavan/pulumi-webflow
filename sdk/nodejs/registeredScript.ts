@@ -126,7 +126,7 @@ export interface RegisteredScriptArgs {
     /**
      * Indicates whether the script can be copied when the site is duplicated. Default: false. When true, the script will be included when creating a copy of the site.
      */
-    canCopy?: pulumi.Input<boolean>;
+    canCopy?: pulumi.Input<boolean | undefined>;
     /**
      * The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'.
      */
@@ -142,7 +142,7 @@ export interface RegisteredScriptArgs {
     /**
      * The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
      */
-    scriptVersion?: pulumi.Input<string>;
+    scriptVersion?: pulumi.Input<string | undefined>;
     /**
      * The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
      */

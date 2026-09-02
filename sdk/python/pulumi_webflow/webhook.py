@@ -22,9 +22,10 @@ class WebhookArgs:
                  site_id: pulumi.Input[_builtins.str],
                  trigger_type: pulumi.Input[_builtins.str],
                  url: pulumi.Input[_builtins.str],
-                 filter: Optional[pulumi.Input[Mapping[str, Any]]] = None):
+                 filter: pulumi.Input[Optional[Mapping[str, Any]]] = None):
         """
         The set of arguments for constructing a Webhook resource.
+
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
         :param pulumi.Input[_builtins.str] trigger_type: The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, memberships_user_account_added, memberships_user_account_updated, memberships_user_account_deleted, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_unpublished. Example: 'form_submission' to receive notifications when forms are submitted.
         :param pulumi.Input[_builtins.str] url: The HTTPS endpoint where Webflow will send webhook events (e.g., 'https://example.com/webhooks/webflow', 'https://api.example.com/events'). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data.
@@ -74,14 +75,14 @@ class WebhookArgs:
 
     @_builtins.property
     @pulumi.getter
-    def filter(self) -> Optional[pulumi.Input[Mapping[str, Any]]]:
+    def filter(self) -> pulumi.Input[Optional[Mapping[str, Any]]]:
         """
         Optional filter for webhook events. The structure depends on the triggerType and allows you to receive only specific events. For example, for collection_item_created, you can filter by collection ID. Refer to Webflow API documentation for filter options for each trigger type.
         """
         return pulumi.get(self, "filter")
 
     @filter.setter
-    def filter(self, value: Optional[pulumi.Input[Mapping[str, Any]]]):
+    def filter(self, value: pulumi.Input[Optional[Mapping[str, Any]]]):
         pulumi.set(self, "filter", value)
 
 
@@ -91,10 +92,10 @@ class Webhook(pulumi.CustomResource):
     def __init__(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 filter: Optional[pulumi.Input[Mapping[str, Any]]] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
-                 trigger_type: Optional[pulumi.Input[_builtins.str]] = None,
-                 url: Optional[pulumi.Input[_builtins.str]] = None,
+                 filter: pulumi.Input[Optional[Mapping[str, Any]]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
+                 trigger_type: pulumi.Input[Optional[_builtins.str]] = None,
+                 url: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         """
         Manages webhooks for a Webflow site. Webhooks allow you to receive real-time notifications when events occur in your Webflow site, such as form submissions, page updates, e-commerce orders, and more. Note: Webhooks cannot be updated in-place; any change to triggerType, url, or filter requires replacement.
@@ -130,10 +131,10 @@ class Webhook(pulumi.CustomResource):
     def _internal_init(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 filter: Optional[pulumi.Input[Mapping[str, Any]]] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
-                 trigger_type: Optional[pulumi.Input[_builtins.str]] = None,
-                 url: Optional[pulumi.Input[_builtins.str]] = None,
+                 filter: pulumi.Input[Optional[Mapping[str, Any]]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
+                 trigger_type: pulumi.Input[Optional[_builtins.str]] = None,
+                 url: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         opts = pulumi.ResourceOptions.merge(_utilities.get_resource_opts_defaults(), opts)
         if not isinstance(opts, pulumi.ResourceOptions):

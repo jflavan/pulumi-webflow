@@ -5,11 +5,85 @@ import * as pulumi from "@pulumi/pulumi";
 import * as inputs from "../types/input";
 import * as outputs from "../types/output";
 
+export interface AnalyticsDimensionFilter {
+    /**
+     * Keep only rows whose dimension value equals this value.
+     */
+    eq?: string;
+    /**
+     * Keep only rows whose dimension value is one of these values.
+     */
+    in?: string[];
+    /**
+     * Exclude rows whose dimension value equals this value.
+     */
+    ne?: string;
+    /**
+     * Exclude rows whose dimension value is one of these values.
+     */
+    nin?: string[];
+}
+
+export interface AnalyticsDimensionFilterArgs {
+    /**
+     * Keep only rows whose dimension value equals this value.
+     */
+    eq?: pulumi.Input<string | undefined>;
+    /**
+     * Keep only rows whose dimension value is one of these values.
+     */
+    in?: pulumi.Input<pulumi.Input<string>[] | undefined>;
+    /**
+     * Exclude rows whose dimension value equals this value.
+     */
+    ne?: pulumi.Input<string | undefined>;
+    /**
+     * Exclude rows whose dimension value is one of these values.
+     */
+    nin?: pulumi.Input<pulumi.Input<string>[] | undefined>;
+}
+
+export interface AnalyticsTimeOnPageTimeseriesArgs {
+    /**
+     * IANA time zone used to align bucket boundaries (e.g., 'UTC', 'America/New_York').
+     */
+    bucketTimeZone: string;
+    /**
+     * Size of each bucket: 'day' or 'week'.
+     */
+    granularityPeriod: string;
+}
+
+export interface AnalyticsTimeOnPageTimeseriesArgsArgs {
+    /**
+     * IANA time zone used to align bucket boundaries (e.g., 'UTC', 'America/New_York').
+     */
+    bucketTimeZone: pulumi.Input<string>;
+    /**
+     * Size of each bucket: 'day' or 'week'.
+     */
+    granularityPeriod: pulumi.Input<string>;
+}
+
+export interface AnalyticsTimeseriesArgs {
+    /**
+     * IANA time zone used to align daily bucket boundaries (e.g., 'UTC', 'America/New_York'). Bucket timestamps are returned as UTC instants of local midnight in this zone.
+     */
+    bucketTimeZone: string;
+}
+
+export interface AnalyticsTimeseriesArgsArgs {
+    /**
+     * IANA time zone used to align daily bucket boundaries (e.g., 'UTC', 'America/New_York'). Bucket timestamps are returned as UTC instants of local midnight in this zone.
+     */
+    bucketTimeZone: pulumi.Input<string>;
+}
+
 export interface CustomScriptArgsArgs {
     /**
      * Optional developer-specified key/value pairs applied as HTML attributes to the script tag. Example: {'data-config': 'my-value'}. These attributes are passed directly to the script tag.
      */
-    attributes?: pulumi.Input<{[key: string]: any}>;
+    attributes?: pulumi.Input<{[key: string]: any} | undefined>;
     /**
      * The unique identifier of the registered custom code script. The script must first be registered to the site using the RegisterScript resource. Examples: 'cms_slider', 'analytics', 'custom_widget'
      */
@@ -26,11 +100,11 @@ export interface CustomScriptArgsArgs {
 
 export interface NodeContentUpdateArgs {
     /**
-     * The unique identifier for the DOM node to update. This ID comes from the page's DOM structure and must exist on the page. Retrieve node IDs using GET /pages/{page_id}/dom endpoint.
+     * The unique identifier for the DOM node to update. Retrieve node IDs using GET /pages/{page_id}/dom.
      */
     nodeId: pulumi.Input<string>;
     /**
-     * The new text content for the node. This will replace the existing text content in the specified node. Only applicable to text nodes or elements containing text.
+     * The new text content for the node (HTML is allowed). An empty string clears the node's text.
      */
     text: pulumi.Input<string>;
 }
@@ -39,7 +113,7 @@ export interface PageCustomCodeScriptArgs {
     /**
      * Optional developer-specified key/value pairs for script attributes. These attributes can be used by the script to customize its behavior on this page.
      */
-    attributes?: pulumi.Input<{[key: string]: any}>;
+    attributes?: pulumi.Input<{[key: string]: any} | undefined>;
     /**
      * The unique identifier of a registered custom code script. This must be a script that was previously registered using the RegisteredScript resource. Script IDs are assigned by Webflow when the script is registered.
      */
@@ -52,5 +126,35 @@ export interface PageCustomCodeScriptArgs {
      * The semantic version string for the registered script (e.g., '1.0.0'). This version must match a registered version of the script. You can have multiple versions of the same script registered.
      */
     scriptVersion: pulumi.Input<string>;
+}
+
+export interface PageOpenGraphArgsArgs {
+    /**
+     * The Open Graph description of the page.
+     */
+    description?: pulumi.Input<string | undefined>;
+    /**
+     * Whether the Open Graph description is copied from the SEO description.
+     */
+    descriptionCopied?: pulumi.Input<boolean | undefined>;
+    /**
+     * The Open Graph title of the page.
+     */
+    title?: pulumi.Input<string | undefined>;
+    /**
+     * Whether the Open Graph title is copied from the SEO title.
+     */
+    titleCopied?: pulumi.Input<boolean | undefined>;
+}
+
+export interface PageSEOArgsArgs {
+    /**
+     * The SEO meta description of the page.
+     */
+    description?: pulumi.Input<string | undefined>;
+    /**
+     * The SEO title of the page.
+     */
+    title?: pulumi.Input<string | undefined>;
 }
 

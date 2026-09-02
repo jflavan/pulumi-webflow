@@ -4,6 +4,48 @@ All notable changes to the Pulumi Webflow provider will be documented in this fi
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- feat!: remove the `PageData` resource. It could never be created or imported. Use the new `getPage` / `getPages` functions to read pages and the new `PageMetadata` resource to manage page settings.
+  - **Migration:** delete `PageData` resources from your program and run `pulumi state delete <URN>` for any that exist in state.
+- feat!(asset): `fileSource` is now required and is uploaded. `Asset` previously only reserved an asset slot and never sent the file; it now reads a local path or URL, computes the MD5 `fileHash`, and completes the S3 upload. `uploadUrl` and `uploadDetails` are now secret outputs.
+- feat!(site): the publish request body now matches the API: `publishToWebflowSubdomain`, `publishCustomDomains` (custom domain IDs) and `publishPageId` replace the undocumented `domains` field. `publish: true` with no target publishes to the webflow.io subdomain.
+- feat!(collectionfield): `type: "Video"` is now `"VideoLink"` (the documented enum); `slug`, `type`, `validations` and `metadata` changes force replacement because the API cannot update them.
+- fix!(config): explicit `webflow:apiToken` now takes precedence over `WEBFLOW_API_TOKEN`; the environment variable is only a fallback.
+- The Go module now requires Go 1.26 (dependency upgrade to pulumi-go-provider v1.6 and pulumi/sdk v3.260).
+
+### Features
+
+- feat: `GoogleTag` resource for the Google Tag Manager API (list/upsert/delete tag IDs on a site).
+- feat: `PageSchemaMarkup` resource and `getPageSchemaMarkup` function for JSON-LD schema markup (beta API).
+- feat: `PageMetadata` resource (title, slug, SEO and Open Graph, per locale) and `getPage` / `getPages` functions with `translatable` and locale support.
+- feat: Analyze API (beta) functions: `getAnalyticsTraffic`, `getAnalyticsTopPages`, `getAnalyticsTopDimensions`, `getAnalyticsTopEvents`, `getAnalyticsTimeOnPage`.
+- feat(site): publish a single page with `publishPageId`; `publishScope` output.
+- feat(asset): `folderId` output; list filtering by folder.
+- feat(collectionitem): `live` input publishes the item after create/update; `cmsLocaleId` is sent on reads; `lastPublished` is populated.
+- feat(collectionfield): `metadata` input for Option and Reference fields.
+- feat(pagecontent): `localeId` input; empty text can clear a node.
+- feat(webhook): all documented trigger types, including `comment_created`.
+- feat(redirect): `destinationPath` and `statusCode` update in place.
+
+### Bug Fixes
+
+- fix(collectionitem): `fieldData` changes were never detected; omitted `isDraft`/`isArchived` no longer flip-flop after refresh.
+- fix(collection): omitting `slug` and running `pulumi refresh` no longer replaces (deletes) the collection.
+- fix(collectionfield): update uses PATCH with the documented fields; `isRequired: false` is sent.
+- fix(robotstxt): no more permanent diff from content normalization; delete sends the documented body and accepts 200.
+- fix(pagecontent): use POST with `localeId` and fail on node-level `errors`.
+- fix(pagecustomcode): only 404 marks the resource deleted; scripts are read back so drift and import work; `Content-Type` is sent.
+- fix(redirect, registeredscript, inlinescript): Read follows pagination instead of dropping resources from state.
+- fix(inlinescript): user-omitted `integrityHash` no longer causes replace loops after refresh.
+- fix(sitecustomcode, pagecustomcode): nested attribute values no longer panic in Diff; script order is ignored.
+- fix(site): `parentFolderId` can be cleared.
+- fix(auth): retries after 429 resend request bodies; transient 502/503/504 are retried; no whole-request timeout swallows long `Retry-After` waits; one shared connection pool honouring `HTTPS_PROXY`.
+- fix: "not found" is detected from the HTTP status, never from error text; validation runs after the dry-run branch so previews with unknown inputs work; previews no longer fabricate IDs, timestamps or currencies.
+- fix(release): publish the Node SDK from `sdk/nodejs/bin` (previous releases shipped no JavaScript); publish steps can fail the workflow; SLSA attestation covers the archives; actions pinned to SHAs.
+- fix(build): correct the `-X` version symbol, so Makefile builds report their version; `make test_all` runs the integration harness.
+- fix(docs): examples compile again in all five languages (removed `shortName` input, `scriptVersion`, correct Go/C#/Java package paths, real version pins); install commands include `--server`; NuGet package name corrected; license aligned to MIT everywhere.
+
 ## [v0.10.1] - 2026-03-19
 
 ### Bug Fixes

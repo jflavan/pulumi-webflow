@@ -20,7 +20,7 @@ export class Provider extends pulumi.ProviderResource {
     }
 
     /**
-     * Webflow API v2 bearer token for authentication. Can also be set via WEBFLOW_API_TOKEN environment variable.
+     * Webflow API v2 bearer token for authentication. Explicit configuration takes precedence over the WEBFLOW_API_TOKEN environment variable, which is used as a fallback when no token is configured.
      */
     declare public readonly apiToken: pulumi.Output<string | undefined>;
 
@@ -35,7 +35,7 @@ export class Provider extends pulumi.ProviderResource {
         let resourceInputs: pulumi.Inputs = {};
         opts = opts || {};
         {
-            resourceInputs["apiToken"] = args?.apiToken ? pulumi.secret(args.apiToken) : undefined;
+            resourceInputs["apiToken"] = (args?.apiToken ? pulumi.secret(args.apiToken) : undefined) ?? utilities.getEnv("WEBFLOW_API_TOKEN");
         }
         opts = pulumi.mergeOptions(utilities.resourceOptsDefaults(), opts);
         const secretOpts = { additionalSecretOutputs: ["apiToken"] };
@@ -49,7 +49,7 @@ export class Provider extends pulumi.ProviderResource {
  */
 export interface ProviderArgs {
     /**
-     * Webflow API v2 bearer token for authentication. Can also be set via WEBFLOW_API_TOKEN environment variable.
+     * Webflow API v2 bearer token for authentication. Explicit configuration takes precedence over the WEBFLOW_API_TOKEN environment variable, which is used as a fallback when no token is configured.
      */
-    apiToken?: pulumi.Input<string>;
+    apiToken?: pulumi.Input<string | undefined>;
 }

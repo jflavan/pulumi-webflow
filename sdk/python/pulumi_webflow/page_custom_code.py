@@ -25,6 +25,7 @@ class PageCustomCodeArgs:
                  scripts: pulumi.Input[Sequence[pulumi.Input['PageCustomCodeScriptArgs']]]):
         """
         The set of arguments for constructing a PageCustomCode resource.
+
         :param pulumi.Input[_builtins.str] page_id: The Webflow page ID (24-character hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). You can find page IDs using the Webflow Pages API or in the Webflow designer. This field will be validated before making any API calls.
         :param pulumi.Input[Sequence[pulumi.Input['PageCustomCodeScriptArgs']]] scripts: List of custom code scripts to apply to the page. Each script must reference a script ID and version that have been previously registered. All scripts in this list will be applied to the page; any scripts not listed will be removed from the page.
         """
@@ -62,8 +63,8 @@ class PageCustomCode(pulumi.CustomResource):
     def __init__(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 page_id: Optional[pulumi.Input[_builtins.str]] = None,
-                 scripts: Optional[pulumi.Input[Sequence[pulumi.Input[Union['PageCustomCodeScriptArgs', 'PageCustomCodeScriptArgsDict']]]]] = None,
+                 page_id: pulumi.Input[Optional[_builtins.str]] = None,
+                 scripts: pulumi.Input[Optional[Sequence[pulumi.Input[Union['PageCustomCodeScriptArgs', 'PageCustomCodeScriptArgsDict']]]]] = None,
                  __props__=None):
         """
         Manages custom code (JavaScript) scripts applied to a Webflow page. This resource allows you to apply registered custom code scripts to specific pages. Scripts must first be registered using the RegisteredScript resource before they can be applied. All scripts in the configuration will be applied to the page; scripts not listed will be removed.
@@ -97,8 +98,8 @@ class PageCustomCode(pulumi.CustomResource):
     def _internal_init(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 page_id: Optional[pulumi.Input[_builtins.str]] = None,
-                 scripts: Optional[pulumi.Input[Sequence[pulumi.Input[Union['PageCustomCodeScriptArgs', 'PageCustomCodeScriptArgsDict']]]]] = None,
+                 page_id: pulumi.Input[Optional[_builtins.str]] = None,
+                 scripts: pulumi.Input[Optional[Sequence[pulumi.Input[Union['PageCustomCodeScriptArgs', 'PageCustomCodeScriptArgsDict']]]]] = None,
                  __props__=None):
         opts = pulumi.ResourceOptions.merge(_utilities.get_resource_opts_defaults(), opts)
         if not isinstance(opts, pulumi.ResourceOptions):

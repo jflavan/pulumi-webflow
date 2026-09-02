@@ -132,7 +132,7 @@ export interface InlineScriptArgs {
     /**
      * Indicates whether the script can be copied when the site is duplicated. Default: false. When true, the script will be included when creating a copy of the site.
      */
-    canCopy?: pulumi.Input<boolean>;
+    canCopy?: pulumi.Input<boolean | undefined>;
     /**
      * The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'.
      */
@@ -140,7 +140,7 @@ export interface InlineScriptArgs {
     /**
      * The Sub-Resource Integrity (SRI) hash for the script (optional). Format: 'sha384-<hash>', 'sha256-<hash>', or 'sha512-<hash>'. SRI hashes help ensure that the script hasn't been modified in transit. You can generate an SRI hash using https://www.srihash.org/
      */
-    integrityHash?: pulumi.Input<string>;
+    integrityHash?: pulumi.Input<string | undefined>;
     /**
      * The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
      */
