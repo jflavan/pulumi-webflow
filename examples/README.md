@@ -213,16 +213,20 @@ examples/site/
 
 | Directory | Resource(s) | Languages |
 |-----------|-------------|-----------|
+| `analytics/` | `getAnalyticsTraffic`, `getAnalyticsTopPages`, `getAnalyticsTopDimensions`, `getAnalyticsTopEvents`, `getAnalyticsTimeOnPage` functions (beta API) | TS |
 | `asset/` | Asset | TS, Python, Go, C#, Java |
 | `assetfolder/` | AssetFolder | TS |
 | `collection/` | Collection | TS, Python, Go, C#, Java |
 | `collectionfield/` | CollectionField | TS |
 | `collectionitem/` | CollectionItem | TS, Python, Go, C#, Java |
 | `ecommerce-settings/` | EcommerceSettings | TS |
+| `googletag/` | GoogleTag | TS |
 | `inlinescript/` | InlineScript | TS |
-| `page/` | PageData | TS, Python, Go |
+| `page/` | `getPages`, `getPage` functions | TS, Python, Go |
 | `pagecontent/` | PageContent | TS |
 | `pagecustomcode/` | PageCustomCode | TS |
+| `pagemetadata/` | PageMetadata, `getPages`, `getPage` | TS |
+| `pageschemamarkup/` | PageSchemaMarkup, `getPageSchemaMarkup` (beta API) | TS |
 | `redirect/` | Redirect | TS, Python, Go, C#, Java |
 | `registeredscript/` | RegisteredScript | TS |
 | `robotstxt/` | RobotsTxt | TS, Python, Go, C#, Java |

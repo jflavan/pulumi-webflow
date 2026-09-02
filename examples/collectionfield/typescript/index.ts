@@ -21,6 +21,8 @@ const collectionId = config.requireSecret("collectionId");
  * - Switch: Boolean toggle (true/false)
  * - Image: Single image reference
  * - Email: Email address with validation
+ * - Option: Dropdown configured through `metadata`
+ * - VideoLink: Video embed from a URL
  */
 
 // Example 1: Plain Text Field (Required)
@@ -142,6 +144,32 @@ const accentColorField = new webflow.CollectionField("accent-color", {
   helpText: "Custom accent color for this article",
 });
 
+// Example 11: Option Field with metadata
+// Dropdown choices are declared through `metadata` (required for Option,
+// Reference and MultiReference fields; create-only - changing it replaces the field)
+const statusField = new webflow.CollectionField("status", {
+  collectionId: collectionId,
+  type: "Option",
+  displayName: "Status",
+  slug: "status",
+  isRequired: false,
+  helpText: "Editorial status of this article",
+  metadata: {
+    options: [{ name: "Draft" }, { name: "In Review" }, { name: "Published" }],
+  },
+});
+
+// Example 12: Video Link Field
+// Embeds a video from a URL; the type is "VideoLink" (formerly "Video")
+const videoField = new webflow.CollectionField("intro-video", {
+  collectionId: collectionId,
+  type: "VideoLink",
+  displayName: "Intro Video",
+  slug: "intro-video",
+  isRequired: false,
+  helpText: "YouTube or Vimeo URL shown at the top of the article",
+});
+
 // Export field IDs and metadata for reference
 export const deployedCollectionId = collectionId;
 export const titleFieldId = titleField.fieldId;
@@ -154,6 +182,8 @@ export const coverImageFieldId = coverImageField.fieldId;
 export const shortDescriptionFieldId = shortDescriptionField.fieldId;
 export const phoneFieldId = phoneField.fieldId;
 export const accentColorFieldId = accentColorField.fieldId;
+export const statusFieldId = statusField.fieldId;
+export const videoFieldId = videoField.fieldId;
 
 // Summary of created fields
 const fieldSummary = pulumi.all([
@@ -167,6 +197,8 @@ const fieldSummary = pulumi.all([
   shortDescriptionField.displayName,
   phoneField.displayName,
   accentColorField.displayName,
+  statusField.displayName,
+  videoField.displayName,
 ]).apply((names) => {
   return `✅ Successfully created ${names.length} collection fields:\n${names.map((n, i) => `  ${i + 1}. ${n}`).join("\n")}`;
 });

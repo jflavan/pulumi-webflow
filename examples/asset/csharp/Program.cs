@@ -5,6 +5,16 @@ using System.Threading.Tasks;
 using Pulumi;
 using Community.Pulumi.Webflow;
 
+// Asset Example - Uploading Files to Webflow
+//
+// FileSource points at a local file (resolved relative to this program's
+// directory) or an http(s) URL. At apply time the provider reads the content,
+// computes its MD5 FileHash, registers the asset with Webflow and completes the
+// S3 upload for you. A content change of a local file replaces the asset.
+// UploadUrl / UploadDetails are secret outputs; FolderId reports the folder
+// Webflow placed the asset in.
+//
+// Required token scopes: assets:read and assets:write.
 class Program
 {
     static Task<int> Main() => Deployment.RunAsync(() =>
@@ -14,45 +24,37 @@ class Program
 
         // Get configuration values
         var siteId = config.RequireSecret("siteId");
+        // Optional: an http(s) URL to upload as a second asset
+        var heroImageUrl = config.Get("heroImageUrl");
 
-        /**
-         * Asset Example - Creating and Managing Webflow Assets
-         *
-         * This example demonstrates how to register assets with Webflow.
-         * After registration, you'll receive uploadUrl and uploadDetails
-         * to complete the file upload to S3.
-         *
-         * Two-step process:
-         * 1. Register asset metadata (this provider handles this)
-         * 2. Upload file to S3 using uploadUrl + uploadDetails (done separately)
-         */
-
-        // Example 1: Register a single asset
-        // The fileHash is the MD5 hash of your file content
-        // Generate with: md5sum logo.png (Linux) or md5 -q logo.png (macOS)
+        // Example 1: Upload a local file shipped with this example
         var logoAsset = new Asset("company-logo", new AssetArgs
         {
             SiteId = siteId,
-            FileName = "logo.png",
-            FileHash = "d41d8cd98f00b204e9800998ecf8427e",
+            FileName = "logo.svg",
+            FileSource = "./assets/logo.svg",
         });
 
-        // Example 2: Asset with folder organization
-        var heroAsset = new Asset("hero-image", new AssetArgs
+        // Example 2: Upload from a URL, optionally into a folder
+        // Set `pulumi config set heroImageUrl https://.../hero.jpg` to enable it.
+        Asset? heroAsset = null;
+        if (!string.IsNullOrEmpty(heroImageUrl))
         {
-            SiteId = siteId,
-            FileName = "hero-banner.jpg",
-            FileHash = "a1b2c3d4e5f6789012345678abcdef12",
-            // ParentFolder = "folder-id-here", // Uncomment to organize in a folder
-        });
+            heroAsset = new Asset("hero-image", new AssetArgs
+            {
+                SiteId = siteId,
+                FileName = "hero-banner.jpg",
+                FileSource = heroImageUrl,
+                // ParentFolder = "folder-id-here", // Uncomment to organize in an asset folder
+            });
+        }
 
-        // Example 3: Bulk asset registration
+        // Example 3: Bulk upload of local files
         var iconAssets = new List<Asset>();
         var icons = new[]
         {
-            new { Name = "icon-home", FileName = "home.svg", FileHash = "11111111111111111111111111111111" },
-            new { Name = "icon-settings", FileName = "settings.svg", FileHash = "22222222222222222222222222222222" },
-            new { Name = "icon-user", FileName = "user.svg", FileHash = "33333333333333333333333333333333" },
+            new { Name = "icon-home", FileName = "icon-home.svg", FileSource = "./assets/icons/home.svg" },
+            new { Name = "icon-user", FileName = "icon-user.svg", FileSource = "./assets/icons/user.svg" },
         };
 
         foreach (var icon in icons)
@@ -61,32 +63,40 @@ class Program
             {
                 SiteId = siteId,
                 FileName = icon.FileName,
-                FileHash = icon.FileHash,
+                FileSource = icon.FileSource,
             });
             iconAssets.Add(asset);
         }
 
         // Export values for the logo asset
-        // These are needed to complete the S3 upload
         var outputs = new Dictionary<string, object?>
         {
             ["logoAssetId"] = logoAsset.AssetId,
-            ["logoUploadUrl"] = logoAsset.UploadUrl,
-            ["logoUploadDetails"] = logoAsset.UploadDetails,
+            ["logoHostedUrl"] = logoAsset.HostedUrl, // public CDN URL of the uploaded file
             ["logoAssetUrl"] = logoAsset.AssetUrl,
-            ["logoHostedUrl"] = logoAsset.HostedUrl,
-
-            // Export hero asset info
-            ["heroAssetId"] = heroAsset.AssetId,
-            ["heroHostedUrl"] = heroAsset.HostedUrl,
+            ["logoFileHash"] = logoAsset.FileHash, // computed from the file content
+            ["logoContentType"] = logoAsset.ContentType,
+            ["logoSize"] = logoAsset.Size,
+            ["logoFolderId"] = logoAsset.FolderId,
 
             // Export icon asset IDs
             ["iconAssetIds"] = Output.All(iconAssets.Select(a => a.AssetId).ToArray()),
         };
 
+        // Export hero asset info (only when heroImageUrl is configured)
+        if (heroAsset != null)
+        {
+            outputs["heroAssetId"] = heroAsset.AssetId;
+            outputs["heroHostedUrl"] = heroAsset.HostedUrl;
+        }
+
         // Print deployment message
-        var assetCount = icons.Length + 2;
-        siteId.Apply(s => Console.WriteLine($"Registered {assetCount} assets for site {s}. Use uploadUrl and uploadDetails to complete S3 uploads."));
+        var assetCount = icons.Length + 1 + (heroAsset != null ? 1 : 0);
+        logoAsset.HostedUrl.Apply(url =>
+        {
+            Console.WriteLine($"Uploaded {assetCount} assets. Logo is available at {url}");
+            return url;
+        });
 
         return outputs;
     });

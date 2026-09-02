@@ -156,6 +156,9 @@ The examples demonstrate these trigger types:
 | `collection_item_changed` | Collection item is updated |
 | `collection_item_deleted` | Collection item is deleted |
 | `collection_item_unpublished` | Collection item is unpublished |
+| `comment_created` | A comment is created on the site |
+
+All trigger types documented by Webflow are accepted, including `comment_created` for site comments.
 
 ## Configuration
 

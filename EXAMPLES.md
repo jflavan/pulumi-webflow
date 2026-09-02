@@ -34,7 +34,7 @@ Every resource in this provider MUST have example code demonstrating its usage. 
 - ✅ Java (if Java SDK is supported)
 
 **Core resources include:**
-- Site, Collection, CollectionItem, Page, Webhook, Redirect, RobotsTxt
+- Site, Collection, CollectionItem, PageMetadata (with the `getPages`/`getPage` functions), Webhook, Redirect, RobotsTxt
 
 ### Tier 3: Integration Examples (NICE TO HAVE)
 
@@ -171,7 +171,7 @@ When modifying a resource:
 ## Current Status
 
 Coverage is derived from the language directories that actually exist under `examples/<resource>/`
-(16 resources registered in `provider/provider.go`, plus 2 functions):
+(18 resources registered in `provider/provider.go`, plus 10 functions):
 
 | Resource            | TypeScript | Python | Go | C# | Java | Directory                      |
 |---------------------|:----------:|:------:|:--:|:--:|:----:|--------------------------------|
@@ -181,10 +181,12 @@ Coverage is derived from the language directories that actually exist under `exa
 | CollectionField     | ✅ |    |    |    |      | `examples/collectionfield/`    |
 | CollectionItem      | ✅ | ✅ | ✅ | ✅ | ✅ | `examples/collectionitem/`     |
 | EcommerceSettings   | ✅ |    |    |    |      | `examples/ecommerce-settings/` |
+| GoogleTag           | ✅ |    |    |    |      | `examples/googletag/`          |
 | InlineScript        | ✅ |    |    |    |      | `examples/inlinescript/`       |
 | PageContent         | ✅ |    |    |    |      | `examples/pagecontent/`        |
 | PageCustomCode      | ✅ |    |    |    |      | `examples/pagecustomcode/`     |
-| PageData            | ✅ | ✅ | ✅ |    |      | `examples/page/`               |
+| PageMetadata        | ✅ |    |    |    |      | `examples/pagemetadata/`       |
+| PageSchemaMarkup    | ✅ |    |    |    |      | `examples/pageschemamarkup/`   |
 | Redirect            | ✅ | ✅ | ✅ | ✅ | ✅ | `examples/redirect/`           |
 | RegisteredScript    | ✅ |    |    |    |      | `examples/registeredscript/`   |
 | RobotsTxt           | ✅ | ✅ | ✅ | ✅ | ✅ | `examples/robotstxt/`          |
@@ -194,15 +196,24 @@ Coverage is derived from the language directories that actually exist under `exa
 
 ### Data Sources (Functions)
 - ✅ `getTokenInfo`, `getAuthorizedUser` - `examples/token/` (TypeScript)
+- ✅ `getPages`, `getPage` - `examples/page/` (TypeScript, Python, Go) and `examples/pagemetadata/` (TypeScript)
+- ✅ `getPageSchemaMarkup` - `examples/pageschemamarkup/` (TypeScript)
+- ✅ `getAnalyticsTraffic`, `getAnalyticsTopPages`, `getAnalyticsTopDimensions`, `getAnalyticsTopEvents`,
+  `getAnalyticsTimeOnPage` - `examples/analytics/` (TypeScript)
 
 ### Missing Examples
-- (None - all 16 resources and both functions have at least a TypeScript example)
+- (None - all 18 resources and all 10 functions have at least a TypeScript example)
 
-**Tier 1 coverage: 100% (16/16 resources + 2 functions with at least a TypeScript example and README)**
-**Multi-language coverage: 50% (8/16 resources with 3+ languages: Asset, Collection, CollectionItem, PageData, Redirect, RobotsTxt, Site, Webhook)**
-**Complete coverage: 38% (6/16 resources with all 5 languages: Asset, Collection, CollectionItem, Redirect, RobotsTxt, Site)**
+**Tier 1 coverage: 100% (18/18 resources + 10 functions with at least a TypeScript example and README)**
+**Multi-language coverage: 39% (7/18 resources with 3+ languages: Asset, Collection, CollectionItem, Redirect, RobotsTxt, Site, Webhook)**
+**Complete coverage: 33% (6/18 resources with all 5 languages: Asset, Collection, CollectionItem, Redirect, RobotsTxt, Site)**
 
-Core resources still missing C#/Java examples: PageData, Webhook.
+Core resources still missing C#/Java examples: Webhook (and the `getPages`/`getPage` functions in `examples/page/`).
+
+The Go examples for `asset`, `collectionitem`, `page` and `site` use properties that are newer than
+the published `v0.10.1` Go module, so their `go.mod` files carry a
+`replace github.com/JDetmar/pulumi-webflow/sdk/go/webflow => ../../../sdk/go/webflow` directive
+(noted in each README). Remove the directive and pin the released version once it is published.
 
 ## Integration Examples
 

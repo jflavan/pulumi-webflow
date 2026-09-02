@@ -42,8 +42,14 @@ const configuredSite = new webflow.Site("configured-site", {
   parentFolderId: config.get("parentFolderId"),
   // Optional and IMMUTABLE: changing it later replaces (deletes + recreates) the site
   templateName: config.get("templateName"),
-  // Do not auto-publish; enable after the first manual publish in the Designer
-  publish: false,
+  // Publish after every create/update once you run `pulumi config set publish true`.
+  // With publishToWebflowSubdomain the site goes to its webflow.io subdomain;
+  // add custom domain IDs with publishCustomDomains, or publish a single page
+  // with publishPageId. Leave publish off until the site is ready to go live.
+  publish: config.getBoolean("publish") ?? false,
+  publishToWebflowSubdomain: true,
+  // publishCustomDomains: ["your-custom-domain-id"], // domain IDs, not host names
+  // publishPageId: "your-page-id", // publish only this page instead of the whole site
 });
 
 // Export the site resources for reference
@@ -54,6 +60,10 @@ export const basicSiteShortName = basicSite.shortName;
 export const basicSiteTimeZone = basicSite.timeZone;
 export const environmentSiteIds = environmentSites.map((s) => s.id);
 export const configuredSiteId = configuredSite.id;
+// publishScope reports what the last provider-initiated publish targeted
+// (the webflow.io subdomain, custom domains, or a single page)
+export const configuredSitePublishScope = configuredSite.publishScope;
+export const configuredSiteLastPublished = configuredSite.lastPublished;
 
 // Print deployment success message
 const message = pulumi.interpolate`✅ Successfully created ${environmentSites.length + 2} sites`;

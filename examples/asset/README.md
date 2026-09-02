@@ -1,27 +1,32 @@
 # Asset Resource Examples
 
-This directory contains examples demonstrating how to create and manage assets (images, files, documents) for Webflow sites using Pulumi in all supported languages.
+This directory contains examples demonstrating how to upload assets (images, files, documents) to
+Webflow sites using Pulumi in all supported languages.
 
 ## What You'll Learn
 
-- Register asset metadata with Webflow
-- Obtain presigned S3 upload URLs
-- Use upload details to complete file uploads
-- Organize assets into folders
+- Upload a local file shipped with the example (`assets/logo.svg`)
+- Upload a file from an http(s) URL
+- Organize assets into folders with `parentFolder`
+- Read the computed `fileHash`, the public `hostedUrl` and the `folderId` as outputs
 
-## Important: Two-Step Upload Process
+## How Uploads Work
 
-The Webflow Asset API uses a two-step process:
+`fileSource` is required and tells the provider where the file bytes come from:
 
-1. **Register Asset Metadata** (handled by this provider)
-   - Call `webflow.Asset()` with `fileName` and `fileHash`
-   - Receive `uploadUrl` and `uploadDetails` for S3 upload
-   - Asset ID is assigned immediately
+- a **local path**, resolved relative to the Pulumi program's working directory
+  (e.g. `./assets/logo.svg`), or
+- an **http(s) URL** (e.g. `https://example.com/hero.jpg`).
 
-2. **Upload File to S3** (done separately)
-   - POST to `uploadUrl` with form fields from `uploadDetails`
-   - Include the actual file binary
-   - The `hostedUrl` becomes accessible after upload completes
+At apply time the provider reads the content, computes its MD5 `fileHash`, registers the asset
+with Webflow and completes the S3 upload. You no longer have to upload anything yourself:
+`hostedUrl` is usable as soon as `pulumi up` finishes.
+
+- `fileHash` is optional and computed for you; if you set it explicitly it must match the content.
+- For local files, a content change (different hash) replaces the asset.
+- `uploadUrl` and `uploadDetails` (the presigned S3 form Webflow returns) are still exposed, as
+  **secret** outputs, but you do not need them.
+- `folderId` reports the folder Webflow placed the asset in.
 
 ## Available Languages
 
@@ -32,6 +37,23 @@ The Webflow Asset API uses a two-step process:
 | Go         | `go/`        | `main.go`      | `go.mod`            |
 | C#         | `csharp/`    | `Program.cs`   | `.csproj`           |
 | Java       | `java/`      | `App.java`     | `pom.xml`           |
+
+Every language directory ships the same sample files under `assets/`:
+
+```
+assets/
+├── logo.svg
+└── icons/
+    ├── home.svg
+    └── user.svg
+```
+
+## Prerequisites
+
+- Pulumi CLI installed
+- A Webflow API token with the **`assets:read`** and **`assets:write`** scopes, set as
+  `WEBFLOW_API_TOKEN` or via `pulumi config set webflow:apiToken --secret`
+- Your Webflow site ID
 
 ## Quick Start
 
@@ -67,6 +89,11 @@ pulumi config set siteId your-site-id --secret
 pulumi up
 ```
 
+> The Go example's `go.mod` contains a `replace` directive pointing at the SDK in this repository
+> (`../../../sdk/go/webflow`) because `fileSource` is newer than the published `v0.10.1` Go
+> module. Once the next release is published you can drop the directive and depend on that
+> version instead.
+
 ### C#
 
 ```bash
@@ -89,128 +116,81 @@ pulumi up
 
 ## Examples Included
 
-### 1. Basic Asset Registration
-
-Register a single asset and get the upload URL:
+### 1. Upload a Local File
 
 ```typescript
 const logoAsset = new webflow.Asset("company-logo", {
   siteId: siteId,
-  fileName: "logo.png",
-  fileHash: "d41d8cd98f00b204e9800998ecf8427e", // MD5 hash of file
+  fileName: "logo.svg",
+  fileSource: "./assets/logo.svg", // relative to the program directory
 });
 
-// Use these to upload to S3:
-export const uploadUrl = logoAsset.uploadUrl;
-export const uploadDetails = logoAsset.uploadDetails;
+export const logoHostedUrl = logoAsset.hostedUrl;
+export const logoFileHash = logoAsset.fileHash; // computed by the provider
 ```
 
-### 2. Asset with Folder Organization
+### 2. Upload from a URL (optional)
 
-Place assets in specific folders:
+Set `pulumi config set heroImageUrl https://example.com/hero.jpg` to enable this part of the
+example. `parentFolder` places the asset in an existing asset folder (see the
+[AssetFolder example](../assetfolder/)).
 
 ```typescript
 const heroImage = new webflow.Asset("hero-image", {
   siteId: siteId,
   fileName: "hero-banner.jpg",
-  fileHash: "a1b2c3d4e5f6789012345678abcdef12",
-  parentFolder: "folder-id-here", // Optional folder ID
+  fileSource: heroImageUrl,
+  // parentFolder: imagesFolder.folderId,
 });
 ```
 
-### 3. Bulk Asset Registration
-
-Register multiple assets efficiently:
+### 3. Bulk Upload
 
 ```typescript
-const assets = [
-  { name: "icon-home", file: "home.svg", hash: "..." },
-  { name: "icon-settings", file: "settings.svg", hash: "..." },
-  { name: "icon-user", file: "user.svg", hash: "..." },
+const icons = [
+  { name: "icon-home", fileName: "icon-home.svg", fileSource: "./assets/icons/home.svg" },
+  { name: "icon-user", fileName: "icon-user.svg", fileSource: "./assets/icons/user.svg" },
 ];
 
-assets.forEach((asset) => {
-  new webflow.Asset(asset.name, {
+icons.forEach((icon) => {
+  new webflow.Asset(icon.name, {
     siteId: siteId,
-    fileName: asset.file,
-    fileHash: asset.hash,
+    fileName: icon.fileName,
+    fileSource: icon.fileSource,
   });
 });
 ```
 
-## Completing the S3 Upload
-
-After running `pulumi up`, use the output values to upload your file:
-
-### Using curl
-
-```bash
-# Get the outputs
-UPLOAD_URL=$(pulumi stack output uploadUrl)
-# uploadDetails contains form fields - extract them
-
-# Upload the file (example with common fields)
-curl -X POST "$UPLOAD_URL" \
-  -F "acl=public-read" \
-  -F "key=<from uploadDetails>" \
-  -F "Content-Type=image/png" \
-  -F "X-Amz-Credential=<from uploadDetails>" \
-  -F "X-Amz-Algorithm=AWS4-HMAC-SHA256" \
-  -F "X-Amz-Date=<from uploadDetails>" \
-  -F "Policy=<from uploadDetails>" \
-  -F "X-Amz-Signature=<from uploadDetails>" \
-  -F "file=@/path/to/your/logo.png"
-```
-
-### Using the Webflow JS SDK
-
-```javascript
-// The Webflow JS SDK has a helper that handles both steps:
-await client.assets.utilities.createAndUpload(siteId, {
-  fileName: "logo.png",
-  file: fs.readFileSync("/path/to/logo.png"),
-});
-```
-
-## Generating MD5 File Hash
-
-The `fileHash` is required and must be the MD5 hash of your file:
-
-```bash
-# Linux
-md5sum logo.png | awk '{print $1}'
-
-# macOS
-md5 -q logo.png
-
-# Windows (PowerShell)
-(Get-FileHash -Algorithm MD5 logo.png).Hash.ToLower()
-```
-
 ## Configuration
 
-Each example requires the following configuration:
-
-| Config Key        | Required | Description                              |
-|-------------------|----------|------------------------------------------|
-| `siteId`  | Yes      | Your Webflow site ID (stored as secret)  |
+| Config Key      | Required | Description                                                |
+|-----------------|----------|------------------------------------------------------------|
+| `siteId`        | Yes      | Your Webflow site ID (stored as secret)                    |
+| `heroImageUrl`  | No       | An http(s) URL to upload as the `hero-image` asset         |
 
 ## Expected Output
 
-After successful deployment, you'll see exports like:
+After a successful deployment you'll see exports like:
 
 ```
 Outputs:
-    assetId       : "5f0c8c9e1c9d440000e8d8c4"
-    uploadUrl     : "https://s3.amazonaws.com/..."
-    uploadDetails : { acl: "...", key: "...", ... }
-    assetUrl      : "https://s3.amazonaws.com/..."
-    hostedUrl     : "https://assets.website-files.com/..."
+    iconAssetIds    : ["5f0c8c9e1c9d440000e8d8c5", "5f0c8c9e1c9d440000e8d8c6"]
+    logoAssetId     : "5f0c8c9e1c9d440000e8d8c4"
+    logoAssetUrl    : "https://s3.amazonaws.com/webflow-prod-assets/..."
+    logoContentType : "image/svg+xml"
+    logoFileHash    : "3c1f0b9d4a2e6f8b7c5d1e9a0b2c4d6e"
+    logoFolderId    : ""
+    logoHostedUrl   : "https://cdn.prod.website-files.com/.../logo.svg"
+    logoSize        : 412
 ```
 
-## Cleanup
+## Updating an Asset
 
-To remove all created assets:
+Edit `assets/logo.svg` and run `pulumi up` again: the provider notices the new MD5 hash and
+replaces the asset (Webflow assets are immutable, so a new asset ID is created and the old one
+deleted). Changing `fileName`, `siteId` or `parentFolder` replaces the asset as well.
+
+## Cleanup
 
 ```bash
 pulumi destroy
@@ -219,21 +199,23 @@ pulumi stack rm dev
 
 ## Troubleshooting
 
-### "fileHash is required" Error
+### "fileSource is required" Error
 
-You must provide an MD5 hash of your file content. See "Generating MD5 File Hash" above.
+Every asset needs a `fileSource` (local path or URL). The former "register only, upload later"
+flow with a hand-computed `fileHash` is no longer supported.
 
-### "hostedUrl not accessible"
+### "no such file or directory"
 
-The `hostedUrl` only becomes accessible after you complete the S3 upload using `uploadUrl` and `uploadDetails`.
+Local paths are resolved relative to the Pulumi program's working directory (the directory
+containing `Pulumi.yaml`). Use `./assets/logo.svg`, not a path relative to your shell.
 
-### "Invalid fileHash format" Error
+### "fileHash does not match"
 
-The MD5 hash must be a 32-character hexadecimal string (lowercase or uppercase).
+If you set `fileHash` explicitly it must be the MD5 of the actual content. Simply omit it and let
+the provider compute it.
 
 ## Related Resources
 
 - [AssetFolder Resource](../assetfolder/)
 - [Main Examples Index](../README.md)
-- [AWS S3 POST Documentation](https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPOST.html)
-- [Webflow Asset API](https://developers.webflow.com/reference/assets)
+- [Webflow Asset API](https://developers.webflow.com/data/reference/assets)

@@ -39,8 +39,14 @@ configured_site = webflow.Site("configured-site",
     parent_folder_id=config.get("parentFolderId"),
     # Optional and IMMUTABLE: changing it later replaces (deletes + recreates) the site
     template_name=config.get("templateName"),
-    # Do not auto-publish; enable after the first manual publish in the Designer
-    publish=False)
+    # Publish after every create/update once you run `pulumi config set publish true`.
+    # With publish_to_webflow_subdomain the site goes to its webflow.io subdomain;
+    # add custom domain IDs with publish_custom_domains, or publish a single page
+    # with publish_page_id. Leave publish off until the site is ready to go live.
+    publish=config.get_bool("publish") or False,
+    publish_to_webflow_subdomain=True)
+    # publish_custom_domains=["your-custom-domain-id"],  # domain IDs, not host names
+    # publish_page_id="your-page-id",  # publish only this page instead of the whole site
 
 # Export values
 pulumi.export("basic_site_id", basic_site.id)
@@ -50,6 +56,10 @@ pulumi.export("basic_site_short_name", basic_site.short_name)
 pulumi.export("basic_site_time_zone", basic_site.time_zone)
 pulumi.export("environment_site_ids", [s.id for s in environment_sites])
 pulumi.export("configured_site_id", configured_site.id)
+# publish_scope reports what the last provider-initiated publish targeted
+# (the webflow.io subdomain, custom domains, or a single page)
+pulumi.export("configured_site_publish_scope", configured_site.publish_scope)
+pulumi.export("configured_site_last_published", configured_site.last_published)
 
 # Print success message
 site_count = len(environment_sites) + 2

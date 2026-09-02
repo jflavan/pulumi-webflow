@@ -121,6 +121,9 @@ Each example requires the following configuration:
 | `pageId`  | Yes      | Your Webflow page ID (24-char hex string) |
 | `environment`     | No       | Deployment environment (default: development) |
 
+**Localized pages:** the resource accepts an optional `localeId` input to update the text of a
+secondary locale; omit it to update the primary locale.
+
 ### Setting Configuration
 
 ```bash
@@ -139,7 +142,7 @@ After successful deployment, you'll see exports like:
 Outputs:
     deployedPageId      : [secret]
     heroContentId       : "pagecontent-abc123..."
-    heroLastUpdated     : "2025-01-06T10:30:00Z"
+    heroNodeCount       : 2
     footerContentId     : "pagecontent-def456..."
     featureContentId    : "pagecontent-ghi789..."
 ```

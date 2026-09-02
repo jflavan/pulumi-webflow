@@ -45,8 +45,14 @@ func main() {
 		configuredArgs := &webflow.SiteArgs{
 			WorkspaceId: pulumi.String(workspaceID),
 			DisplayName: pulumi.String(fmt.Sprintf("%s-configured", displayName)),
-			// Do not auto-publish; enable after the first manual publish in the Designer
-			Publish: pulumi.Bool(false),
+			// Publish after every create/update once you run `pulumi config set publish true`.
+			// With PublishToWebflowSubdomain the site goes to its webflow.io subdomain;
+			// add custom domain IDs with PublishCustomDomains, or publish a single page
+			// with PublishPageId. Leave publish off until the site is ready to go live.
+			Publish:                   pulumi.Bool(cfg.GetBool("publish")),
+			PublishToWebflowSubdomain: pulumi.Bool(true),
+			// PublishCustomDomains: pulumi.StringArray{pulumi.String("your-custom-domain-id")}, // domain IDs, not host names
+			// PublishPageId: pulumi.String("your-page-id"), // publish only this page instead of the whole site
 		}
 		// Optional: organize the site in a workspace folder
 		if v := cfg.Get("parentFolderId"); v != "" {
@@ -74,6 +80,10 @@ func main() {
 		}
 		ctx.Export("environmentSiteIds", siteIds)
 		ctx.Export("configuredSiteId", configuredSite.ID())
+		// PublishScope reports what the last provider-initiated publish targeted
+		// (the webflow.io subdomain, custom domains, or a single page)
+		ctx.Export("configuredSitePublishScope", configuredSite.PublishScope)
+		ctx.Export("configuredSiteLastPublished", configuredSite.LastPublished)
 
 		ctx.Log.Info(
 			fmt.Sprintf("✅ Successfully created %d sites", len(environmentSites)+2),

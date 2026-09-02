@@ -124,11 +124,11 @@ const imagesFolder = new webflow.AssetFolder("images", {
   displayName: "Images",
 });
 
-// Upload asset to folder
+// Upload asset to folder (the provider reads the file and uploads it)
 const logoAsset = new webflow.Asset("company-logo", {
   siteId: siteId,
   fileName: "logo.png",
-  fileHash: "d41d8cd98f00b204e9800998ecf8427e",
+  fileSource: "./assets/logo.png", // local path or http(s) URL
   parentFolder: imagesFolder.folderId, // Place in Images folder
 });
 ```

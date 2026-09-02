@@ -4,8 +4,9 @@ This directory contains examples demonstrating how to create and manage fields f
 
 ## What You'll Learn
 
-- Create various field types (PlainText, RichText, Number, DateTime, Switch, Email, Image, Phone, Color)
+- Create various field types (PlainText, RichText, Number, DateTime, Switch, Email, Image, Phone, Color, Option, VideoLink)
 - Set up field validations (min/max for numbers, maxLength for text)
+- Configure Option fields with `metadata`
 - Configure required vs. optional fields
 - Add help text for content editors
 - Use auto-generated slugs vs. custom slugs
@@ -137,6 +138,26 @@ displayName: "Short Description"
 // slug will be auto-generated as "short-description"
 ```
 
+### 11. Option Field with `metadata`
+
+Dropdown fields declare their choices through the `metadata` input (required for `Option`,
+`Reference` and `MultiReference` fields; create-only).
+
+```typescript
+type: "Option"
+metadata: {
+  options: [{ name: "Draft" }, { name: "In Review" }, { name: "Published" }],
+}
+```
+
+### 12. Video Link Field
+
+Embeds a video from a URL. The type is `VideoLink` (the former `Video` name is no longer accepted).
+
+```typescript
+type: "VideoLink"
+```
+
 ## Configuration
 
 Each example requires the following configuration:
@@ -163,7 +184,9 @@ Outputs:
     shortDescriptionFieldId    : "vwx234..."
     phoneFieldId               : "yza567..."
     accentColorFieldId         : "bcd890..."
-    summary                    : "✅ Successfully created 10 collection fields:
+    statusFieldId              : "efg123..."
+    videoFieldId               : "hij456..."
+    summary                    : "✅ Successfully created 12 collection fields:
                                    1. Article Title
                                    2. Article Content
                                    ..."
@@ -185,12 +208,16 @@ The CollectionField resource supports the following field types:
 | Color           | Color picker                                 | -                                 |
 | Image           | Single image reference                       | -                                 |
 | MultiImage      | Multiple image references                    | -                                 |
-| Video           | Video embed or upload                        | -                                 |
+| VideoLink       | Video embed link (YouTube, Vimeo, ...)        | -                                 |
 | Link            | URL/link input                               | -                                 |
 | File            | File upload                                  | -                                 |
-| Option          | Dropdown/select field                        | options (array of choices)        |
-| Reference       | Reference to another collection item         | collectionId                      |
-| MultiReference  | Multiple references to collection items      | collectionId                      |
+| Option          | Dropdown/select field                        | `metadata: { options: [{ name }] }` (required) |
+| Reference       | Reference to another collection item         | `metadata: { collectionId }` (required) |
+| MultiReference  | Multiple references to collection items      | `metadata: { collectionId }` (required) |
+
+`metadata` is the type-specific configuration for `Option`, `Reference` and `MultiReference` fields;
+it is not accepted for other types and, like `type`, `slug` and `validations`, changing it replaces
+the field. The former `Video` type name is now `VideoLink`.
 
 ## Important Notes
 
@@ -243,7 +270,8 @@ Ensure you're using one of the supported field types listed in the Field Type Re
 Check that your validations match the field type:
 - Number fields: Use `min`, `max`, `decimalPlaces`
 - PlainText/RichText: Use `maxLength`
-- Option fields: Use `options` array
+- Option fields: Use `metadata: { options: [...] }` (not `validations`)
+- Reference/MultiReference fields: Use `metadata: { collectionId: "..." }`
 
 ## Related Resources
 

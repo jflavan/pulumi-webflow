@@ -49,8 +49,14 @@ public class App {
             var configuredArgs = SiteArgs.builder()
                 .workspaceId(workspaceId)
                 .displayName(displayName + "-configured")
-                // Do not auto-publish; enable after the first manual publish in the Designer
-                .publish(false);
+                // Publish after every create/update once you run `pulumi config set publish true`.
+                // With publishToWebflowSubdomain the site goes to its webflow.io subdomain;
+                // add custom domain IDs with publishCustomDomains, or publish a single page
+                // with publishPageId. Leave publish off until the site is ready to go live.
+                .publish(config.getBoolean("publish").orElse(false))
+                .publishToWebflowSubdomain(true);
+                // .publishCustomDomains("your-custom-domain-id") // domain IDs, not host names
+                // .publishPageId("your-page-id") // publish only this page instead of the whole site
             // Optional: organize the site in a workspace folder
             config.get("parentFolderId").ifPresent(configuredArgs::parentFolderId);
             // Optional and IMMUTABLE: changing it later replaces (deletes + recreates) the site
@@ -67,6 +73,10 @@ public class App {
                 .map(Site::id)
                 .collect(Collectors.toList())));
             ctx.export("configuredSiteId", configuredSite.id());
+            // publishScope reports what the last provider-initiated publish targeted
+            // (the webflow.io subdomain, custom domains, or a single page)
+            ctx.export("configuredSitePublishScope", configuredSite.publishScope());
+            ctx.export("configuredSiteLastPublished", configuredSite.lastPublished());
         });
     }
 }

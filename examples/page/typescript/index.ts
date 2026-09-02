@@ -6,82 +6,91 @@ const config = new pulumi.Config();
 
 // Get configuration values
 const siteId = config.requireSecret("siteId");
-const pageId = config.get("pageId"); // Optional: set to get a specific page
+const pageId = config.get("pageId"); // Optional: set to also read a single page
 
 /**
- * Page Data Source Example - Reading Page Information
+ * Page Functions Example - Reading Page Information
  *
- * This example demonstrates how to read page information from a Webflow site.
- * Pages cannot be created via the API - they must be created in the Webflow designer.
- * This data source allows you to retrieve page metadata for use in your infrastructure code.
+ * This example demonstrates how to read page information from a Webflow site
+ * with the `getPages` and `getPage` functions. Pages cannot be created via the
+ * API - they must be created in the Webflow Designer. The functions let you
+ * discover page IDs and use page metadata in your infrastructure code.
  *
  * Use cases:
- * - Reference existing pages in your infrastructure
- * - Get page metadata for custom code injection
+ * - Find page IDs for PageMetadata, PageContent, PageCustomCode or PageSchemaMarkup
  * - List all pages in a site for documentation
- * - Query page properties for conditional logic
+ * - Query page properties (draft, archived, SEO, ...) for conditional logic
+ *
+ * Required token scope: pages:read.
  */
 
-// Example 1: Get all pages for a site
-// When pageId is not specified, retrieves all pages
-const allPages = new webflow.PageData("all-pages", {
+// Example 1: List all pages of the site
+// getPages follows API pagination and returns every page.
+const allPages = webflow.getPagesOutput({
   siteId: siteId,
+  // localeId: "your-locale-id", // optional: list a secondary locale instead
 });
 
-// `pages` is optional in the schema; normalise it to an array once for the exports below
-const pageList = allPages.pages.apply((pages) => pages ?? []);
+const pageList = allPages.pages;
 
-// Example 2: Get a specific page by ID (conditional on config)
-// When pageId is specified, retrieves only that page's details
-let specificPage: webflow.PageData | undefined;
+// Example 2: Read a single page by ID (only when pageId is configured)
+let specificPage: pulumi.Output<webflow.GetPageResult> | undefined;
 if (pageId) {
-  specificPage = new webflow.PageData("specific-page", {
-    siteId: siteId,
+  specificPage = webflow.getPageOutput({
     pageId: pageId,
+    // localeId: "your-locale-id", // optional secondary locale
+    // translatable: true,         // return the locale's own translation, not inherited content
   });
 }
 
-// Export outputs for all pages scenario
-export const sitePages = pageList.apply((pages) => {
-  // Transform the pages array into a readable format
-  return pages.map((page) => ({
+// Export outputs for the listing
+export const sitePages = pageList.apply((pages) =>
+  pages.map((page) => ({
     id: page.pageId,
     title: page.title,
     slug: page.slug,
+    publishedPath: page.publishedPath,
     draft: page.draft,
     archived: page.archived,
-  }));
-});
+  }))
+);
 
 export const pageCount = pageList.apply((pages) => pages.length);
 
 // Export the full list of page IDs for reference
-export const pageIds = pageList.apply((pages) =>
-  pages.map((p) => p.pageId)
+export const pageIds = pageList.apply((pages) => pages.map((p) => p.pageId));
+
+// Filter pages by their properties
+export const draftPageSlugs = pageList.apply((pages) => pages.filter((p) => p.draft).map((p) => p.slug));
+export const collectionTemplateSlugs = pageList.apply((pages) =>
+  pages.filter((p) => p.collectionId !== "").map((p) => p.slug)
 );
 
-// Export outputs for specific page scenario (undefined when pageId is not configured).
+// Export outputs for the single-page scenario (undefined when pageId is not configured).
 // Stack outputs in TypeScript are top-level `export`s; there is no pulumi.export().
 export const pageTitle = specificPage?.title;
 export const pageSlug = specificPage?.slug;
-export const pageWebflowId = specificPage?.webflowPageId;
+export const pagePublishedPath = specificPage?.publishedPath;
 export const pageCreatedOn = specificPage?.createdOn;
 export const pageLastUpdated = specificPage?.lastUpdated;
 export const pageIsDraft = specificPage?.draft;
 export const pageIsArchived = specificPage?.archived;
 export const pageParentId = specificPage?.parentId;
 export const pageCollectionId = specificPage?.collectionId;
+export const pageSeoTitle = specificPage?.seo.title;
+export const pageSeoDescription = specificPage?.seo.description;
+export const pageOpenGraphTitle = specificPage?.openGraph.title;
 
 // Print helpful information
 pageList.apply((pages) => {
-  console.log(`\n📄 Found ${pages.length} pages in the site`);
+  console.log(`\nFound ${pages.length} pages in the site`);
 
   // Show a sample of pages
   const sampleSize = Math.min(5, pages.length);
   if (sampleSize > 0) {
     console.log(`\nFirst ${sampleSize} pages:`);
     pages.slice(0, sampleSize).forEach((page, idx) => {
-      console.log(`  ${idx + 1}. "${page.title}" (/${page.slug})`);
+      console.log(`  ${idx + 1}. "${page.title}" (${page.publishedPath || "/" + page.slug}) id=${page.pageId}`);
     });
 
     if (pages.length > sampleSize) {
@@ -92,6 +101,6 @@ pageList.apply((pages) => {
 
 if (specificPage) {
   specificPage.title.apply((title) => {
-    console.log(`\n✅ Retrieved page: "${title}"`);
+    console.log(`\nRetrieved page: "${title}"`);
   });
 }

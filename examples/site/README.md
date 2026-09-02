@@ -6,8 +6,10 @@ This directory contains examples demonstrating how to create and manage Webflow 
 
 - Create Webflow sites with the required properties (`workspaceId`, `displayName`)
 - Implement multi-environment site configurations
-- Use the optional `parentFolderId`, `templateName` and `publish` inputs
-- Read Webflow-generated values (`shortName`, `timeZone`, `previewUrl`, ...) as outputs
+- Use the optional `parentFolderId` and `templateName` inputs
+- Publish the site to its webflow.io subdomain, to custom domains, or publish a single page
+  (`publish`, `publishToWebflowSubdomain`, `publishCustomDomains`, `publishPageId`)
+- Read Webflow-generated values (`shortName`, `timeZone`, `previewUrl`, `publishScope`, ...) as outputs
 - Manage site lifecycle (create, update, delete)
 
 ## Available Languages
@@ -115,10 +117,35 @@ const sites = environments.map(env =>
 );
 ```
 
-### 3. Optional Configuration
+### 3. Optional Configuration and Publishing
 
-Demonstrates the optional inputs: `parentFolderId`, `templateName` (immutable - changing it
-replaces the site) and `publish`.
+Demonstrates the optional inputs `parentFolderId` and `templateName` (immutable - changing it
+replaces the site), and the publish inputs:
+
+```typescript
+const configuredSite = new webflow.Site("configured-site", {
+    workspaceId: "YOUR_WORKSPACE_ID",
+    displayName: "My Website",
+    publish: true,                    // publish after every create/update
+    publishToWebflowSubdomain: true,  // ... to the site's webflow.io subdomain
+    // publishCustomDomains: ["custom-domain-id"], // ... and/or to these custom domain IDs
+    // publishPageId: "page-id",                   // publish only this page
+});
+
+export const publishScope = configuredSite.publishScope;
+```
+
+- `publish` must be `true` for any publishing to happen; the example reads it from the `publish`
+  config key so it stays off by default (`pulumi config set publish true` enables it).
+- `publishToWebflowSubdomain: true` publishes to `<shortName>.webflow.io`. If neither it nor
+  `publishCustomDomains` is set, the provider publishes to the webflow.io subdomain anyway.
+- `publishCustomDomains` takes custom domain **IDs** (not host names); read them from the site
+  settings or the Sites API.
+- **Single-page publishing:** set `publishPageId` to publish only that page instead of the whole
+  site - handy when a `PageMetadata` or `PageContent` change should go live without republishing
+  everything.
+- The read-only `publishScope` output reports what the last provider-initiated publish targeted,
+  and `lastPublished` when it happened.
 
 ## Configuration
 
@@ -130,6 +157,7 @@ Each example reads the following project config keys:
 | `displayName`     | Yes      | Human-readable name for the site                                  |
 | `parentFolderId`  | No       | Workspace folder to place the site in                             |
 | `templateName`    | No       | Site template; immutable, changing it replaces the site           |
+| `publish`         | No       | `true` to publish the configured site to its webflow.io subdomain after each update (default `false`) |
 
 **Note:** `shortName` is no longer an input (removed in v0.9.4). Webflow derives it from
 `displayName`; read it from the resource output instead (`site.shortName` in TypeScript,
@@ -148,6 +176,8 @@ Outputs:
     basicSiteTimeZone     : "America/New_York"
     environmentSiteIds    : ["def456...", "ghi789...", "jkl012..."]
     configuredSiteId      : "mno345..."
+    configuredSitePublishScope : "webflow-subdomain"   # only after a publish
+    configuredSiteLastPublished: "2026-05-01T12:00:00Z"
 ```
 
 ## Cleanup

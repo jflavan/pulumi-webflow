@@ -47,8 +47,11 @@ published_product = webflow.CollectionItem("published-product",
         # "category": "Electronics",
         # "in-stock": True,
     },
-    is_draft=False,  # Published to live site
-    is_archived=False)
+    is_draft=False,  # Staged: goes out with the next site publish
+    is_archived=False,
+    # Publish the item to the live site right away, after every create and
+    # update. Requires the site to have been published at least once.
+    live=True)
 
 # Example 3: Archived Content
 # Create an item that is archived (hidden but retained for records)
@@ -118,6 +121,7 @@ pulumi.export("draft_post_created_on", draft_blog_post.created_on)
 pulumi.export("published_product_id", published_product.id)
 pulumi.export("published_product_item_id", published_product.item_id)
 pulumi.export("published_product_last_updated", published_product.last_updated)
+pulumi.export("published_product_last_published", published_product.last_published)  # set because live=True
 
 # Archived item exports
 pulumi.export("archived_item_id", archived_item.id)

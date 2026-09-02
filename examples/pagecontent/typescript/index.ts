@@ -32,6 +32,7 @@ const pageId = config.requireSecret("pageId");
  */
 const heroContent = new webflow.PageContent("hero-section-content", {
   pageId: pageId,
+  // localeId: "your-locale-id", // optional: update a secondary locale instead of the primary one
   nodes: [
     {
       nodeId: "hero-heading-node-id",
@@ -90,7 +91,7 @@ const featureContent = new webflow.PageContent("feature-section-content", {
 // Export resource information for reference
 export const deployedPageId = pageId;
 export const heroContentId = heroContent.id;
-export const heroLastUpdated = heroContent.lastUpdated;
+export const heroNodeCount = heroContent.nodes.apply((nodes) => nodes.length);
 export const footerContentId = footerContent.id;
 export const featureContentId = featureContent.id;
 

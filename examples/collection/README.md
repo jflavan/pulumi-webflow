@@ -218,8 +218,12 @@ Common validation issues:
 
 After creating collections, you'll typically want to:
 
-1. **Add Collection Fields**: Use `webflow.CollectionField` to define custom fields (title, body, images, etc.)
+1. **Add Collection Fields**: Use `webflow.CollectionField` to define custom fields (title, body, images, etc.).
+   `Option` fields take their choices and `Reference`/`MultiReference` fields their target collection
+   through the `metadata` input, and video fields use the `VideoLink` type (see the
+   [CollectionField examples](../collectionfield/)).
 2. **Add Collection Items**: Use `webflow.CollectionItem` to populate collections with content
+   (`live: true` publishes an item to the live site right after it is written)
 3. **Configure Collection Settings**: Adjust SEO, templates, and publishing options in Webflow Designer
 
 ## Related Resources

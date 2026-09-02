@@ -5,7 +5,7 @@ This directory contains examples demonstrating how to create and manage CMS coll
 ## What You'll Learn
 
 - Create blog posts, products, or other CMS content items
-- Manage draft and published states
+- Manage draft, staged and live states (`isDraft`, `live`)
 - Set custom field data based on your collection schema
 - Archive and unarchive collection items
 - Work with localized content (optional)
@@ -91,7 +91,7 @@ isDraft: true
 
 ### 2. Published Product
 
-Create a published product with custom fields.
+Create a product with custom fields and publish it to the live site immediately.
 
 ```
 fieldData: {
@@ -100,7 +100,8 @@ fieldData: {
   price: 99.99,
   description: "The best widget on the market"
 }
-isDraft: false
+isDraft: false   // staged for the next site publish
+live: true       // publish the item now, and again after every update
 ```
 
 ### 3. Archived Content
@@ -162,11 +163,15 @@ Example:
 }
 ```
 
-### Draft vs Published
+### Draft vs Staged vs Live
 
-- `isDraft: true` - Item exists in CMS but is NOT visible on the live site
-- `isDraft: false` - Item is published and visible on the live site
-- Default: `true` (draft mode)
+- `isDraft: true` - Item exists in CMS but is NOT visible on the live site (Webflow's default for new items)
+- `isDraft: false` - Item is staged: it goes out with the next site publish, but is not published by itself
+- `live: true` - The provider publishes the item to the live site after every create and update
+  (via the publish-items endpoint) and reads it back from the live endpoint, so `lastPublished`
+  reflects the live copy. Requires the site to have been published at least once. Setting it back
+  to `false` stops publishing future changes but does not unpublish the item.
+- When `isDraft` is omitted the draft state is not managed and never causes a diff
 
 ### Archived Items
 
@@ -185,6 +190,7 @@ Outputs:
     draftPostItemId       : "670d3e4a..."
     publishedProductId    : "item_def456..."
     publishedProductItemId: "670d3e4b..."
+    publishedProductLastPublished: "2026-05-01T12:00:00Z"
     archivedItemId        : "item_ghi789..."
     bulkItemIds           : ["item_jkl...", "item_mno...", "item_pqr..."]
 ```

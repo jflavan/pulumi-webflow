@@ -1,0 +1,10 @@
+name: webflow-pageschemamarkup-example
+runtime: nodejs
+description: Example of managing JSON-LD schema markup on a Webflow page with Pulumi
+
+config:
+  pageId:
+    description: The Webflow page ID whose schema markup is managed
+  localeId:
+    description: Optional - a secondary locale ID to manage instead of the primary locale
+    default: ""

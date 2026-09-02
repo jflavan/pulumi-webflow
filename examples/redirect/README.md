@@ -118,6 +118,11 @@ Each example requires the following configuration:
 | `siteId`  | Yes      | Your Webflow site ID (stored as secret)  |
 | `environment`     | No       | Deployment environment (default: development) |
 
+## Updating Redirects
+
+Changing `destinationPath` or `statusCode` updates the redirect in place (no replacement);
+changing `sourcePath` or `siteId` replaces it.
+
 ## Expected Output
 
 After successful deployment, you'll see exports like:

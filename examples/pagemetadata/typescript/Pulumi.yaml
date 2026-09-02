@@ -1,0 +1,13 @@
+name: webflow-pagemetadata-example
+runtime: nodejs
+description: Example of managing page settings with PageMetadata and the getPage/getPages functions
+
+config:
+  siteId:
+    description: The Webflow site ID
+  pageSlug:
+    description: Slug of the page whose settings are managed
+    default: about
+  localeId:
+    description: Optional - a secondary locale ID to manage instead of the primary locale
+    default: ""

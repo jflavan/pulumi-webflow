@@ -46,8 +46,14 @@ class Program
         {
             WorkspaceId = workspaceId,
             DisplayName = $"{displayName}-configured",
-            // Do not auto-publish; enable after the first manual publish in the Designer
-            Publish = false,
+            // Publish after every create/update once you run `pulumi config set publish true`.
+            // With PublishToWebflowSubdomain the site goes to its webflow.io subdomain;
+            // add custom domain IDs with PublishCustomDomains, or publish a single page
+            // with PublishPageId. Leave publish off until the site is ready to go live.
+            Publish = config.GetBoolean("publish") ?? false,
+            PublishToWebflowSubdomain = true,
+            // PublishCustomDomains = { "your-custom-domain-id" }, // domain IDs, not host names
+            // PublishPageId = "your-page-id", // publish only this page instead of the whole site
         };
         // Optional: organize the site in a workspace folder
         var parentFolderId = config.Get("parentFolderId");
@@ -73,6 +79,10 @@ class Program
             ["basicSiteTimeZone"] = basicSite.TimeZone,
             ["environmentSiteIds"] = Output.All(environmentSites.Select(s => s.Id).ToArray()),
             ["configuredSiteId"] = configuredSite.Id,
+            // PublishScope reports what the last provider-initiated publish targeted
+            // (the webflow.io subdomain, custom domains, or a single page)
+            ["configuredSitePublishScope"] = configuredSite.PublishScope,
+            ["configuredSiteLastPublished"] = configuredSite.LastPublished,
         };
     });
 }

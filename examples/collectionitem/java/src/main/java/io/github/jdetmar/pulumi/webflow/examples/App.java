@@ -52,8 +52,11 @@ public class App {
                         // "category", "Electronics",
                         // "in-stock", true
                     ))
-                    .isDraft(false) // Published to live site
+                    .isDraft(false) // Staged: goes out with the next site publish
                     .isArchived(false)
+                    // Publish the item to the live site right away, after every create and
+                    // update. Requires the site to have been published at least once.
+                    .live(true)
                     .build());
 
             // Example 3: Archived Content
@@ -140,6 +143,7 @@ public class App {
             ctx.export("publishedProductId", publishedProduct.id());
             ctx.export("publishedProductItemId", publishedProduct.itemId());
             ctx.export("publishedProductLastUpdated", publishedProduct.lastUpdated());
+            ctx.export("publishedProductLastPublished", publishedProduct.lastPublished()); // set because live(true)
 
             // Archived item exports
             ctx.export("archivedItemId", archivedItem.id());

@@ -13,3 +13,6 @@ config:
     description: Optional workspace folder to place the site in
   templateName:
     description: Optional site template (immutable - changing it replaces the site)
+  publish:
+    description: Set to true to publish the configured site to its webflow.io subdomain after each update
+    default: false

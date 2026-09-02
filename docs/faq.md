@@ -456,12 +456,15 @@ pulumi state mv urn:pulumi:...:old-name urn:pulumi:...:new-name
 
 ### What resource types are available?
 
-Sixteen resources and two functions (see the [catalog](../README.md#resources-and-functions)):
-`Site`, `Redirect`, `RobotsTxt`, `Collection`, `CollectionField`, `CollectionItem`, `PageData`,
-`PageContent`, `Webhook`, `Asset`, `AssetFolder`, `RegisteredScript`, `InlineScript`,
-`SiteCustomCode`, `PageCustomCode`, `EcommerceSettings`, plus `getTokenInfo` and `getAuthorizedUser`.
-`GoogleTag`, `PageSchemaMarkup`, `PageMetadata` and the `getPage*` / `getAnalytics*` functions are
-new in the current release line; see the [CHANGELOG](../CHANGELOG.md).
+Eighteen resources and ten functions (see the [catalog](../README.md#resources-and-functions)):
+`Site`, `Redirect`, `RobotsTxt`, `Collection`, `CollectionField`, `CollectionItem`, `PageMetadata`,
+`PageContent`, `PageSchemaMarkup`, `Webhook`, `Asset`, `AssetFolder`, `RegisteredScript`,
+`InlineScript`, `SiteCustomCode`, `PageCustomCode`, `GoogleTag`, `EcommerceSettings`, plus the
+functions `getTokenInfo`, `getAuthorizedUser`, `getPages`, `getPage`, `getPageSchemaMarkup`,
+`getAnalyticsTraffic`, `getAnalyticsTopPages`, `getAnalyticsTopDimensions`, `getAnalyticsTopEvents`
+and `getAnalyticsTimeOnPage`. `GoogleTag`, `PageSchemaMarkup`, `PageMetadata` and the `getPage*` /
+`getAnalytics*` functions are available from the next release; the `PageData` resource was removed
+in its favour (see the [CHANGELOG](../CHANGELOG.md)).
 
 ### How do I create a Site resource?
 

@@ -8,52 +8,59 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
 
+// Page Functions Example - Reading Page Information
+//
+// This example demonstrates how to read page information from a Webflow site
+// with the GetPages and GetPage functions. Pages cannot be created via the API -
+// they must be created in the Webflow Designer. The functions let you discover
+// page IDs and use page metadata in your infrastructure code.
+//
+// Required token scope: pages:read.
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
 		cfg := config.New(ctx, "")
 		siteID := cfg.RequireSecret("siteId")
-		pageID := cfg.Get("pageId") // Optional: set to get a specific page
+		pageID := cfg.Get("pageId") // Optional: set to also read a single page
 
-		// Example 1: Get all pages for a site
-		allPages, err := webflow.NewPageData(ctx, "all-pages", &webflow.PageDataArgs{
+		// Example 1: List all pages of the site
+		// GetPagesOutput follows API pagination and returns every page.
+		allPages := webflow.GetPagesOutput(ctx, webflow.GetPagesOutputArgs{
 			SiteId: siteID,
+			// LocaleId: pulumi.String("your-locale-id"), // optional: list a secondary locale instead
 		})
-		if err != nil {
-			return fmt.Errorf("failed to get all pages: %w", err)
-		}
 
-		// Example 2: Get a specific page by ID (conditional on config)
-		var specificPage *webflow.PageData
+		// Example 2: Read a single page by ID (only when pageId is configured)
+		var specificPage *webflow.GetPageResultOutput
 		if pageID != "" {
-			specificPage, err = webflow.NewPageData(ctx, "specific-page", &webflow.PageDataArgs{
-				SiteId: siteID,
-				PageId: pulumi.StringPtr(pageID),
+			page := webflow.GetPageOutput(ctx, webflow.GetPageOutputArgs{
+				PageId: pulumi.String(pageID),
+				// LocaleId:     pulumi.String("your-locale-id"), // optional secondary locale
+				// Translatable: pulumi.Bool(true),               // return the locale's own translation
 			})
-			if err != nil {
-				return fmt.Errorf("failed to get specific page: %w", err)
-			}
+			specificPage = &page
 		}
 
-		// Export outputs for all pages scenario
-		ctx.Export("sitePages", allPages.Pages.ApplyT(func(pages []webflow.PageInfo) interface{} {
+		// Export outputs for the listing
+		ctx.Export("sitePages", allPages.Pages().ApplyT(func(pages []webflow.PageRecord) interface{} {
 			result := make([]map[string]interface{}, len(pages))
 			for i, page := range pages {
 				result[i] = map[string]interface{}{
-					"id":       page.PageId,
-					"title":    page.Title,
-					"slug":     page.Slug,
-					"draft":    page.Draft,
-					"archived": page.Archived,
+					"id":            page.PageId,
+					"title":         page.Title,
+					"slug":          page.Slug,
+					"publishedPath": page.PublishedPath,
+					"draft":         page.Draft,
+					"archived":      page.Archived,
 				}
 			}
 			return result
 		}))
 
-		ctx.Export("pageCount", allPages.Pages.ApplyT(func(pages []webflow.PageInfo) int {
+		ctx.Export("pageCount", allPages.Pages().ApplyT(func(pages []webflow.PageRecord) int {
 			return len(pages)
 		}))
 
-		ctx.Export("pageIds", allPages.Pages.ApplyT(func(pages []webflow.PageInfo) []string {
+		ctx.Export("pageIds", allPages.Pages().ApplyT(func(pages []webflow.PageRecord) []string {
 			ids := make([]string, len(pages))
 			for i, page := range pages {
 				ids[i] = page.PageId
@@ -61,22 +68,46 @@ func main() {
 			return ids
 		}))
 
-		// Export outputs for specific page scenario (if configured)
+		// Filter pages by their properties
+		ctx.Export("draftPageSlugs", allPages.Pages().ApplyT(func(pages []webflow.PageRecord) []string {
+			slugs := []string{}
+			for _, page := range pages {
+				if page.Draft {
+					slugs = append(slugs, page.Slug)
+				}
+			}
+			return slugs
+		}))
+
+		ctx.Export("collectionTemplateSlugs", allPages.Pages().ApplyT(func(pages []webflow.PageRecord) []string {
+			slugs := []string{}
+			for _, page := range pages {
+				if page.CollectionId != "" {
+					slugs = append(slugs, page.Slug)
+				}
+			}
+			return slugs
+		}))
+
+		// Export outputs for the single-page scenario (if configured)
 		if specificPage != nil {
-			ctx.Export("pageTitle", specificPage.Title)
-			ctx.Export("pageSlug", specificPage.Slug)
-			ctx.Export("pageWebflowId", specificPage.WebflowPageId)
-			ctx.Export("pageCreatedOn", specificPage.CreatedOn)
-			ctx.Export("pageLastUpdated", specificPage.LastUpdated)
-			ctx.Export("pageIsDraft", specificPage.Draft)
-			ctx.Export("pageIsArchived", specificPage.Archived)
-			ctx.Export("pageParentId", specificPage.ParentId)
-			ctx.Export("pageCollectionId", specificPage.CollectionId)
+			ctx.Export("pageTitle", specificPage.Title())
+			ctx.Export("pageSlug", specificPage.Slug())
+			ctx.Export("pagePublishedPath", specificPage.PublishedPath())
+			ctx.Export("pageCreatedOn", specificPage.CreatedOn())
+			ctx.Export("pageLastUpdated", specificPage.LastUpdated())
+			ctx.Export("pageIsDraft", specificPage.Draft())
+			ctx.Export("pageIsArchived", specificPage.Archived())
+			ctx.Export("pageParentId", specificPage.ParentId())
+			ctx.Export("pageCollectionId", specificPage.CollectionId())
+			ctx.Export("pageSeoTitle", specificPage.Seo().Title())
+			ctx.Export("pageSeoDescription", specificPage.Seo().Description())
+			ctx.Export("pageOpenGraphTitle", specificPage.OpenGraph().Title())
 		}
 
 		// Print helpful information
-		allPages.Pages.ApplyT(func(pages []webflow.PageInfo) interface{} {
-			ctx.Log.Info(fmt.Sprintf("\n📄 Found %d pages in the site", len(pages)), nil)
+		allPages.Pages().ApplyT(func(pages []webflow.PageRecord) interface{} {
+			ctx.Log.Info(fmt.Sprintf("\nFound %d pages in the site", len(pages)), nil)
 
 			// Show a sample of pages
 			sampleSize := len(pages)
@@ -87,7 +118,11 @@ func main() {
 			if sampleSize > 0 {
 				ctx.Log.Info(fmt.Sprintf("\nFirst %d pages:", sampleSize), nil)
 				for i := 0; i < sampleSize; i++ {
-					ctx.Log.Info(fmt.Sprintf("  %d. \"%s\" (/%s)", i+1, pages[i].Title, pages[i].Slug), nil)
+					path := pages[i].PublishedPath
+					if path == "" {
+						path = "/" + pages[i].Slug
+					}
+					ctx.Log.Info(fmt.Sprintf("  %d. \"%s\" (%s) id=%s", i+1, pages[i].Title, path, pages[i].PageId), nil)
 				}
 
 				if len(pages) > sampleSize {
@@ -98,8 +133,8 @@ func main() {
 		})
 
 		if specificPage != nil {
-			specificPage.Title.ApplyT(func(title string) interface{} {
-				ctx.Log.Info(fmt.Sprintf("\n✅ Retrieved page: \"%s\"", title), nil)
+			specificPage.Title().ApplyT(func(title string) interface{} {
+				ctx.Log.Info(fmt.Sprintf("\nRetrieved page: \"%s\"", title), nil)
 				return nil
 			})
 		}

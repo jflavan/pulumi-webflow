@@ -55,8 +55,11 @@ func main() {
 				// "category": pulumi.String("Electronics"),
 				// "in-stock": pulumi.Bool(true),
 			},
-			IsDraft:    pulumi.Bool(isPublished), // false = published
+			IsDraft:    pulumi.Bool(isPublished), // false = staged for the next site publish
 			IsArchived: pulumi.Bool(isNotArchived),
+			// Publish the item to the live site right away, after every create and
+			// update. Requires the site to have been published at least once.
+			Live: pulumi.Bool(true),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create published product: %w", err)
@@ -138,6 +141,7 @@ func main() {
 		ctx.Export("publishedProductId", publishedProduct.ID())
 		ctx.Export("publishedProductItemId", publishedProduct.ItemId)
 		ctx.Export("publishedProductLastUpdated", publishedProduct.LastUpdated)
+		ctx.Export("publishedProductLastPublished", publishedProduct.LastPublished) // set because Live is true
 
 		// Archived item exports
 		ctx.Export("archivedItemId", archivedItem.ID())
