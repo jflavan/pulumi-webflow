@@ -33,13 +33,14 @@ The Webflow Pulumi Provider lets you programmatically manage Webflow resources u
 1. [Prerequisites](#prerequisites)
 2. [Installation](#installation)
 3. [Quick Start](#quick-start) - Start here
-4. [Authentication](#authentication)
-5. [Verification](#verification)
-6. [Get Help](#get-help)
-7. [Version Control & Audit Trail](#version-control--audit-trail)
-8. [Multi-Language Examples](#multi-language-examples)
-9. [Next Steps](#next-steps)
-10. [Contributing](#contributing)
+4. [Resources and Functions](#resources-and-functions)
+5. [Authentication](#authentication)
+6. [Verification](#verification)
+7. [Get Help](#get-help)
+8. [Version Control & Audit Trail](#version-control--audit-trail)
+9. [Multi-Language Examples](#multi-language-examples)
+10. [Next Steps](#next-steps)
+11. [Contributing](#contributing)
 
 ---
 
@@ -54,7 +55,7 @@ Before you begin, make sure you have:
 ### 2. **Programming Language Runtime** (choose at least one)
 - **TypeScript**: [Node.js](https://nodejs.org/) 18.x or later
 - **Python**: [Python](https://www.python.org/downloads/) 3.9 or later
-- **Go**: [Go](https://golang.org/dl/) 1.21 or later
+- **Go**: [Go](https://golang.org/dl/) 1.24.7 or later
 - **C#**: [.NET](https://dotnet.microsoft.com/download) 6.0 or later
 - **Java**: [Java](https://adoptopenjdk.net/) 11 or later
 
@@ -76,7 +77,7 @@ The Webflow provider installs automatically when you first run `pulumi up`. For 
 # Just run the Quick Start below, and the provider will install automatically
 
 # OR manual installation if you prefer
-pulumi plugin install resource webflow
+pulumi plugin install resource webflow --server github://api.github.com/JDetmar/pulumi-webflow
 
 # Verify installation
 pulumi plugin ls | grep webflow
@@ -237,6 +238,43 @@ pulumi destroy
 
 ---
 
+## Resources and Functions
+
+Everything below is registered in [`provider/provider.go`](./provider/provider.go) and available in all five SDKs
+(`@jdetmar/pulumi-webflow`, `pulumi_webflow`, `github.com/JDetmar/pulumi-webflow/sdk/go/webflow`,
+`Community.Pulumi.Webflow`, `io.github.jdetmar.pulumi.webflow`). Every resource except `Site` is scoped to an
+existing site, page or collection ID.
+
+| Resource | What it manages | Example |
+|----------|-----------------|---------|
+| `Site` | Webflow sites (create/update/delete). Inputs: `workspaceId`, `displayName`, optional `parentFolderId`, `templateName`, `publish`. `shortName` and `timeZone` are read-only outputs. | [examples/site](./examples/site/) |
+| `Redirect` | 301/302 URL redirects for a site | [examples/redirect](./examples/redirect/) |
+| `RobotsTxt` | The site's `robots.txt` | [examples/robotstxt](./examples/robotstxt/) |
+| `Collection` | CMS collections (changes require replacement) | [examples/collection](./examples/collection/) |
+| `CollectionField` | Fields of a CMS collection | [examples/collectionfield](./examples/collectionfield/) |
+| `CollectionItem` | CMS items with dynamic field data | [examples/collectionitem](./examples/collectionitem/) |
+| `PageData` | Reads metadata of pages created in the Designer (pages cannot be created via the API) | [examples/page](./examples/page/) |
+| `PageContent` | Text content inside existing DOM nodes of a page | [examples/pagecontent](./examples/pagecontent/) |
+| `Webhook` | Event webhooks (form submissions, publishes, e-commerce events, ...) | [examples/webhook](./examples/webhook/) |
+| `Asset` | Uploaded files and images (immutable; changes replace the asset) | [examples/asset](./examples/asset/) |
+| `AssetFolder` | Asset folders (the API cannot delete them) | [examples/assetfolder](./examples/assetfolder/) |
+| `RegisteredScript` | Externally hosted scripts in the script registry, with `scriptVersion` and integrity hash | [examples/registeredscript](./examples/registeredscript/) |
+| `InlineScript` | Inline JavaScript (up to 2000 characters) in the script registry, with `scriptVersion` | [examples/inlinescript](./examples/inlinescript/) |
+| `SiteCustomCode` | Applies registered scripts site-wide (header/footer) | [examples/sitecustomcode](./examples/sitecustomcode/) |
+| `PageCustomCode` | Applies registered scripts to a single page | [examples/pagecustomcode](./examples/pagecustomcode/) |
+| `EcommerceSettings` | Read-only import of a site's e-commerce settings | [examples/ecommerce-settings](./examples/ecommerce-settings/) |
+
+| Function | What it returns | Example |
+|----------|-----------------|---------|
+| `getTokenInfo` | Scopes, rate limits and authorized resources of the configured API token | [examples/token](./examples/token/) |
+| `getAuthorizedUser` | The user who authorized the API token | [examples/token](./examples/token/) |
+
+**New in this release:** the `GoogleTag`, `PageSchemaMarkup` and `PageMetadata` resources and the `getPage`,
+`getPages`, `getPageSchemaMarkup` and `getAnalytics*` functions are landing with this release line; see the
+[CHANGELOG](./CHANGELOG.md) for the exact version and the generated `schema.json` for their properties.
+
+---
+
 ## Authentication
 
 ### Getting Your Webflow API Token
@@ -246,10 +284,22 @@ pulumi destroy
 3. Click **API Tokens** in the left sidebar
 4. Click **Create New Token**
 5. Name it something descriptive (e.g., "Pulumi Provider")
-6. Grant the following permissions:
-   - **Sites**: Read & Write
-   - **Redirects**: Read & Write (if using Redirect resources)
-   - **Robots.txt**: Read & Write (if using RobotsTxt resources)
+6. Grant the scopes for the resource families you manage. The provider only calls the endpoints
+   for resources in your program, so a token needs only the rows that apply:
+
+   | Resource family | Resources / functions | Scopes |
+   |-----------------|-----------------------|--------|
+   | Sites | `Site`, `Webhook` | `sites:read`, `sites:write` |
+   | Site configuration | `Redirect`, `RobotsTxt` | `site_config:read`, `site_config:write` |
+   | Pages | `PageData`, `PageContent` (and the upcoming `PageMetadata`, `PageSchemaMarkup`, `getPage*`) | `pages:read`, `pages:write` |
+   | CMS | `Collection`, `CollectionField`, `CollectionItem` | `cms:read`, `cms:write` |
+   | Assets | `Asset`, `AssetFolder` | `assets:read`, `assets:write` |
+   | Custom code | `RegisteredScript`, `InlineScript`, `SiteCustomCode`, `PageCustomCode` (and the upcoming `GoogleTag`) | `custom_code:read`, `custom_code:write` |
+   | E-commerce | `EcommerceSettings` | `ecommerce:read` |
+   | Token and user info | `getTokenInfo`, `getAuthorizedUser` | `authorized_user:read` |
+   | Analytics (upcoming) | `getAnalytics*` | the analytics scope listed in the [Webflow scope reference](https://developers.webflow.com/data/reference/scopes) |
+
+   Read-only scopes are enough for `pulumi preview`, `pulumi refresh` and the functions; `pulumi up` needs the write scopes.
 7. Click **Create Token**
 8. **Copy the token immediately** - Webflow won't show it again
 
@@ -265,6 +315,11 @@ export WEBFLOW_API_TOKEN="your-token-here"
 # Option 3: Code (NOT RECOMMENDED for production - security risk)
 # Don't do this in production code!
 ```
+
+**Precedence:** if both are set, the provider uses the `WEBFLOW_API_TOKEN` environment variable
+first and falls back to `webflow:apiToken` from the stack config only when the variable is unset
+or empty (see `GetHTTPClient` in `provider/config.go`). Unset the variable when you want a stack's
+own encrypted token to be used, for example when switching between stacks that use different tokens.
 
 ### Security Best Practices
 
@@ -309,8 +364,8 @@ pulumi version
 # Check the Webflow provider is available
 pulumi plugin ls | grep webflow
 
-# Should output something like:
-# resource webflow 1.0.0-alpha.0+dev
+# Should output something like (the version matches the SDK version in your project):
+# resource  webflow  0.10.1
 ```
 
 ### Verify Authentication Works
@@ -380,7 +435,7 @@ Each includes setup instructions, complete code, and a README.
 Once you've completed the Quick Start:
 
 ### 1. **Explore More Resources**
-- Deploy multiple resource types (Redirects, Sites, etc.)
+- Deploy the other resource types from the [catalog above](#resources-and-functions) (Sites, CMS collections, webhooks, custom code, ...)
 - Use the [examples/](./examples/) directory for real-world patterns
 - Check [docs/](./docs/) for comprehensive reference documentation
 
@@ -428,13 +483,13 @@ This project is licensed under the MIT License - see [LICENSE](./LICENSE) file f
 
 | Problem | Solution |
 |---------|----------|
-| Plugin not found | `pulumi plugin install resource webflow` |
+| Plugin not found | `pulumi plugin install resource webflow --server github://api.github.com/JDetmar/pulumi-webflow` |
 | Invalid token | Check Webflow Account Settings → API Tokens |
 | Invalid site ID | Verify in Webflow Designer → Project Settings → API & Webhooks |
 | Deployment times out | Check internet connection, try again |
 | Token format error | Ensure you're using the full API token (not just a prefix) |
 | Site not found | Verify site ID matches the site where you want to deploy |
-| Need detailed logs | Enable debug logging: `PULUMI_LOG_LEVEL=debug pulumi up` - See [Logging Guide](./docs/logging.md) |
+| Need detailed logs | Enable debug logging: `pulumi up -v=9 --logtostderr` (the provider logs at debug level; there is no `PULUMI_LOG_LEVEL` variable) - See [Logging Guide](./docs/logging.md) |
 
 For more troubleshooting help and detailed logging documentation:
 - **[Logging and Debugging Guide](./docs/logging.md)** - Comprehensive guide to structured logging features

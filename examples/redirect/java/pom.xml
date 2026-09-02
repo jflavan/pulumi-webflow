@@ -5,7 +5,7 @@
                              http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.pulumi.webflow.examples</groupId>
+    <groupId>io.github.jdetmar.pulumi.webflow.examples</groupId>
     <artifactId>redirect-example</artifactId>
     <version>1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
@@ -17,8 +17,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
-        <pulumi.version>3.0.0</pulumi.version>
-        <webflow.version>1.0.0-alpha.0</webflow.version>
+        <pulumi.version>1.0.0</pulumi.version>
+        <webflow.version>0.10.1</webflow.version>
     </properties>
 
     <dependencies>
@@ -28,7 +28,7 @@
             <version>${pulumi.version}</version>
         </dependency>
         <dependency>
-            <groupId>io.github.jdetmar</groupId>
+            <groupId>io.github.jdetmar.pulumi</groupId>
             <artifactId>pulumi-webflow</artifactId>
             <version>${webflow.version}</version>
         </dependency>
@@ -52,7 +52,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.pulumi.webflow.examples.App</mainClass>
+                            <mainClass>io.github.jdetmar.pulumi.webflow.examples.App</mainClass>
                         </manifest>
                     </archive>
                 </configuration>

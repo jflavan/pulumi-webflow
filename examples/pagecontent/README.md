@@ -57,7 +57,7 @@ Alternatively, you can use the Webflow Designer to inspect elements and find the
 cd typescript
 npm install
 pulumi stack init dev
-pulumi config set webflow:pageId your-page-id --secret
+pulumi config set pageId your-page-id --secret
 pulumi up
 ```
 
@@ -118,14 +118,14 @@ Each example requires the following configuration:
 
 | Config Key        | Required | Description                              |
 |-------------------|----------|------------------------------------------|
-| `webflow:pageId`  | Yes      | Your Webflow page ID (24-char hex string) |
+| `pageId`  | Yes      | Your Webflow page ID (24-char hex string) |
 | `environment`     | No       | Deployment environment (default: development) |
 
 ### Setting Configuration
 
 ```bash
 # Required: Set your page ID
-pulumi config set webflow:pageId 5f0c8c9e1c9d440000e8d8c4 --secret
+pulumi config set pageId 5f0c8c9e1c9d440000e8d8c4 --secret
 
 # Optional: Set environment
 pulumi config set environment production

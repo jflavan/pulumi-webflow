@@ -6,3 +6,5 @@ config:
   # Default configuration (can be overridden per stack in Pulumi.<stack>.yaml)
   webflow:
     description: Webflow provider configuration
+  workspaceId:
+    description: Webflow workspace ID that owns the sites (Enterprise workspace required for site creation)

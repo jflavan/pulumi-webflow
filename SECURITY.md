@@ -2,10 +2,14 @@
 
 ## Supported Versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.x.x   | :white_check_mark: |
-| < 1.0   | :x:                |
+The provider is pre-1.0 and follows semantic versioning on the `0.x` line. Security fixes are released as a new patch of the **latest 0.x minor release** (currently `0.10.x`); older minor releases do not receive backported fixes.
+
+| Version                         | Supported          |
+| ------------------------------- | ------------------ |
+| Latest 0.x minor (e.g. 0.10.x)  | :white_check_mark: |
+| Older 0.x minors (e.g. 0.9.x)   | :x: upgrade to the latest release |
+
+See the [CHANGELOG](CHANGELOG.md) and [GitHub Releases](https://github.com/JDetmar/pulumi-webflow/releases) for the current version.
 
 ## Reporting a Vulnerability
 
@@ -19,7 +23,9 @@ Instead, please report them via one of the following methods:
 
 1. **GitHub Security Advisories (Preferred)**: Use the [Security Advisories](https://github.com/JDetmar/pulumi-webflow/security/advisories/new) feature to privately report the vulnerability.
 
-2. **Email**: Contact the maintainer directly at the email address listed in the repository.
+2. **GitHub Discussions (non-sensitive questions only)**: For general security questions that do not disclose a vulnerability, open a [discussion](https://github.com/JDetmar/pulumi-webflow/discussions).
+
+This is a community-maintained project with a single maintainer; there is no dedicated security team or paid support, and the response timeline below is a best-effort commitment.
 
 ### What to Include
 

@@ -224,7 +224,7 @@ Error: Plugin webflow not found
 
 **Solution:**
 ```bash
-pulumi plugin install resource webflow
+pulumi plugin install resource webflow --server github://api.github.com/JDetmar/pulumi-webflow
 ```
 
 ### Python module not found errors

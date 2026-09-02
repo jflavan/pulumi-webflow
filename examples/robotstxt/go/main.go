@@ -3,14 +3,15 @@ package main
 import (
 	"fmt"
 
+	"github.com/JDetmar/pulumi-webflow/sdk/go/webflow"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
-	"github.com/jdetmar/pulumi-webflow/sdk/go/webflow"
+	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
 		// Get configuration values
-		cfg := pulumi.NewConfig(ctx, "")
+		cfg := config.New(ctx, "")
 		siteID := cfg.RequireSecret("siteId")
 		environment := cfg.Get("environment")
 		if environment == "" {
@@ -86,7 +87,7 @@ Sitemap: https://example.com/sitemap.xml`),
 		// Print success message
 		ctx.Log.Info(
 			fmt.Sprintf("✅ Successfully deployed RobotsTxt resources in %s environment", environment),
-			&pulumi.LogOptions{},
+			nil,
 		)
 
 		return nil

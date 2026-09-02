@@ -28,6 +28,9 @@ const allPages = new webflow.PageData("all-pages", {
   siteId: siteId,
 });
 
+// `pages` is optional in the schema; normalise it to an array once for the exports below
+const pageList = allPages.pages.apply((pages) => pages ?? []);
+
 // Example 2: Get a specific page by ID (conditional on config)
 // When pageId is specified, retrieves only that page's details
 let specificPage: webflow.PageData | undefined;
@@ -39,7 +42,7 @@ if (pageId) {
 }
 
 // Export outputs for all pages scenario
-export const sitePages = allPages.pages.apply((pages) => {
+export const sitePages = pageList.apply((pages) => {
   // Transform the pages array into a readable format
   return pages.map((page) => ({
     id: page.pageId,
@@ -50,28 +53,27 @@ export const sitePages = allPages.pages.apply((pages) => {
   }));
 });
 
-export const pageCount = allPages.pages.apply((pages) => pages.length);
+export const pageCount = pageList.apply((pages) => pages.length);
 
 // Export the full list of page IDs for reference
-export const pageIds = allPages.pages.apply((pages) =>
+export const pageIds = pageList.apply((pages) =>
   pages.map((p) => p.pageId)
 );
 
-// Export outputs for specific page scenario (if configured)
-if (specificPage) {
-  pulumi.export("pageTitle", specificPage.title);
-  pulumi.export("pageSlug", specificPage.slug);
-  pulumi.export("pageWebflowId", specificPage.webflowPageId);
-  pulumi.export("pageCreatedOn", specificPage.createdOn);
-  pulumi.export("pageLastUpdated", specificPage.lastUpdated);
-  pulumi.export("pageIsDraft", specificPage.draft);
-  pulumi.export("pageIsArchived", specificPage.archived);
-  pulumi.export("pageParentId", specificPage.parentId);
-  pulumi.export("pageCollectionId", specificPage.collectionId);
-}
+// Export outputs for specific page scenario (undefined when pageId is not configured).
+// Stack outputs in TypeScript are top-level `export`s; there is no pulumi.export().
+export const pageTitle = specificPage?.title;
+export const pageSlug = specificPage?.slug;
+export const pageWebflowId = specificPage?.webflowPageId;
+export const pageCreatedOn = specificPage?.createdOn;
+export const pageLastUpdated = specificPage?.lastUpdated;
+export const pageIsDraft = specificPage?.draft;
+export const pageIsArchived = specificPage?.archived;
+export const pageParentId = specificPage?.parentId;
+export const pageCollectionId = specificPage?.collectionId;
 
 // Print helpful information
-allPages.pages.apply((pages) => {
+pageList.apply((pages) => {
   console.log(`\n📄 Found ${pages.length} pages in the site`);
 
   // Show a sample of pages

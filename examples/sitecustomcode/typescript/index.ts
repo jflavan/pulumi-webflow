@@ -25,7 +25,7 @@ const analyticsScript = new webflow.RegisteredScript("analytics-script", {
   displayName: "GoogleAnalytics",
   hostedLocation: "https://cdn.example.com/ga-v4.js",
   integrityHash: "sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC",
-  version: "4.0.0",
+  scriptVersion: "4.0.0",
   canCopy: true,
 });
 
@@ -34,7 +34,7 @@ const chatWidgetScript = new webflow.RegisteredScript("chat-widget", {
   displayName: "LiveChat",
   hostedLocation: "https://cdn.example.com/livechat-v2.min.js",
   integrityHash: "sha384-abc123def456ghi789jkl012mno345pqr678stu901vwx234yz567ABC890DEF123",
-  version: "2.5.0",
+  scriptVersion: "2.5.0",
   canCopy: true,
 });
 
@@ -43,7 +43,7 @@ const cookieConsentScript = new webflow.RegisteredScript("cookie-consent", {
   displayName: "CookieConsent",
   hostedLocation: "https://cdn.example.com/cookie-consent.js",
   integrityHash: "sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=",
-  version: "1.0.0",
+  scriptVersion: "1.0.0",
   canCopy: true,
 });
 
@@ -54,7 +54,7 @@ const siteScripts = new webflow.SiteCustomCode("site-wide-scripts", {
     {
       // Analytics in header - loads before page renders
       id: analyticsScript.scriptId,
-      version: "4.0.0",
+      scriptVersion: "4.0.0",
       location: "header",
       attributes: {
         "data-site-id": "GA-123456789",
@@ -63,7 +63,7 @@ const siteScripts = new webflow.SiteCustomCode("site-wide-scripts", {
     {
       // Cookie consent in header - must load early
       id: cookieConsentScript.scriptId,
-      version: "1.0.0",
+      scriptVersion: "1.0.0",
       location: "header",
       attributes: {
         "data-theme": "dark",
@@ -73,7 +73,7 @@ const siteScripts = new webflow.SiteCustomCode("site-wide-scripts", {
     {
       // Chat widget in footer - loads after page content
       id: chatWidgetScript.scriptId,
-      version: "2.5.0",
+      scriptVersion: "2.5.0",
       location: "footer",
       attributes: {
         "data-widget-id": "chat-widget-123",
@@ -89,7 +89,7 @@ const minimalSiteScripts = new webflow.SiteCustomCode("minimal-site-scripts", {
   scripts: [
     {
       id: analyticsScript.scriptId,
-      version: "4.0.0",
+      scriptVersion: "4.0.0",
       location: "header",
     },
   ],

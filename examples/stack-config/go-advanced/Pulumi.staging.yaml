@@ -7,13 +7,12 @@ config:
   webflow:apiToken:
     secure: # Run: pulumi config set webflow:apiToken <token> --secret
   environmentName: staging
+  workspaceId: "YOUR_WORKSPACE_ID"  # Enterprise workspace ID (Account Settings > Workspace)
 
   # Staging: production-like but still blocks indexing
   sites:
     marketing:
       displayName: "Marketing Site (Staging)"
-      shortName: "marketing-staging"
-      timeZone: "America/New_York"
       allowIndexing: false
       redirects:
         - sourcePath: "/old-pricing"
@@ -22,8 +21,6 @@ config:
 
     docs:
       displayName: "Documentation (Staging)"
-      shortName: "docs-staging"
-      timeZone: "America/New_York"
       allowIndexing: false
       redirects:
         - sourcePath: "/v1"
@@ -32,6 +29,4 @@ config:
 
     blog:
       displayName: "Engineering Blog (Staging)"
-      shortName: "blog-staging"
-      timeZone: "America/Los_Angeles"
       allowIndexing: false

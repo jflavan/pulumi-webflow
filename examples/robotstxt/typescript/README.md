@@ -39,7 +39,7 @@ Set up your Pulumi stack with the required configuration:
 
 ```bash
 # Set your Webflow site ID (will be prompted for secret)
-pulumi config set webflow:siteId your-site-id --secret
+pulumi config set siteId your-site-id --secret
 
 # Optionally set the environment
 pulumi config set environment production
@@ -49,7 +49,7 @@ You can also create a `Pulumi.dev.yaml` file:
 
 ```yaml
 config:
-  webflow:siteId: your-site-id
+  siteId: your-site-id
   environment: development
 ```
 

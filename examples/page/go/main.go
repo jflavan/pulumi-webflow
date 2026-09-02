@@ -3,13 +3,14 @@ package main
 import (
 	"fmt"
 
-	"github.com/jdetmar/pulumi-webflow/sdk/go/webflow"
+	"github.com/JDetmar/pulumi-webflow/sdk/go/webflow"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
-		cfg := pulumi.NewConfig(ctx, "")
+		cfg := config.New(ctx, "")
 		siteID := cfg.RequireSecret("siteId")
 		pageID := cfg.Get("pageId") // Optional: set to get a specific page
 

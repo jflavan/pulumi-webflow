@@ -23,7 +23,7 @@ This directory contains examples demonstrating how to register and manage inline
 cd typescript
 npm install
 pulumi stack init dev
-pulumi config set webflow:siteId your-site-id --secret
+pulumi config set siteId your-site-id --secret
 pulumi up
 ```
 
@@ -43,7 +43,7 @@ const analyticsSnippet = new webflow.InlineScript("analytics-snippet", {
   gtag('js', new Date());
   gtag('config', 'G-XXXXXXXXXX');
 })();`,
-  version: "1.0.0",
+  scriptVersion: "1.0.0",
   canCopy: true,
 });
 ```
@@ -59,7 +59,7 @@ const cookieConsent = new webflow.InlineScript("cookie-consent", {
   sourceCode: `document.addEventListener('DOMContentLoaded', function() {
   // ... cookie consent logic
 });`,
-  version: "1.2.0",
+  scriptVersion: "1.2.0",
   canCopy: true,
 });
 ```
@@ -75,7 +75,7 @@ const scrollToTop = new webflow.InlineScript("scroll-to-top", {
   sourceCode: `document.addEventListener('DOMContentLoaded', function() {
   // ... scroll-to-top logic
 });`,
-  version: "2.0.0",
+  scriptVersion: "2.0.0",
   canCopy: false,
 });
 ```
@@ -86,7 +86,7 @@ Each example requires the following configuration:
 
 | Config Key        | Required | Description                              |
 |-------------------|----------|------------------------------------------|
-| `webflow:siteId`  | Yes      | Your Webflow site ID (stored as secret)  |
+| `siteId`  | Yes      | Your Webflow site ID (stored as secret)  |
 | `environment`     | No       | Deployment environment (default: development) |
 
 ## Expected Output
@@ -176,7 +176,7 @@ Display names must be 1-50 alphanumeric characters only:
 - Valid: `AnalyticsSnippet`, `MyScript123`
 - Invalid: `my-script`, `Analytics Snippet`
 
-### "Invalid version" Error
+### "Invalid scriptVersion" Error
 
 Version must be valid SemVer:
 - Valid: `1.0.0`, `2.3.1`

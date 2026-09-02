@@ -289,7 +289,7 @@ deploy_all_sites:
 ## Support
 
 For issues with:
-- **Webflow Provider**: [GitHub Issues](https://github.com/jdetmar/pulumi-webflow/issues)
+- **Webflow Provider**: [GitHub Issues](https://github.com/JDetmar/pulumi-webflow/issues)
 - **Pulumi Platform**: [Pulumi Community Slack](https://pulumi-community.slack.com/)
 - **CI/CD Integration**: Consult your platform documentation
 

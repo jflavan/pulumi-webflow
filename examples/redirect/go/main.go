@@ -3,13 +3,14 @@ package main
 import (
 	"fmt"
 
+	"github.com/JDetmar/pulumi-webflow/sdk/go/webflow"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
-	"github.com/jdetmar/pulumi-webflow/sdk/go/webflow"
+	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
-		cfg := pulumi.NewConfig(ctx, "")
+		cfg := config.New(ctx, "")
 		siteID := cfg.RequireSecret("siteId")
 		environment := cfg.Get("environment")
 		if environment == "" {
@@ -59,7 +60,7 @@ func main() {
 			{"/product-c", "/products/product-c"},
 		}
 
-		bulkRedirectIds := []pulumi.StringOutput{}
+		bulkRedirectIds := pulumi.StringArray{}
 		for i, mapping := range redirectMappings {
 			redirect, err := webflow.NewRedirect(ctx, fmt.Sprintf("bulk-redirect-%d", i), &webflow.RedirectArgs{
 				SiteId:          siteID,
@@ -78,11 +79,11 @@ func main() {
 		ctx.Export("permanentRedirectId", permanentRedirect.ID())
 		ctx.Export("temporaryRedirectId", temporaryRedirect.ID())
 		ctx.Export("externalRedirectId", externalRedirect.ID())
-		ctx.Export("bulkRedirectIds", pulumi.StringArray(bulkRedirectIds))
+		ctx.Export("bulkRedirectIds", bulkRedirectIds)
 
 		ctx.Log.Info(
 			fmt.Sprintf("✅ Successfully deployed %d redirects in %s environment", len(redirectMappings)+3, environment),
-			&pulumi.LogOptions{},
+			nil,
 		)
 
 		return nil

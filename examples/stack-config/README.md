@@ -125,10 +125,10 @@ examples/stack-config/typescript-complete/
      webflow:apiToken:
        secure: AAABAPxyz...  # Encrypted API token
      environmentName: dev
+     workspaceId: "YOUR_WORKSPACE_ID"
      sites:
        marketing:
          displayName: "Marketing Site"
-         shortName: "marketing-dev"
    ```
 
 3. **Code Logic** - Same infrastructure code adapts based on stack config
@@ -528,11 +528,10 @@ Edit the appropriate `Pulumi.<stack>.yaml` file directly to add/modify sites:
 ```yaml
 # In Pulumi.dev.yaml (or staging/prod)
 config:
+  workspaceId: "YOUR_WORKSPACE_ID"
   sites:
     marketing:
       displayName: "Marketing Site"
-      shortName: "marketing-dev"
-      timeZone: "America/New_York"
       allowIndexing: false
 ```
 

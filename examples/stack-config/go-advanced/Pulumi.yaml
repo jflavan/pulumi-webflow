@@ -5,3 +5,5 @@ description: Multi-environment Webflow site deployment with stack-specific confi
 config:
   webflow:
     description: Webflow provider configuration
+  workspaceId:
+    description: Webflow workspace ID that owns the sites (Enterprise workspace required for site creation)

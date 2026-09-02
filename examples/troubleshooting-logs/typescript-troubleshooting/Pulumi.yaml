@@ -1,3 +1,10 @@
 name: webflow-logging-troubleshooting
 runtime: nodejs
 description: Troubleshooting example with detailed logging to diagnose Webflow provider issues
+
+config:
+  webflow:apiToken:
+    description: Webflow API token (or set WEBFLOW_API_TOKEN)
+    secret: true
+  workspaceId:
+    description: Webflow workspace ID that owns the sites (Enterprise workspace required for site creation)

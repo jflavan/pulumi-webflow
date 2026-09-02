@@ -3,13 +3,14 @@ package main
 import (
 	"fmt"
 
+	"github.com/JDetmar/pulumi-webflow/sdk/go/webflow"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
-	"github.com/jdetmar/pulumi-webflow/sdk/go/webflow"
+	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
-		cfg := pulumi.NewConfig(ctx, "")
+		cfg := config.New(ctx, "")
 		siteID := cfg.RequireSecret("siteId")
 		environment := cfg.Get("environment")
 		if environment == "" {
@@ -112,7 +113,7 @@ func main() {
 
 		ctx.Log.Info(
 			"✅ Successfully deployed 5 collections",
-			&pulumi.LogOptions{},
+			nil,
 		)
 
 		return nil

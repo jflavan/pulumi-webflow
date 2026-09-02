@@ -3,13 +3,14 @@ package main
 import (
 	"fmt"
 
-	"github.com/jdetmar/pulumi-webflow/sdk/go/webflow"
+	"github.com/JDetmar/pulumi-webflow/sdk/go/webflow"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
-		cfg := pulumi.NewConfig(ctx, "")
+		cfg := config.New(ctx, "")
 		siteID := cfg.RequireSecret("siteId")
 
 		// Example 1: Register a single asset
@@ -47,7 +48,7 @@ func main() {
 			{"icon-user", "user.svg", "33333333333333333333333333333333"},
 		}
 
-		iconAssetIDs := []pulumi.StringOutput{}
+		iconAssetIDs := pulumi.StringArray{}
 		for _, icon := range iconAssets {
 			asset, err := webflow.NewAsset(ctx, icon.name, &webflow.AssetArgs{
 				SiteId:   siteID,
@@ -73,11 +74,11 @@ func main() {
 		ctx.Export("heroHostedUrl", heroAsset.HostedUrl)
 
 		// Export icon asset IDs
-		ctx.Export("iconAssetIds", pulumi.StringArray(iconAssetIDs))
+		ctx.Export("iconAssetIds", iconAssetIDs)
 
 		ctx.Log.Info(
 			fmt.Sprintf("Registered %d assets. Use uploadUrl and uploadDetails to complete S3 uploads.", len(iconAssets)+2),
-			&pulumi.LogOptions{},
+			nil,
 		)
 
 		return nil
