@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strings"
 	"time"
 
 	p "github.com/pulumi/pulumi-go-provider"
@@ -28,10 +27,7 @@ type WebhookArgs struct {
 	// Example: "5f0c8c9e1c9d440000e8d8c3"
 	SiteID string `pulumi:"siteId"`
 	// TriggerType is the Webflow event that triggers this webhook.
-	// Valid values: form_submission, site_publish, page_created, page_metadata_updated,
-	// page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed,
-	// memberships_user_account_added, memberships_user_account_updated, memberships_user_account_deleted,
-	// collection_item_created, collection_item_changed, collection_item_deleted, collection_item_unpublished
+	// Valid values are the documented webhook events; see validTriggerTypeList in webhook.go.
 	TriggerType string `pulumi:"triggerType"`
 	// URL is the HTTPS endpoint where Webflow will send webhook events.
 	// Must be a valid HTTPS URL (e.g., "https://example.com/webhooks/webflow")
@@ -124,8 +120,8 @@ func (w *Webhook) Diff(
 		detailedDiff["url"] = p.PropertyDiff{Kind: p.UpdateReplace}
 	}
 
-	// Check for filter change (requires replacement - webhooks cannot be updated)
-	// Compare filter maps - if either is nil or they differ, trigger replacement
+	// Check for filter change (requires replacement - webhooks cannot be updated).
+	// A nil filter and an empty filter map are the same thing: no filter.
 	if !mapsEqual(req.State.Filter, req.Inputs.Filter) {
 		detailedDiff["filter"] = p.PropertyDiff{Kind: p.UpdateReplace}
 	}
@@ -140,9 +136,12 @@ func (w *Webhook) Diff(
 	return diff, nil
 }
 
-// mapsEqual compares two maps for equality using deep comparison.
-// Returns true if both maps are deeply equal (same keys and values, including nested structures).
+// mapsEqual compares two filter maps structurally (nested values included).
+// nil and empty maps are treated as equal because both mean "no filter".
 func mapsEqual(a, b map[string]interface{}) bool {
+	if len(a) == 0 && len(b) == 0 {
+		return true
+	}
 	return reflect.DeepEqual(a, b)
 }
 
@@ -150,14 +149,35 @@ func mapsEqual(a, b map[string]interface{}) bool {
 func (w *Webhook) Create(
 	ctx context.Context, req infer.CreateRequest[WebhookArgs],
 ) (infer.CreateResponse[WebhookState], error) {
-	// Log the start of webhook creation
+	// Log the start of webhook creation. The URL is deliberately not logged: it may carry
+	// secrets (signing tokens, credentials) in its query string.
 	log := NewLogContext(ctx).
 		WithField("siteId", req.Inputs.SiteID).
-		WithField("triggerType", req.Inputs.TriggerType).
-		WithField("url", req.Inputs.URL)
+		WithField("triggerType", req.Inputs.TriggerType)
 	log.Info("Creating Webflow webhook")
 
-	// Validate inputs BEFORE generating resource ID
+	state := WebhookState{
+		WebhookArgs:   req.Inputs,
+		CreatedOn:     "", // Will be populated from API response
+		LastTriggered: "", // Will be populated from API response if available
+	}
+
+	// During preview, return expected state without making API calls.
+	// Validation is deferred to apply-time because inputs may contain Pulumi unknowns
+	// (e.g., siteId from a Site output) which the infer framework deserializes as zero values.
+	if req.DryRun {
+		log.Debug("Dry run mode - skipping API call")
+		// Set a preview timestamp
+		state.CreatedOn = time.Now().Format(time.RFC3339)
+		// Generate a predictable ID for dry-run
+		previewID := fmt.Sprintf("preview-%d", time.Now().Unix())
+		return infer.CreateResponse[WebhookState]{
+			ID:     GenerateWebhookResourceID(req.Inputs.SiteID, previewID),
+			Output: state,
+		}, nil
+	}
+
+	// Validate inputs BEFORE making API calls (all values are resolved at apply-time)
 	if err := ValidateSiteID(req.Inputs.SiteID); err != nil {
 		log.Errorf("Validation failed: %v", err)
 		return infer.CreateResponse[WebhookState]{}, fmt.Errorf("validation failed for Webhook resource: %w", err)
@@ -171,25 +191,6 @@ func (w *Webhook) Create(
 		return infer.CreateResponse[WebhookState]{}, fmt.Errorf("validation failed for Webhook resource: %w", err)
 	}
 
-	state := WebhookState{
-		WebhookArgs:   req.Inputs,
-		CreatedOn:     "", // Will be populated from API response
-		LastTriggered: "", // Will be populated from API response if available
-	}
-
-	// During preview, return expected state without making API calls
-	if req.DryRun {
-		log.Debug("Dry run mode - skipping API call")
-		// Set a preview timestamp
-		state.CreatedOn = time.Now().Format(time.RFC3339)
-		// Generate a predictable ID for dry-run
-		previewID := fmt.Sprintf("preview-%d", time.Now().Unix())
-		return infer.CreateResponse[WebhookState]{
-			ID:     GenerateWebhookResourceID(req.Inputs.SiteID, previewID),
-			Output: state,
-		}, nil
-	}
-
 	// Get HTTP client
 	client, err := GetHTTPClient(ctx, providerVersion)
 	if err != nil {
@@ -199,10 +200,11 @@ func (w *Webhook) Create(
 
 	// Call Webflow API
 	log.Debug("Calling Webflow API to create webhook")
-	response, err := PostWebhook(
-		ctx, client, req.Inputs.SiteID,
-		req.Inputs.TriggerType, req.Inputs.URL, req.Inputs.Filter,
-	)
+	response, err := PostWebhook(ctx, client, req.Inputs.SiteID, WebhookRequest{
+		TriggerType: req.Inputs.TriggerType,
+		URL:         req.Inputs.URL,
+		Filter:      req.Inputs.Filter,
+	})
 	if err != nil {
 		log.Errorf("Failed to create webhook via API: %v", err)
 		return infer.CreateResponse[WebhookState]{}, fmt.Errorf("failed to create webhook: %w", err)
@@ -240,6 +242,9 @@ func (w *Webhook) Read(
 	if err != nil {
 		return infer.ReadResponse[WebhookArgs, WebhookState]{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
+	if err := ValidateSiteID(siteID); err != nil {
+		return infer.ReadResponse[WebhookArgs, WebhookState]{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
 
 	// Get HTTP client
 	client, err := GetHTTPClient(ctx, providerVersion)
@@ -247,32 +252,15 @@ func (w *Webhook) Read(
 		return infer.ReadResponse[WebhookArgs, WebhookState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API to get all webhooks for this site
-	response, err := GetWebhooks(ctx, client, siteID)
+	// Locate the webhook in the site's webhook list
+	foundWebhook, err := FindWebhook(ctx, client, siteID, webhookID)
 	if err != nil {
-		// Resource not found - return empty ID to signal deletion
-		if strings.Contains(err.Error(), "not found") {
-			return infer.ReadResponse[WebhookArgs, WebhookState]{
-				ID: "",
-			}, nil
+		// Only "not found" (site or webhook gone) signals deletion; every other failure
+		// (network, auth, rate limiting, 5xx) is propagated.
+		if IsNotFound(err) {
+			return infer.ReadResponse[WebhookArgs, WebhookState]{ID: ""}, nil
 		}
-		return infer.ReadResponse[WebhookArgs, WebhookState]{}, fmt.Errorf("failed to read webhooks: %w", err)
-	}
-
-	// Find the specific webhook in the list
-	var foundWebhook *WebhookResponse
-	for _, webhook := range response.Webhooks {
-		if webhook.ID == webhookID {
-			foundWebhook = &webhook
-			break
-		}
-	}
-
-	// If webhook not found, return empty ID to signal deletion
-	if foundWebhook == nil {
-		return infer.ReadResponse[WebhookArgs, WebhookState]{
-			ID: "",
-		}, nil
+		return infer.ReadResponse[WebhookArgs, WebhookState]{}, fmt.Errorf("failed to read webhook: %w", err)
 	}
 
 	// Build current state from API response
@@ -312,15 +300,12 @@ func (w *Webhook) Update(
 
 // Delete removes a webhook from the Webflow site.
 func (w *Webhook) Delete(ctx context.Context, req infer.DeleteRequest[WebhookState]) (infer.DeleteResponse, error) {
-	// Extract siteID and webhookID from resource ID
+	// Extract siteID and webhookID from resource ID. The parser guarantees both are
+	// non-empty; the webhook ID format is not validated because Create accepts whatever
+	// ID Webflow assigns, and Delete must be able to remove exactly that.
 	_, webhookID, err := ExtractIDsFromWebhookResourceID(req.ID)
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
-	}
-
-	// Validate webhook ID
-	if err := ValidateWebhookID(webhookID); err != nil {
-		return infer.DeleteResponse{}, fmt.Errorf("invalid webhook ID: %w", err)
 	}
 
 	// Get HTTP client

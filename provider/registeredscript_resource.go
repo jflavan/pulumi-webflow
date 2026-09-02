@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	p "github.com/pulumi/pulumi-go-provider"
@@ -148,13 +147,9 @@ func (r *RegisteredScriptResource) Diff(
 		detailedDiff["integrityHash"] = p.PropertyDiff{Kind: p.UpdateReplace}
 	}
 
-	// Compare version - only if state has a non-empty version.
-	// If state version is empty (from old state before field was required),
-	// check if the current state outputs have version set. If they don't differ
-	// from inputs, no change is needed.
-	// Note: Due to struct embedding, the state version might not deserialize correctly
-	// in some cases. We handle this by only flagging a diff if both versions are
-	// non-empty AND different.
+	// Compare version only when both sides have one. scriptVersion is optional for
+	// backwards compatibility: state written before the field existed has no version,
+	// and an omitted input means "don't care", so neither case should force a replace.
 	stateVersion := req.State.Version
 	inputVersion := req.Inputs.Version
 	if stateVersion != "" && inputVersion != "" && stateVersion != inputVersion {
@@ -179,7 +174,30 @@ func (r *RegisteredScriptResource) Diff(
 func (r *RegisteredScriptResource) Create(
 	ctx context.Context, req infer.CreateRequest[RegisteredScriptResourceArgs],
 ) (infer.CreateResponse[RegisteredScriptResourceState], error) {
-	// Validate inputs BEFORE generating resource ID
+	state := RegisteredScriptResourceState{
+		RegisteredScriptResourceArgs: req.Inputs,
+		CreatedOn:                    "", // Will be populated after creation
+		LastUpdated:                  "", // Will be populated after creation
+	}
+
+	// During preview, return expected state without making API calls.
+	// Validation is deferred to apply-time because inputs may contain Pulumi unknowns
+	// (e.g., siteId from a Site output) which the infer framework deserializes as zero values.
+	if req.DryRun {
+		// Set a preview timestamp
+		now := time.Now().Format(time.RFC3339)
+		state.CreatedOn = now
+		state.LastUpdated = now
+		// Generate a predictable ID for dry-run
+		previewID := fmt.Sprintf("preview-%d", time.Now().Unix())
+		state.ScriptID = previewID
+		return infer.CreateResponse[RegisteredScriptResourceState]{
+			ID:     GenerateRegisteredScriptResourceID(req.Inputs.SiteID, previewID),
+			Output: state,
+		}, nil
+	}
+
+	// Validate inputs BEFORE making API calls (all values are resolved at apply-time)
 	if err := ValidateSiteID(req.Inputs.SiteID); err != nil {
 		return infer.CreateResponse[RegisteredScriptResourceState]{},
 			fmt.Errorf("validation failed for RegisteredScript resource: %w", err)
@@ -201,27 +219,6 @@ func (r *RegisteredScriptResource) Create(
 			fmt.Errorf("validation failed for RegisteredScript resource: %w", err)
 	}
 
-	state := RegisteredScriptResourceState{
-		RegisteredScriptResourceArgs: req.Inputs,
-		CreatedOn:                    "", // Will be populated after creation
-		LastUpdated:                  "", // Will be populated after creation
-	}
-
-	// During preview, return expected state without making API calls
-	if req.DryRun {
-		// Set a preview timestamp
-		now := time.Now().Format(time.RFC3339)
-		state.CreatedOn = now
-		state.LastUpdated = now
-		// Generate a predictable ID for dry-run
-		previewID := fmt.Sprintf("preview-%d", time.Now().Unix())
-		state.ScriptID = previewID
-		return infer.CreateResponse[RegisteredScriptResourceState]{
-			ID:     GenerateRegisteredScriptResourceID(req.Inputs.SiteID, previewID),
-			Output: state,
-		}, nil
-	}
-
 	// Get HTTP client
 	client, err := GetHTTPClient(ctx, providerVersion)
 	if err != nil {
@@ -229,11 +226,13 @@ func (r *RegisteredScriptResource) Create(
 	}
 
 	// Call Webflow API
-	response, err := PostRegisteredScript(
-		ctx, client, req.Inputs.SiteID,
-		req.Inputs.DisplayName, req.Inputs.HostedLocation, req.Inputs.IntegrityHash,
-		req.Inputs.Version, req.Inputs.CanCopy,
-	)
+	response, err := PostRegisteredScript(ctx, client, req.Inputs.SiteID, RegisteredScriptRequest{
+		DisplayName:    req.Inputs.DisplayName,
+		HostedLocation: req.Inputs.HostedLocation,
+		IntegrityHash:  req.Inputs.IntegrityHash,
+		CanCopy:        req.Inputs.CanCopy,
+		Version:        req.Inputs.Version,
+	})
 	if err != nil {
 		return infer.CreateResponse[RegisteredScriptResourceState]{},
 			fmt.Errorf("failed to create registered script: %w", err)
@@ -270,6 +269,10 @@ func (r *RegisteredScriptResource) Read(
 		return infer.ReadResponse[RegisteredScriptResourceArgs, RegisteredScriptResourceState]{},
 			fmt.Errorf("invalid resource ID: %w", err)
 	}
+	if err := validateScriptResourceIDs(siteID, scriptID); err != nil {
+		return infer.ReadResponse[RegisteredScriptResourceArgs, RegisteredScriptResourceState]{},
+			fmt.Errorf("invalid resource ID: %w", err)
+	}
 
 	// Get HTTP client
 	client, err := GetHTTPClient(ctx, providerVersion)
@@ -278,37 +281,20 @@ func (r *RegisteredScriptResource) Read(
 			fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API to get all scripts for this site
-	response, err := GetRegisteredScripts(ctx, client, siteID)
+	// Locate the script in the site's registered scripts, following pagination.
+	foundScript, err := FindRegisteredScript(ctx, client, siteID, scriptID)
 	if err != nil {
-		// Resource not found - return empty ID to signal deletion
-		if strings.Contains(err.Error(), "not found") {
-			return infer.ReadResponse[RegisteredScriptResourceArgs, RegisteredScriptResourceState]{
-				ID: "",
-			}, nil
+		// Only "not found" (site or script gone) signals deletion; every other failure
+		// (network, auth, rate limiting, 5xx) is propagated.
+		if IsNotFound(err) {
+			return infer.ReadResponse[RegisteredScriptResourceArgs, RegisteredScriptResourceState]{ID: ""}, nil
 		}
 		return infer.ReadResponse[RegisteredScriptResourceArgs, RegisteredScriptResourceState]{},
-			fmt.Errorf("failed to read registered scripts: %w", err)
-	}
-
-	// Find the specific script in the list
-	var foundScript *RegisteredScript
-	for i, script := range response.RegisteredScripts {
-		if script.ID == scriptID {
-			foundScript = &response.RegisteredScripts[i]
-			break
-		}
-	}
-
-	// If script not found, return empty ID to signal deletion
-	if foundScript == nil {
-		return infer.ReadResponse[RegisteredScriptResourceArgs, RegisteredScriptResourceState]{
-			ID: "",
-		}, nil
+			fmt.Errorf("failed to read registered script: %w", err)
 	}
 
 	// Build current state from API response
-	// Note: Webflow's list scripts API doesn't return the version field,
+	// Note: Webflow's list scripts API may not return the version field,
 	// so we preserve it from the existing inputs/state if the API returns empty.
 	version := foundScript.Version
 	if version == "" {
@@ -373,6 +359,9 @@ func (r *RegisteredScriptResource) Delete(
 	// Extract siteID and scriptID from resource ID
 	siteID, scriptID, err := ExtractIDsFromRegisteredScriptResourceID(req.ID)
 	if err != nil {
+		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
+	if err := validateScriptResourceIDs(siteID, scriptID); err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
 
