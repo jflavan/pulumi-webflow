@@ -7,7 +7,7 @@ import * as outputs from "./types/output";
 import * as utilities from "./utilities";
 
 /**
- * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+ * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings > Apps & integrations > API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
  */
 export function getTokenInfo(args?: GetTokenInfoArgs, opts?: pulumi.InvokeOptions): Promise<GetTokenInfoResult> {
     args = args || {};
@@ -30,7 +30,7 @@ export interface GetTokenInfoResult {
     readonly authorization: outputs.GetTokenInfoAuthorization;
 }
 /**
- * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+ * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings > Apps & integrations > API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
  */
 export function getTokenInfoOutput(opts?: pulumi.InvokeOutputOptions): pulumi.Output<GetTokenInfoResult> {
     opts = pulumi.mergeOptions(utilities.resourceOptsDefaults(), opts || {});

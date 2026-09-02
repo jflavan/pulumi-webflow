@@ -18,6 +18,10 @@ import javax.annotation.Nullable;
 /**
  * Manages Webflow sites programmatically. This resource allows you to create, configure, and manage Webflow sites through infrastructure code. Create, Read, Update, and Delete operations are fully supported for complete site lifecycle management.
  * 
+ * **Required scopes:** creating a site (POST /v2/workspaces/{workspace_id}/sites) requires the `workspace:write` scope and an Enterprise workspace; reading a site requires `sites:read`; updating, publishing and deleting a site require `sites:write`.
+ * 
+ * **Import:** `pulumi import webflow:index:Site my-site &lt;siteId&gt;`. The Webflow API does not report the template a site was created from, so `templateName` is empty after import and only affects creation; it is compared only when both the program and the state hold a value.
+ * 
  */
 @ResourceType(type="webflow:index:Site")
 public class Site extends com.pulumi.resources.CustomResource {
@@ -106,14 +110,14 @@ public class Site extends com.pulumi.resources.CustomResource {
         return Codegen.optional(this.lastUpdated);
     }
     /**
-     * The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
+     * The folder ID where the site will be organized in the Webflow dashboard (24-character lowercase hexadecimal string). Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
      * 
      */
     @Export(name="parentFolderId", refs={String.class}, tree="[0]")
     private Output</* @Nullable */ String> parentFolderId;
 
     /**
-     * @return The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
+     * @return The folder ID where the site will be organized in the Webflow dashboard (24-character lowercase hexadecimal string). Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
      * 
      */
     public Output<Optional<String>> parentFolderId() {
@@ -162,14 +166,14 @@ public class Site extends com.pulumi.resources.CustomResource {
         return Codegen.optional(this.publishCustomDomains);
     }
     /**
-     * When `publish` is true, publish only the page with this ID instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
+     * When `publish` is true, publish only the page with this ID (24-character lowercase hexadecimal string) instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
      * 
      */
     @Export(name="publishPageId", refs={String.class}, tree="[0]")
     private Output</* @Nullable */ String> publishPageId;
 
     /**
-     * @return When `publish` is true, publish only the page with this ID instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
+     * @return When `publish` is true, publish only the page with this ID (24-character lowercase hexadecimal string) instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
      * 
      */
     public Output<Optional<String>> publishPageId() {
@@ -218,14 +222,14 @@ public class Site extends com.pulumi.resources.CustomResource {
         return Codegen.optional(this.shortName);
     }
     /**
-     * The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **WARNING: This field is IMMUTABLE.** Once set, it cannot be changed. Changing this value will trigger a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., &#39;mast-framework&#39;, &#39;blank&#39;). Consider using resource protection (`protect: true`) to prevent accidental replacement.
+     * The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **This value only affects creation.** The Webflow API does not report which template a site was created from, so it cannot be read back: after `pulumi import` the state holds no templateName, and adding one to the program later does not change or replace the site. **WARNING:** changing from one non-empty template to a different non-empty template triggers a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., &#39;mast-framework&#39;, &#39;blank&#39;). Consider using resource protection (`protect: true`) to prevent accidental replacement.
      * 
      */
     @Export(name="templateName", refs={String.class}, tree="[0]")
     private Output</* @Nullable */ String> templateName;
 
     /**
-     * @return The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **WARNING: This field is IMMUTABLE.** Once set, it cannot be changed. Changing this value will trigger a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., &#39;mast-framework&#39;, &#39;blank&#39;). Consider using resource protection (`protect: true`) to prevent accidental replacement.
+     * @return The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **This value only affects creation.** The Webflow API does not report which template a site was created from, so it cannot be read back: after `pulumi import` the state holds no templateName, and adding one to the program later does not change or replace the site. **WARNING:** changing from one non-empty template to a different non-empty template triggers a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., &#39;mast-framework&#39;, &#39;blank&#39;). Consider using resource protection (`protect: true`) to prevent accidental replacement.
      * 
      */
     public Output<Optional<String>> templateName() {
@@ -246,14 +250,14 @@ public class Site extends com.pulumi.resources.CustomResource {
         return Codegen.optional(this.timeZone);
     }
     /**
-     * The Webflow workspace ID where the site will be created. Required for site creation (Enterprise workspace required by Webflow API). Example: &#39;5f0c8c9e1c9d440000e8d8c3&#39;. You can find your workspace ID in the Webflow dashboard under Account Settings &gt; Workspace.
+     * The Webflow workspace ID where the site will be created (24-character lowercase hexadecimal string). Required for site creation (Enterprise workspace and the `workspace:write` scope are required by the Webflow API). Example: &#39;5f0c8c9e1c9d440000e8d8c3&#39;. You can find your workspace ID in the Webflow dashboard under Account Settings &gt; Workspace. Changing this value replaces the site.
      * 
      */
     @Export(name="workspaceId", refs={String.class}, tree="[0]")
     private Output<String> workspaceId;
 
     /**
-     * @return The Webflow workspace ID where the site will be created. Required for site creation (Enterprise workspace required by Webflow API). Example: &#39;5f0c8c9e1c9d440000e8d8c3&#39;. You can find your workspace ID in the Webflow dashboard under Account Settings &gt; Workspace.
+     * @return The Webflow workspace ID where the site will be created (24-character lowercase hexadecimal string). Required for site creation (Enterprise workspace and the `workspace:write` scope are required by the Webflow API). Example: &#39;5f0c8c9e1c9d440000e8d8c3&#39;. You can find your workspace ID in the Webflow dashboard under Account Settings &gt; Workspace. Changing this value replaces the site.
      * 
      */
     public Output<String> workspaceId() {

@@ -27,8 +27,8 @@ type GetPageArgs struct {
 	LocaleId *string `pulumi:"localeId"`
 	// The Webflow page ID (24-character lowercase hexadecimal string).
 	PageId string `pulumi:"pageId"`
-	// When true, adds ?translatable=true so the secondary locale's translation content is returned instead of content inherited from the primary locale.
-	Translatable *bool `pulumi:"translatable"`
+	// Optional ID of the secondary locale you are translating into (24-character lowercase hexadecimal string), sent verbatim as ?translatable=<localeId> to return the page's translatable content for that locale. Webflow returns a 400 error when this is the primary locale ID or any other value, and a 403 error when translation exclusions are not enabled for the site.
+	Translatable *string `pulumi:"translatable"`
 }
 
 type GetPageResult struct {
@@ -78,8 +78,8 @@ type GetPageOutputArgs struct {
 	LocaleId pulumi.StringPtrInput `pulumi:"localeId"`
 	// The Webflow page ID (24-character lowercase hexadecimal string).
 	PageId pulumi.StringInput `pulumi:"pageId"`
-	// When true, adds ?translatable=true so the secondary locale's translation content is returned instead of content inherited from the primary locale.
-	Translatable pulumi.BoolPtrInput `pulumi:"translatable"`
+	// Optional ID of the secondary locale you are translating into (24-character lowercase hexadecimal string), sent verbatim as ?translatable=<localeId> to return the page's translatable content for that locale. Webflow returns a 400 error when this is the primary locale ID or any other value, and a 403 error when translation exclusions are not enabled for the site.
+	Translatable pulumi.StringPtrInput `pulumi:"translatable"`
 }
 
 func (GetPageOutputArgs) ElementType() reflect.Type {

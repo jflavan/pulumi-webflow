@@ -241,14 +241,14 @@ class AwaitableGetPageResult(GetPageResult):
 
 def get_page(locale_id: Optional[_builtins.str] = None,
              page_id: Optional[_builtins.str] = None,
-             translatable: Optional[_builtins.bool] = None,
+             translatable: Optional[_builtins.str] = None,
              opts: Optional[pulumi.InvokeOptions] = None) -> AwaitableGetPageResult:
     """
     Reads the metadata (title, slug, SEO, Open Graph, timestamps, flags) of a single Webflow page. Pages cannot be created via the API; they are built in the Webflow Designer. Requires the pages:read scope.
 
     :param _builtins.str locale_id: Optional locale ID. When omitted the primary locale is returned.
     :param _builtins.str page_id: The Webflow page ID (24-character lowercase hexadecimal string).
-    :param _builtins.bool translatable: When true, adds ?translatable=true so the secondary locale's translation content is returned instead of content inherited from the primary locale.
+    :param _builtins.str translatable: Optional ID of the secondary locale you are translating into (24-character lowercase hexadecimal string), sent verbatim as ?translatable=<localeId> to return the page's translatable content for that locale. Webflow returns a 400 error when this is the primary locale ID or any other value, and a 403 error when translation exclusions are not enabled for the site.
     """
     __args__ = dict()
     __args__['localeId'] = locale_id
@@ -277,14 +277,14 @@ def get_page(locale_id: Optional[_builtins.str] = None,
         title=pulumi.get(__ret__, 'title'))
 def get_page_output(locale_id: pulumi.Input[Optional[Optional[_builtins.str]]] = None,
                     page_id: pulumi.Input[Optional[_builtins.str]] = None,
-                    translatable: pulumi.Input[Optional[Optional[_builtins.bool]]] = None,
+                    translatable: pulumi.Input[Optional[Optional[_builtins.str]]] = None,
                     opts: Optional[Union[pulumi.InvokeOptions, pulumi.InvokeOutputOptions]] = None) -> pulumi.Output[GetPageResult]:
     """
     Reads the metadata (title, slug, SEO, Open Graph, timestamps, flags) of a single Webflow page. Pages cannot be created via the API; they are built in the Webflow Designer. Requires the pages:read scope.
 
     :param _builtins.str locale_id: Optional locale ID. When omitted the primary locale is returned.
     :param _builtins.str page_id: The Webflow page ID (24-character lowercase hexadecimal string).
-    :param _builtins.bool translatable: When true, adds ?translatable=true so the secondary locale's translation content is returned instead of content inherited from the primary locale.
+    :param _builtins.str translatable: Optional ID of the secondary locale you are translating into (24-character lowercase hexadecimal string), sent verbatim as ?translatable=<localeId> to return the page's translatable content for that locale. Webflow returns a 400 error when this is the primary locale ID or any other value, and a 403 error when translation exclusions are not enabled for the site.
     """
     __args__ = dict()
     __args__['localeId'] = locale_id

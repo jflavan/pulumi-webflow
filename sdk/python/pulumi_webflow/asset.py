@@ -27,7 +27,7 @@ class AssetArgs:
         """
         The set of arguments for constructing a Asset resource.
 
-        :param pulumi.Input[_builtins.str] file_name: The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Must not exceed 255 characters or contain <, >, :, ", |, ?, *.
+        :param pulumi.Input[_builtins.str] file_name: The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, ", |, ?, *.
         :param pulumi.Input[_builtins.str] file_source: Where the file bytes come from: a local file path (resolved relative to the Pulumi program's working directory, e.g., './assets/logo.png') or an http(s) URL (e.g., 'https://example.com/logo.png'). The content is read at apply time, MD5-hashed and uploaded to Webflow.
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings.
         :param pulumi.Input[_builtins.str] file_hash: MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
@@ -45,7 +45,7 @@ class AssetArgs:
     @pulumi.getter(name="fileName")
     def file_name(self) -> pulumi.Input[_builtins.str]:
         """
-        The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Must not exceed 255 characters or contain <, >, :, ", |, ?, *.
+        The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, ", |, ?, *.
         """
         return pulumi.get(self, "file_name")
 
@@ -115,12 +115,12 @@ class Asset(pulumi.CustomResource):
                  site_id: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         """
-        Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow's storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset.
+        Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow's storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset. After 'pulumi import' the fileSource and fileHash are unknown; set them in your program and the first refresh adopts them without replacing the asset.
 
         :param str resource_name: The name of the resource.
         :param pulumi.ResourceOptions opts: Options for the resource.
         :param pulumi.Input[_builtins.str] file_hash: MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
-        :param pulumi.Input[_builtins.str] file_name: The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Must not exceed 255 characters or contain <, >, :, ", |, ?, *.
+        :param pulumi.Input[_builtins.str] file_name: The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, ", |, ?, *.
         :param pulumi.Input[_builtins.str] file_source: Where the file bytes come from: a local file path (resolved relative to the Pulumi program's working directory, e.g., './assets/logo.png') or an http(s) URL (e.g., 'https://example.com/logo.png'). The content is read at apply time, MD5-hashed and uploaded to Webflow.
         :param pulumi.Input[_builtins.str] parent_folder: Optional asset folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset is placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings.
@@ -132,7 +132,7 @@ class Asset(pulumi.CustomResource):
                  args: AssetArgs,
                  opts: Optional[pulumi.ResourceOptions] = None):
         """
-        Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow's storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset.
+        Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow's storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset. After 'pulumi import' the fileSource and fileHash are unknown; set them in your program and the first refresh adopts them without replacing the asset.
 
         :param str resource_name: The name of the resource.
         :param AssetArgs args: The arguments to use to populate this resource's properties.
@@ -269,7 +269,7 @@ class Asset(pulumi.CustomResource):
     @pulumi.getter(name="fileName")
     def file_name(self) -> pulumi.Output[_builtins.str]:
         """
-        The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Must not exceed 255 characters or contain <, >, :, ", |, ?, *.
+        The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, ", |, ?, *.
         """
         return pulumi.get(self, "file_name")
 

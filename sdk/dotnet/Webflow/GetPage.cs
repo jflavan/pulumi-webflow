@@ -47,10 +47,10 @@ namespace Community.Pulumi.Webflow
         public string PageId { get; set; } = null!;
 
         /// <summary>
-        /// When true, adds ?translatable=true so the secondary locale's translation content is returned instead of content inherited from the primary locale.
+        /// Optional ID of the secondary locale you are translating into (24-character lowercase hexadecimal string), sent verbatim as ?translatable=&lt;localeId&gt; to return the page's translatable content for that locale. Webflow returns a 400 error when this is the primary locale ID or any other value, and a 403 error when translation exclusions are not enabled for the site.
         /// </summary>
         [Input("translatable")]
-        public bool? Translatable { get; set; }
+        public string? Translatable { get; set; }
 
         public GetPageArgs()
         {
@@ -73,10 +73,10 @@ namespace Community.Pulumi.Webflow
         public Input<string> PageId { get; set; } = null!;
 
         /// <summary>
-        /// When true, adds ?translatable=true so the secondary locale's translation content is returned instead of content inherited from the primary locale.
+        /// Optional ID of the secondary locale you are translating into (24-character lowercase hexadecimal string), sent verbatim as ?translatable=&lt;localeId&gt; to return the page's translatable content for that locale. Webflow returns a 400 error when this is the primary locale ID or any other value, and a 403 error when translation exclusions are not enabled for the site.
         /// </summary>
         [Input("translatable")]
-        public Input<bool>? Translatable { get; set; }
+        public Input<string>? Translatable { get; set; }
 
         public GetPageInvokeArgs()
         {

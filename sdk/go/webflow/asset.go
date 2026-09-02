@@ -12,7 +12,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-// Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow's storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset.
+// Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow's storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset. After 'pulumi import' the fileSource and fileHash are unknown; set them in your program and the first refresh adopts them without replacing the asset.
 type Asset struct {
 	pulumi.CustomResourceState
 
@@ -26,7 +26,7 @@ type Asset struct {
 	CreatedOn pulumi.StringPtrOutput `pulumi:"createdOn"`
 	// MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
 	FileHash pulumi.StringPtrOutput `pulumi:"fileHash"`
-	// The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Must not exceed 255 characters or contain <, >, :, ", |, ?, *.
+	// The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, ", |, ?, *.
 	FileName pulumi.StringOutput `pulumi:"fileName"`
 	// Where the file bytes come from: a local file path (resolved relative to the Pulumi program's working directory, e.g., './assets/logo.png') or an http(s) URL (e.g., 'https://example.com/logo.png'). The content is read at apply time, MD5-hashed and uploaded to Webflow.
 	FileSource pulumi.StringOutput `pulumi:"fileSource"`
@@ -104,7 +104,7 @@ func (AssetState) ElementType() reflect.Type {
 type assetArgs struct {
 	// MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
 	FileHash *string `pulumi:"fileHash"`
-	// The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Must not exceed 255 characters or contain <, >, :, ", |, ?, *.
+	// The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, ", |, ?, *.
 	FileName string `pulumi:"fileName"`
 	// Where the file bytes come from: a local file path (resolved relative to the Pulumi program's working directory, e.g., './assets/logo.png') or an http(s) URL (e.g., 'https://example.com/logo.png'). The content is read at apply time, MD5-hashed and uploaded to Webflow.
 	FileSource string `pulumi:"fileSource"`
@@ -118,7 +118,7 @@ type assetArgs struct {
 type AssetArgs struct {
 	// MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
 	FileHash pulumi.StringPtrInput
-	// The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Must not exceed 255 characters or contain <, >, :, ", |, ?, *.
+	// The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, ", |, ?, *.
 	FileName pulumi.StringInput
 	// Where the file bytes come from: a local file path (resolved relative to the Pulumi program's working directory, e.g., './assets/logo.png') or an http(s) URL (e.g., 'https://example.com/logo.png'). The content is read at apply time, MD5-hashed and uploaded to Webflow.
 	FileSource pulumi.StringInput
@@ -190,7 +190,7 @@ func (o AssetOutput) FileHash() pulumi.StringPtrOutput {
 	return o.ApplyT(func(v *Asset) pulumi.StringPtrOutput { return v.FileHash }).(pulumi.StringPtrOutput)
 }
 
-// The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Must not exceed 255 characters or contain <, >, :, ", |, ?, *.
+// The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, ", |, ?, *.
 func (o AssetOutput) FileName() pulumi.StringOutput {
 	return o.ApplyT(func(v *Asset) pulumi.StringOutput { return v.FileName }).(pulumi.StringOutput)
 }

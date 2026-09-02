@@ -11,26 +11,26 @@ import java.util.Objects;
 @CustomType
 public final class NodeContentUpdate {
     /**
-     * @return The unique identifier for the DOM node to update. Retrieve node IDs using GET /pages/{page_id}/dom.
+     * @return The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
      * 
      */
     private String nodeId;
     /**
-     * @return The new text content for the node (HTML is allowed). An empty string clears the node&#39;s text.
+     * @return The new HTML content for the node (required, non-empty). The HTML tags must match the node&#39;s current content as returned by GET /v2/pages/{page_id}/dom (e.g., &#39;&lt;h1&gt;Hello&lt;/h1&gt;&#39; for a heading). An empty string does not clear the node; Webflow rejects it.
      * 
      */
     private String text;
 
     private NodeContentUpdate() {}
     /**
-     * @return The unique identifier for the DOM node to update. Retrieve node IDs using GET /pages/{page_id}/dom.
+     * @return The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
      * 
      */
     public String nodeId() {
         return this.nodeId;
     }
     /**
-     * @return The new text content for the node (HTML is allowed). An empty string clears the node&#39;s text.
+     * @return The new HTML content for the node (required, non-empty). The HTML tags must match the node&#39;s current content as returned by GET /v2/pages/{page_id}/dom (e.g., &#39;&lt;h1&gt;Hello&lt;/h1&gt;&#39; for a heading). An empty string does not clear the node; Webflow rejects it.
      * 
      */
     public String text() {

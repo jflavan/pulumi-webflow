@@ -113,35 +113,35 @@ public final class WebflowFunctions {
         return Deployment.getInstance().invokeAsync("webflow:index:getAnalyticsTopDimensions", TypeShape.of(GetAnalyticsTopDimensionsResult.class), args, Utilities.withVersion(options));
     }
     /**
-     * Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the &#39;referrer&#39; filter. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the &#39;referrer&#39; filter, nor the &#39;nextCollectionId&#39;, &#39;nextItemSlug&#39;, &#39;nextPageId&#39;, &#39;previousCollectionId&#39;, &#39;previousItemSlug&#39; and &#39;previousPageId&#39; filter dimensions. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
      * 
      */
     public static Output<GetAnalyticsTopEventsResult> getAnalyticsTopEvents(GetAnalyticsTopEventsArgs args) {
         return getAnalyticsTopEvents(args, InvokeOptions.Empty);
     }
     /**
-     * Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the &#39;referrer&#39; filter. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the &#39;referrer&#39; filter, nor the &#39;nextCollectionId&#39;, &#39;nextItemSlug&#39;, &#39;nextPageId&#39;, &#39;previousCollectionId&#39;, &#39;previousItemSlug&#39; and &#39;previousPageId&#39; filter dimensions. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
      * 
      */
     public static CompletableFuture<GetAnalyticsTopEventsResult> getAnalyticsTopEventsPlain(GetAnalyticsTopEventsPlainArgs args) {
         return getAnalyticsTopEventsPlain(args, InvokeOptions.Empty);
     }
     /**
-     * Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the &#39;referrer&#39; filter. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the &#39;referrer&#39; filter, nor the &#39;nextCollectionId&#39;, &#39;nextItemSlug&#39;, &#39;nextPageId&#39;, &#39;previousCollectionId&#39;, &#39;previousItemSlug&#39; and &#39;previousPageId&#39; filter dimensions. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
      * 
      */
     public static Output<GetAnalyticsTopEventsResult> getAnalyticsTopEvents(GetAnalyticsTopEventsArgs args, InvokeOptions options) {
         return Deployment.getInstance().invoke("webflow:index:getAnalyticsTopEvents", TypeShape.of(GetAnalyticsTopEventsResult.class), args, Utilities.withVersion(options));
     }
     /**
-     * Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the &#39;referrer&#39; filter. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the &#39;referrer&#39; filter, nor the &#39;nextCollectionId&#39;, &#39;nextItemSlug&#39;, &#39;nextPageId&#39;, &#39;previousCollectionId&#39;, &#39;previousItemSlug&#39; and &#39;previousPageId&#39; filter dimensions. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
      * 
      */
     public static Output<GetAnalyticsTopEventsResult> getAnalyticsTopEvents(GetAnalyticsTopEventsArgs args, InvokeOutputOptions options) {
         return Deployment.getInstance().invoke("webflow:index:getAnalyticsTopEvents", TypeShape.of(GetAnalyticsTopEventsResult.class), args, Utilities.withVersion(options));
     }
     /**
-     * Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the &#39;referrer&#39; filter. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the &#39;referrer&#39; filter, nor the &#39;nextCollectionId&#39;, &#39;nextItemSlug&#39;, &#39;nextPageId&#39;, &#39;previousCollectionId&#39;, &#39;previousItemSlug&#39; and &#39;previousPageId&#39; filter dimensions. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
      * 
      */
     public static CompletableFuture<GetAnalyticsTopEventsResult> getAnalyticsTopEventsPlain(GetAnalyticsTopEventsPlainArgs args, InvokeOptions options) {
@@ -372,49 +372,49 @@ public final class WebflowFunctions {
         return Deployment.getInstance().invokeAsync("webflow:index:getPages", TypeShape.of(GetPagesResult.class), args, Utilities.withVersion(options));
     }
     /**
-     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings &gt; Apps &amp; integrations &gt; API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
      * 
      */
     public static Output<GetTokenInfoResult> getTokenInfo() {
         return getTokenInfo(GetTokenInfoArgs.Empty, InvokeOptions.Empty);
     }
     /**
-     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings &gt; Apps &amp; integrations &gt; API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
      * 
      */
     public static CompletableFuture<GetTokenInfoResult> getTokenInfoPlain() {
         return getTokenInfoPlain(GetTokenInfoPlainArgs.Empty, InvokeOptions.Empty);
     }
     /**
-     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings &gt; Apps &amp; integrations &gt; API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
      * 
      */
     public static Output<GetTokenInfoResult> getTokenInfo(GetTokenInfoArgs args) {
         return getTokenInfo(args, InvokeOptions.Empty);
     }
     /**
-     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings &gt; Apps &amp; integrations &gt; API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
      * 
      */
     public static CompletableFuture<GetTokenInfoResult> getTokenInfoPlain(GetTokenInfoPlainArgs args) {
         return getTokenInfoPlain(args, InvokeOptions.Empty);
     }
     /**
-     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings &gt; Apps &amp; integrations &gt; API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
      * 
      */
     public static Output<GetTokenInfoResult> getTokenInfo(GetTokenInfoArgs args, InvokeOptions options) {
         return Deployment.getInstance().invoke("webflow:index:getTokenInfo", TypeShape.of(GetTokenInfoResult.class), args, Utilities.withVersion(options));
     }
     /**
-     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings &gt; Apps &amp; integrations &gt; API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
      * 
      */
     public static Output<GetTokenInfoResult> getTokenInfo(GetTokenInfoArgs args, InvokeOutputOptions options) {
         return Deployment.getInstance().invoke("webflow:index:getTokenInfo", TypeShape.of(GetTokenInfoResult.class), args, Utilities.withVersion(options));
     }
     /**
-     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings &gt; Apps &amp; integrations &gt; API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
      * 
      */
     public static CompletableFuture<GetTokenInfoResult> getTokenInfoPlain(GetTokenInfoPlainArgs args, InvokeOptions options) {

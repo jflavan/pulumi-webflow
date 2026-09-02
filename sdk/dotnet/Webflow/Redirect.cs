@@ -11,13 +11,13 @@ using Pulumi;
 namespace Community.Pulumi.Webflow
 {
     /// <summary>
-    /// Manages HTTP redirects for a Webflow site. This resource allows you to define redirect rules for old URLs to new locations, supporting both permanent (301) and temporary (302) redirects.
+    /// Manages HTTP redirects for a Webflow site (POST/PATCH/DELETE /v2/sites/{site_id}/redirects, scope sites:write; GET requires sites:read). Webflow redirects are always permanent (301) redirects from one site path to another; the API does not support other status codes. Changing `sourcePath` replaces the redirect; changing `destinationPath` updates it in place.
     /// </summary>
     [WebflowResourceType("webflow:index:Redirect")]
     public partial class Redirect : global::Pulumi.CustomResource
     {
         /// <summary>
-        /// The timestamp when the redirect was created (RFC3339 format), when reported by the Webflow API. Read-only; empty when the API does not return it.
+        /// The timestamp when the redirect was created (RFC3339 format), if the Webflow API reports it. The redirects API does not document this field, so it is normally empty. Read-only.
         /// </summary>
         [Output("createdOn")]
         public Output<string?> CreatedOn { get; private set; } = null!;
@@ -41,10 +41,10 @@ namespace Community.Pulumi.Webflow
         public Output<string> SourcePath { get; private set; } = null!;
 
         /// <summary>
-        /// The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
+        /// Deprecated and ignored. Webflow redirects are always 301 (permanent) redirects: the redirect API object is {id, fromUrl, toUrl} and has no status code, so this value is never sent to Webflow, never validated and never produces a diff. Remove it from your program; it only remains for backwards compatibility.
         /// </summary>
         [Output("statusCode")]
-        public Output<int> StatusCode { get; private set; } = null!;
+        public Output<int?> StatusCode { get; private set; } = null!;
 
 
         /// <summary>
@@ -111,10 +111,10 @@ namespace Community.Pulumi.Webflow
         public Input<string> SourcePath { get; set; } = null!;
 
         /// <summary>
-        /// The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
+        /// Deprecated and ignored. Webflow redirects are always 301 (permanent) redirects: the redirect API object is {id, fromUrl, toUrl} and has no status code, so this value is never sent to Webflow, never validated and never produces a diff. Remove it from your program; it only remains for backwards compatibility.
         /// </summary>
-        [Input("statusCode", required: true)]
-        public Input<int> StatusCode { get; set; } = null!;
+        [Input("statusCode")]
+        public Input<int>? StatusCode { get; set; }
 
         public RedirectArgs()
         {

@@ -27,9 +27,9 @@ class WebhookArgs:
         The set of arguments for constructing a Webhook resource.
 
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
-        :param pulumi.Input[_builtins.str] trigger_type: The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, memberships_user_account_added, memberships_user_account_updated, memberships_user_account_deleted, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_unpublished. Example: 'form_submission' to receive notifications when forms are submitted.
-        :param pulumi.Input[_builtins.str] url: The HTTPS endpoint where Webflow will send webhook events (e.g., 'https://example.com/webhooks/webflow', 'https://api.example.com/events'). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data.
-        :param pulumi.Input[Mapping[str, Any]] filter: Optional filter for webhook events. The structure depends on the triggerType and allows you to receive only specific events. For example, for collection_item_created, you can filter by collection ID. Refer to Webflow API documentation for filter options for each trigger type.
+        :param pulumi.Input[_builtins.str] trigger_type: The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_published, collection_item_unpublished, comment_created. Webhooks require a Data Client (OAuth) token with `sites:write` plus the read scope of the event family: `forms:read` (form_submission), `cms:read` (collection_item_*), `pages:read` (page_*), `ecommerce:read` (ecomm_*), `comments:read` (comment_created); site_publish needs `sites:read`. Example: 'form_submission' to receive notifications when forms are submitted. Changing this value replaces the webhook.
+        :param pulumi.Input[_builtins.str] url: The HTTPS endpoint where Webflow will send webhook events (e.g., 'https://example.com/webhooks/webflow', 'https://api.example.com/events'). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data. Changing this value replaces the webhook.
+        :param pulumi.Input[Mapping[str, Any]] filter: Optional filter for webhook events. Only supported for the `form_submission` trigger type: it selects the form whose submissions should be sent, with the shape `{ name: string }` where `name` is the form name (e.g., `{ name: 'Contact Form' }`). Setting a filter for any other trigger type, or any key other than `name`, is rejected. When omitted the provider does not track the filter Webflow reports, so a filter set outside Pulumi does not cause a diff. Changing this value replaces the webhook.
         """
         pulumi.set(__self__, "site_id", site_id)
         pulumi.set(__self__, "trigger_type", trigger_type)
@@ -53,7 +53,7 @@ class WebhookArgs:
     @pulumi.getter(name="triggerType")
     def trigger_type(self) -> pulumi.Input[_builtins.str]:
         """
-        The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, memberships_user_account_added, memberships_user_account_updated, memberships_user_account_deleted, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_unpublished. Example: 'form_submission' to receive notifications when forms are submitted.
+        The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_published, collection_item_unpublished, comment_created. Webhooks require a Data Client (OAuth) token with `sites:write` plus the read scope of the event family: `forms:read` (form_submission), `cms:read` (collection_item_*), `pages:read` (page_*), `ecommerce:read` (ecomm_*), `comments:read` (comment_created); site_publish needs `sites:read`. Example: 'form_submission' to receive notifications when forms are submitted. Changing this value replaces the webhook.
         """
         return pulumi.get(self, "trigger_type")
 
@@ -65,7 +65,7 @@ class WebhookArgs:
     @pulumi.getter
     def url(self) -> pulumi.Input[_builtins.str]:
         """
-        The HTTPS endpoint where Webflow will send webhook events (e.g., 'https://example.com/webhooks/webflow', 'https://api.example.com/events'). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data.
+        The HTTPS endpoint where Webflow will send webhook events (e.g., 'https://example.com/webhooks/webflow', 'https://api.example.com/events'). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data. Changing this value replaces the webhook.
         """
         return pulumi.get(self, "url")
 
@@ -77,7 +77,7 @@ class WebhookArgs:
     @pulumi.getter
     def filter(self) -> pulumi.Input[Optional[Mapping[str, Any]]]:
         """
-        Optional filter for webhook events. The structure depends on the triggerType and allows you to receive only specific events. For example, for collection_item_created, you can filter by collection ID. Refer to Webflow API documentation for filter options for each trigger type.
+        Optional filter for webhook events. Only supported for the `form_submission` trigger type: it selects the form whose submissions should be sent, with the shape `{ name: string }` where `name` is the form name (e.g., `{ name: 'Contact Form' }`). Setting a filter for any other trigger type, or any key other than `name`, is rejected. When omitted the provider does not track the filter Webflow reports, so a filter set outside Pulumi does not cause a diff. Changing this value replaces the webhook.
         """
         return pulumi.get(self, "filter")
 
@@ -98,14 +98,18 @@ class Webhook(pulumi.CustomResource):
                  url: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         """
-        Manages webhooks for a Webflow site. Webhooks allow you to receive real-time notifications when events occur in your Webflow site, such as form submissions, page updates, e-commerce orders, and more. Note: Webhooks cannot be updated in-place; any change to triggerType, url, or filter requires replacement.
+        Manages webhooks for a Webflow site. Webhooks allow you to receive real-time notifications when events occur in your Webflow site, such as form submissions, page updates, e-commerce orders, and more.
+
+        **Authentication:** the webhook endpoints require a Data Client (OAuth) token with the `sites:write` scope plus the read scope of the event family being subscribed to (`forms:read`, `cms:read`, `pages:read`, `ecommerce:read` or `comments:read`); reading a webhook requires `sites:read`.
+
+        Webhooks cannot be updated in place: any change to `triggerType`, `url` or `filter` replaces the webhook (the replacement is created before the old one is deleted, so there is no window without a webhook; Webflow allows several webhooks per trigger).
 
         :param str resource_name: The name of the resource.
         :param pulumi.ResourceOptions opts: Options for the resource.
-        :param pulumi.Input[Mapping[str, Any]] filter: Optional filter for webhook events. The structure depends on the triggerType and allows you to receive only specific events. For example, for collection_item_created, you can filter by collection ID. Refer to Webflow API documentation for filter options for each trigger type.
+        :param pulumi.Input[Mapping[str, Any]] filter: Optional filter for webhook events. Only supported for the `form_submission` trigger type: it selects the form whose submissions should be sent, with the shape `{ name: string }` where `name` is the form name (e.g., `{ name: 'Contact Form' }`). Setting a filter for any other trigger type, or any key other than `name`, is rejected. When omitted the provider does not track the filter Webflow reports, so a filter set outside Pulumi does not cause a diff. Changing this value replaces the webhook.
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
-        :param pulumi.Input[_builtins.str] trigger_type: The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, memberships_user_account_added, memberships_user_account_updated, memberships_user_account_deleted, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_unpublished. Example: 'form_submission' to receive notifications when forms are submitted.
-        :param pulumi.Input[_builtins.str] url: The HTTPS endpoint where Webflow will send webhook events (e.g., 'https://example.com/webhooks/webflow', 'https://api.example.com/events'). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data.
+        :param pulumi.Input[_builtins.str] trigger_type: The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_published, collection_item_unpublished, comment_created. Webhooks require a Data Client (OAuth) token with `sites:write` plus the read scope of the event family: `forms:read` (form_submission), `cms:read` (collection_item_*), `pages:read` (page_*), `ecommerce:read` (ecomm_*), `comments:read` (comment_created); site_publish needs `sites:read`. Example: 'form_submission' to receive notifications when forms are submitted. Changing this value replaces the webhook.
+        :param pulumi.Input[_builtins.str] url: The HTTPS endpoint where Webflow will send webhook events (e.g., 'https://example.com/webhooks/webflow', 'https://api.example.com/events'). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data. Changing this value replaces the webhook.
         """
         ...
     @overload
@@ -114,7 +118,11 @@ class Webhook(pulumi.CustomResource):
                  args: WebhookArgs,
                  opts: Optional[pulumi.ResourceOptions] = None):
         """
-        Manages webhooks for a Webflow site. Webhooks allow you to receive real-time notifications when events occur in your Webflow site, such as form submissions, page updates, e-commerce orders, and more. Note: Webhooks cannot be updated in-place; any change to triggerType, url, or filter requires replacement.
+        Manages webhooks for a Webflow site. Webhooks allow you to receive real-time notifications when events occur in your Webflow site, such as form submissions, page updates, e-commerce orders, and more.
+
+        **Authentication:** the webhook endpoints require a Data Client (OAuth) token with the `sites:write` scope plus the read scope of the event family being subscribed to (`forms:read`, `cms:read`, `pages:read`, `ecommerce:read` or `comments:read`); reading a webhook requires `sites:read`.
+
+        Webhooks cannot be updated in place: any change to `triggerType`, `url` or `filter` replaces the webhook (the replacement is created before the old one is deleted, so there is no window without a webhook; Webflow allows several webhooks per trigger).
 
         :param str resource_name: The name of the resource.
         :param WebhookArgs args: The arguments to use to populate this resource's properties.
@@ -198,7 +206,7 @@ class Webhook(pulumi.CustomResource):
     @pulumi.getter
     def filter(self) -> pulumi.Output[Optional[Mapping[str, Any]]]:
         """
-        Optional filter for webhook events. The structure depends on the triggerType and allows you to receive only specific events. For example, for collection_item_created, you can filter by collection ID. Refer to Webflow API documentation for filter options for each trigger type.
+        Optional filter for webhook events. Only supported for the `form_submission` trigger type: it selects the form whose submissions should be sent, with the shape `{ name: string }` where `name` is the form name (e.g., `{ name: 'Contact Form' }`). Setting a filter for any other trigger type, or any key other than `name`, is rejected. When omitted the provider does not track the filter Webflow reports, so a filter set outside Pulumi does not cause a diff. Changing this value replaces the webhook.
         """
         return pulumi.get(self, "filter")
 
@@ -222,7 +230,7 @@ class Webhook(pulumi.CustomResource):
     @pulumi.getter(name="triggerType")
     def trigger_type(self) -> pulumi.Output[_builtins.str]:
         """
-        The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, memberships_user_account_added, memberships_user_account_updated, memberships_user_account_deleted, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_unpublished. Example: 'form_submission' to receive notifications when forms are submitted.
+        The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_published, collection_item_unpublished, comment_created. Webhooks require a Data Client (OAuth) token with `sites:write` plus the read scope of the event family: `forms:read` (form_submission), `cms:read` (collection_item_*), `pages:read` (page_*), `ecommerce:read` (ecomm_*), `comments:read` (comment_created); site_publish needs `sites:read`. Example: 'form_submission' to receive notifications when forms are submitted. Changing this value replaces the webhook.
         """
         return pulumi.get(self, "trigger_type")
 
@@ -230,7 +238,7 @@ class Webhook(pulumi.CustomResource):
     @pulumi.getter
     def url(self) -> pulumi.Output[_builtins.str]:
         """
-        The HTTPS endpoint where Webflow will send webhook events (e.g., 'https://example.com/webhooks/webflow', 'https://api.example.com/events'). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data.
+        The HTTPS endpoint where Webflow will send webhook events (e.g., 'https://example.com/webhooks/webflow', 'https://api.example.com/events'). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data. Changing this value replaces the webhook.
         """
         return pulumi.get(self, "url")
 

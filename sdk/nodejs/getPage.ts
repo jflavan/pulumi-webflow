@@ -28,9 +28,9 @@ export interface GetPageArgs {
      */
     pageId: string;
     /**
-     * When true, adds ?translatable=true so the secondary locale's translation content is returned instead of content inherited from the primary locale.
+     * Optional ID of the secondary locale you are translating into (24-character lowercase hexadecimal string), sent verbatim as ?translatable=<localeId> to return the page's translatable content for that locale. Webflow returns a 400 error when this is the primary locale ID or any other value, and a 403 error when translation exclusions are not enabled for the site.
      */
-    translatable?: boolean;
+    translatable?: string;
 }
 
 export interface GetPageResult {
@@ -125,7 +125,7 @@ export interface GetPageOutputArgs {
      */
     pageId: pulumi.Input<string>;
     /**
-     * When true, adds ?translatable=true so the secondary locale's translation content is returned instead of content inherited from the primary locale.
+     * Optional ID of the secondary locale you are translating into (24-character lowercase hexadecimal string), sent verbatim as ?translatable=<localeId> to return the page's translatable content for that locale. Webflow returns a 400 error when this is the primary locale ID or any other value, and a 403 error when translation exclusions are not enabled for the site.
      */
-    translatable?: pulumi.Input<boolean | undefined>;
+    translatable?: pulumi.Input<string | undefined>;
 }

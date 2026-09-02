@@ -17,7 +17,7 @@ import java.util.Optional;
 import javax.annotation.Nullable;
 
 /**
- * Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow&#39;s storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset.
+ * Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow&#39;s storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset. After &#39;pulumi import&#39; the fileSource and fileHash are unknown; set them in your program and the first refresh adopts them without replacing the asset.
  * 
  */
 @ResourceType(type="webflow:index:Asset")
@@ -93,14 +93,14 @@ public class Asset extends com.pulumi.resources.CustomResource {
         return Codegen.optional(this.fileHash);
     }
     /**
-     * The name of the file as it will appear in Webflow, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. Must not exceed 255 characters or contain &lt;, &gt;, :, &#34;, |, ?, *.
+     * The name of the file as it will appear in Webflow, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. Webflow requires file names to be less than 100 characters; the name must not contain &lt;, &gt;, :, &#34;, |, ?, *.
      * 
      */
     @Export(name="fileName", refs={String.class}, tree="[0]")
     private Output<String> fileName;
 
     /**
-     * @return The name of the file as it will appear in Webflow, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. Must not exceed 255 characters or contain &lt;, &gt;, :, &#34;, |, ?, *.
+     * @return The name of the file as it will appear in Webflow, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. Webflow requires file names to be less than 100 characters; the name must not contain &lt;, &gt;, :, &#34;, |, ?, *.
      * 
      */
     public Output<String> fileName() {

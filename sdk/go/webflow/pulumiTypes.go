@@ -1323,9 +1323,9 @@ func (o GetTokenInfoAuthorizedToOutput) WorkspaceIds() pulumi.StringArrayOutput 
 }
 
 type NodeContentUpdate struct {
-	// The unique identifier for the DOM node to update. Retrieve node IDs using GET /pages/{page_id}/dom.
+	// The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
 	NodeId string `pulumi:"nodeId"`
-	// The new text content for the node (HTML is allowed). An empty string clears the node's text.
+	// The new HTML content for the node (required, non-empty). The HTML tags must match the node's current content as returned by GET /v2/pages/{page_id}/dom (e.g., '<h1>Hello</h1>' for a heading). An empty string does not clear the node; Webflow rejects it.
 	Text string `pulumi:"text"`
 }
 
@@ -1341,9 +1341,9 @@ type NodeContentUpdateInput interface {
 }
 
 type NodeContentUpdateArgs struct {
-	// The unique identifier for the DOM node to update. Retrieve node IDs using GET /pages/{page_id}/dom.
+	// The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
 	NodeId pulumi.StringInput `pulumi:"nodeId"`
-	// The new text content for the node (HTML is allowed). An empty string clears the node's text.
+	// The new HTML content for the node (required, non-empty). The HTML tags must match the node's current content as returned by GET /v2/pages/{page_id}/dom (e.g., '<h1>Hello</h1>' for a heading). An empty string does not clear the node; Webflow rejects it.
 	Text pulumi.StringInput `pulumi:"text"`
 }
 
@@ -1398,12 +1398,12 @@ func (o NodeContentUpdateOutput) ToNodeContentUpdateOutputWithContext(ctx contex
 	return o
 }
 
-// The unique identifier for the DOM node to update. Retrieve node IDs using GET /pages/{page_id}/dom.
+// The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
 func (o NodeContentUpdateOutput) NodeId() pulumi.StringOutput {
 	return o.ApplyT(func(v NodeContentUpdate) string { return v.NodeId }).(pulumi.StringOutput)
 }
 
-// The new text content for the node (HTML is allowed). An empty string clears the node's text.
+// The new HTML content for the node (required, non-empty). The HTML tags must match the node's current content as returned by GET /v2/pages/{page_id}/dom (e.g., '<h1>Hello</h1>' for a heading). An empty string does not clear the node; Webflow rejects it.
 func (o NodeContentUpdateOutput) Text() pulumi.StringOutput {
 	return o.ApplyT(func(v NodeContentUpdate) string { return v.Text }).(pulumi.StringOutput)
 }

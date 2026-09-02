@@ -36,8 +36,8 @@ class CollectionFieldArgs:
         :param pulumi.Input[_builtins.str] help_text: Optional help text shown in the CMS interface (e.g., 'Enter the article title'). Helps content editors understand what to enter in this field.
         :param pulumi.Input[_builtins.bool] is_required: Whether the field is required (optional, defaults to false). When true, content items must provide a value for this field.
         :param pulumi.Input[Mapping[str, Any]] metadata: Type-specific configuration (create-only). Required for Option fields: {"options": [{"name": "Draft"}, {"name": "Published"}]}. Required for Reference and MultiReference fields: {"collectionId": "<referenced collection ID>"}. Not accepted for other field types. Changing metadata requires replacement.
-        :param pulumi.Input[_builtins.str] slug: The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the outputs without causing a diff. The slug is used in API requests and exports and cannot be changed after creation - changing an explicit slug requires replacement.
-        :param pulumi.Input[Mapping[str, Any]] validations: Type-specific validation rules (optional, create-only). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Changing validations requires replacement. Refer to Webflow API documentation for validation options for each field type.
+        :param pulumi.Input[_builtins.str] slug: Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.
+        :param pulumi.Input[Mapping[str, Any]] validations: Deprecated: the Webflow API does not accept validations when creating a field ("field validation is currently not available through the API"). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.
         """
         pulumi.set(__self__, "collection_id", collection_id)
         pulumi.set(__self__, "display_name", display_name)
@@ -49,7 +49,13 @@ class CollectionFieldArgs:
         if metadata is not None:
             pulumi.set(__self__, "metadata", metadata)
         if slug is not None:
+            warnings.warn("""The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs.""", DeprecationWarning)
+            pulumi.log.warn("""slug is deprecated: The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs.""")
+        if slug is not None:
             pulumi.set(__self__, "slug", slug)
+        if validations is not None:
+            warnings.warn("""The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs.""", DeprecationWarning)
+            pulumi.log.warn("""validations is deprecated: The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs.""")
         if validations is not None:
             pulumi.set(__self__, "validations", validations)
 
@@ -127,9 +133,10 @@ class CollectionFieldArgs:
 
     @_builtins.property
     @pulumi.getter
+    @_utilities.deprecated("""The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs.""")
     def slug(self) -> pulumi.Input[Optional[_builtins.str]]:
         """
-        The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the outputs without causing a diff. The slug is used in API requests and exports and cannot be changed after creation - changing an explicit slug requires replacement.
+        Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.
         """
         return pulumi.get(self, "slug")
 
@@ -139,9 +146,10 @@ class CollectionFieldArgs:
 
     @_builtins.property
     @pulumi.getter
+    @_utilities.deprecated("""The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs.""")
     def validations(self) -> pulumi.Input[Optional[Mapping[str, Any]]]:
         """
-        Type-specific validation rules (optional, create-only). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Changing validations requires replacement. Refer to Webflow API documentation for validation options for each field type.
+        Deprecated: the Webflow API does not accept validations when creating a field ("field validation is currently not available through the API"). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.
         """
         return pulumi.get(self, "validations")
 
@@ -166,7 +174,7 @@ class CollectionField(pulumi.CustomResource):
                  validations: pulumi.Input[Optional[Mapping[str, Any]]] = None,
                  __props__=None):
         """
-        Manages fields for a Webflow CMS collection. Collection fields define the structure of content items in a collection. Only displayName, helpText and isRequired can be updated in place; type, slug, validations and metadata cannot be changed after creation and changing them requires replacement (delete + recreate).
+        Manages fields for a Webflow CMS collection. Collection fields define the structure of content items in a collection. Only displayName, helpText and isRequired can be updated in place; type and metadata cannot be changed after creation and changing them requires replacement (delete + recreate). The Webflow API does not accept a slug or validations when creating a field: the slug is generated from displayName and both are reported as outputs only.
 
         :param str resource_name: The name of the resource.
         :param pulumi.ResourceOptions opts: Options for the resource.
@@ -175,9 +183,9 @@ class CollectionField(pulumi.CustomResource):
         :param pulumi.Input[_builtins.str] help_text: Optional help text shown in the CMS interface (e.g., 'Enter the article title'). Helps content editors understand what to enter in this field.
         :param pulumi.Input[_builtins.bool] is_required: Whether the field is required (optional, defaults to false). When true, content items must provide a value for this field.
         :param pulumi.Input[Mapping[str, Any]] metadata: Type-specific configuration (create-only). Required for Option fields: {"options": [{"name": "Draft"}, {"name": "Published"}]}. Required for Reference and MultiReference fields: {"collectionId": "<referenced collection ID>"}. Not accepted for other field types. Changing metadata requires replacement.
-        :param pulumi.Input[_builtins.str] slug: The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the outputs without causing a diff. The slug is used in API requests and exports and cannot be changed after creation - changing an explicit slug requires replacement.
+        :param pulumi.Input[_builtins.str] slug: Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.
         :param pulumi.Input[_builtins.str] type: The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: Color, DateTime, Email, File, Image, Link, MultiImage, Number, Phone, PlainText, RichText, Switch, VideoLink, Option, MultiReference, Reference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
-        :param pulumi.Input[Mapping[str, Any]] validations: Type-specific validation rules (optional, create-only). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Changing validations requires replacement. Refer to Webflow API documentation for validation options for each field type.
+        :param pulumi.Input[Mapping[str, Any]] validations: Deprecated: the Webflow API does not accept validations when creating a field ("field validation is currently not available through the API"). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.
         """
         ...
     @overload
@@ -186,7 +194,7 @@ class CollectionField(pulumi.CustomResource):
                  args: CollectionFieldArgs,
                  opts: Optional[pulumi.ResourceOptions] = None):
         """
-        Manages fields for a Webflow CMS collection. Collection fields define the structure of content items in a collection. Only displayName, helpText and isRequired can be updated in place; type, slug, validations and metadata cannot be changed after creation and changing them requires replacement (delete + recreate).
+        Manages fields for a Webflow CMS collection. Collection fields define the structure of content items in a collection. Only displayName, helpText and isRequired can be updated in place; type and metadata cannot be changed after creation and changing them requires replacement (delete + recreate). The Webflow API does not accept a slug or validations when creating a field: the slug is generated from displayName and both are reported as outputs only.
 
         :param str resource_name: The name of the resource.
         :param CollectionFieldArgs args: The arguments to use to populate this resource's properties.
@@ -328,9 +336,10 @@ class CollectionField(pulumi.CustomResource):
 
     @_builtins.property
     @pulumi.getter
+    @_utilities.deprecated("""The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs.""")
     def slug(self) -> pulumi.Output[Optional[_builtins.str]]:
         """
-        The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the outputs without causing a diff. The slug is used in API requests and exports and cannot be changed after creation - changing an explicit slug requires replacement.
+        Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.
         """
         return pulumi.get(self, "slug")
 
@@ -344,9 +353,10 @@ class CollectionField(pulumi.CustomResource):
 
     @_builtins.property
     @pulumi.getter
+    @_utilities.deprecated("""The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs.""")
     def validations(self) -> pulumi.Output[Optional[Mapping[str, Any]]]:
         """
-        Type-specific validation rules (optional, create-only). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Changing validations requires replacement. Refer to Webflow API documentation for validation options for each field type.
+        Deprecated: the Webflow API does not accept validations when creating a field ("field validation is currently not available through the API"). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.
         """
         return pulumi.get(self, "validations")
 

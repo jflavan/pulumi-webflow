@@ -33,14 +33,14 @@ public class RobotsTxt extends com.pulumi.resources.CustomResource {
         return this.content;
     }
     /**
-     * RFC3339 timestamp of the last modification.
+     * RFC3339 timestamp of the last modification made through this provider. The Webflow API does not report one, so the provider records the time of its last successful write.
      * 
      */
     @Export(name="lastModified", refs={String.class}, tree="[0]")
     private Output<String> lastModified;
 
     /**
-     * @return RFC3339 timestamp of the last modification.
+     * @return RFC3339 timestamp of the last modification made through this provider. The Webflow API does not report one, so the provider records the time of its last successful write.
      * 
      */
     public Output<String> lastModified() {

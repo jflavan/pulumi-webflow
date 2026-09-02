@@ -34,7 +34,7 @@ type CollectionItem struct {
 	LastPublished pulumi.StringPtrOutput `pulumi:"lastPublished"`
 	// The timestamp when the item was last updated (RFC3339 format, read-only). This is automatically updated by Webflow whenever the item is modified.
 	LastUpdated pulumi.StringPtrOutput `pulumi:"lastUpdated"`
-	// Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+	// Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item.
 	Live pulumi.BoolPtrOutput `pulumi:"live"`
 }
 
@@ -94,7 +94,7 @@ type collectionItemArgs struct {
 	IsArchived *bool `pulumi:"isArchived"`
 	// Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff.
 	IsDraft *bool `pulumi:"isDraft"`
-	// Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+	// Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item.
 	Live *bool `pulumi:"live"`
 }
 
@@ -110,7 +110,7 @@ type CollectionItemArgs struct {
 	IsArchived pulumi.BoolPtrInput
 	// Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff.
 	IsDraft pulumi.BoolPtrInput
-	// Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+	// Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item.
 	Live pulumi.BoolPtrInput
 }
 
@@ -196,7 +196,7 @@ func (o CollectionItemOutput) LastUpdated() pulumi.StringPtrOutput {
 	return o.ApplyT(func(v *CollectionItem) pulumi.StringPtrOutput { return v.LastUpdated }).(pulumi.StringPtrOutput)
 }
 
-// Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+// Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item.
 func (o CollectionItemOutput) Live() pulumi.BoolPtrOutput {
 	return o.ApplyT(func(v *CollectionItem) pulumi.BoolPtrOutput { return v.Live }).(pulumi.BoolPtrOutput)
 }

@@ -480,11 +480,11 @@
       "properties": {
         "nodeId": {
           "type": "string",
-          "description": "The unique identifier for the DOM node to update. Retrieve node IDs using GET /pages/{page_id}/dom."
+          "description": "The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom."
         },
         "text": {
           "type": "string",
-          "description": "The new text content for the node (HTML is allowed). An empty string clears the node's text."
+          "description": "The new HTML content for the node (required, non-empty). The HTML tags must match the node's current content as returned by GET /v2/pages/{page_id}/dom (e.g., '<h1>Hello</h1>' for a heading). An empty string does not clear the node; Webflow rejects it."
         }
       },
       "type": "object",
@@ -721,7 +721,7 @@
   },
   "resources": {
     "webflow:index:Asset": {
-      "description": "Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow's storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset.",
+      "description": "Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow's storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset. After 'pulumi import' the fileSource and fileHash are unknown; set them in your program and the first refresh adopts them without replacing the asset.",
       "properties": {
         "assetId": {
           "type": "string",
@@ -745,7 +745,7 @@
         },
         "fileName": {
           "type": "string",
-          "description": "The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Must not exceed 255 characters or contain <, >, :, \", |, ?, *."
+          "description": "The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, \", |, ?, *."
         },
         "fileSource": {
           "type": "string",
@@ -801,7 +801,7 @@
         },
         "fileName": {
           "type": "string",
-          "description": "The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Must not exceed 255 characters or contain <, >, :, \", |, ?, *."
+          "description": "The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, \", |, ?, *."
         },
         "fileSource": {
           "type": "string",
@@ -881,7 +881,7 @@
       ]
     },
     "webflow:index:Collection": {
-      "description": "Manages CMS collections for a Webflow site. Collections are containers for structured content items (blog posts, products, etc.). Note: Webflow collections do not support updates - any changes require replacement (delete + recreate).",
+      "description": "Manages CMS collections for a Webflow site. Collections are containers for structured content items (blog posts, products, etc.). displayName, singularName and slug are updated in place (PATCH /v2/collections/{collection_id}); changing siteId requires replacement (delete + recreate).",
       "properties": {
         "collectionId": {
           "type": "string",
@@ -909,7 +909,7 @@
         },
         "slug": {
           "type": "string",
-          "description": "The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation."
+          "description": "The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items; changing an explicit slug updates the collection in place, which changes the URLs of its items."
         }
       },
       "required": [
@@ -932,7 +932,7 @@
         },
         "slug": {
           "type": "string",
-          "description": "The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation."
+          "description": "The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items; changing an explicit slug updates the collection in place, which changes the URLs of its items."
         }
       },
       "requiredInputs": [
@@ -942,7 +942,7 @@
       ]
     },
     "webflow:index:CollectionField": {
-      "description": "Manages fields for a Webflow CMS collection. Collection fields define the structure of content items in a collection. Only displayName, helpText and isRequired can be updated in place; type, slug, validations and metadata cannot be changed after creation and changing them requires replacement (delete + recreate).",
+      "description": "Manages fields for a Webflow CMS collection. Collection fields define the structure of content items in a collection. Only displayName, helpText and isRequired can be updated in place; type and metadata cannot be changed after creation and changing them requires replacement (delete + recreate). The Webflow API does not accept a slug or validations when creating a field: the slug is generated from displayName and both are reported as outputs only.",
       "properties": {
         "collectionId": {
           "type": "string",
@@ -977,7 +977,8 @@
         },
         "slug": {
           "type": "string",
-          "description": "The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the outputs without causing a diff. The slug is used in API requests and exports and cannot be changed after creation - changing an explicit slug requires replacement."
+          "description": "Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.",
+          "deprecationMessage": "The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs."
         },
         "type": {
           "type": "string",
@@ -988,7 +989,8 @@
           "additionalProperties": {
             "$ref": "pulumi.json#/Any"
           },
-          "description": "Type-specific validation rules (optional, create-only). Different field types support different validations. Example for Number type: {\"min\": 0, \"max\": 100}. Example for PlainText type: {\"maxLength\": 500}. Changing validations requires replacement. Refer to Webflow API documentation for validation options for each field type."
+          "description": "Deprecated: the Webflow API does not accept validations when creating a field (\"field validation is currently not available through the API\"). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.",
+          "deprecationMessage": "The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs."
         }
       },
       "required": [
@@ -1022,7 +1024,8 @@
         },
         "slug": {
           "type": "string",
-          "description": "The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the outputs without causing a diff. The slug is used in API requests and exports and cannot be changed after creation - changing an explicit slug requires replacement."
+          "description": "Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.",
+          "deprecationMessage": "The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs."
         },
         "type": {
           "type": "string",
@@ -1033,7 +1036,8 @@
           "additionalProperties": {
             "$ref": "pulumi.json#/Any"
           },
-          "description": "Type-specific validation rules (optional, create-only). Different field types support different validations. Example for Number type: {\"min\": 0, \"max\": 100}. Example for PlainText type: {\"maxLength\": 500}. Changing validations requires replacement. Refer to Webflow API documentation for validation options for each field type."
+          "description": "Deprecated: the Webflow API does not accept validations when creating a field (\"field validation is currently not available through the API\"). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.",
+          "deprecationMessage": "The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs."
         }
       },
       "requiredInputs": [
@@ -1086,7 +1090,7 @@
         },
         "live": {
           "type": "boolean",
-          "description": "Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item."
+          "description": "Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item."
         }
       },
       "required": [
@@ -1119,7 +1123,7 @@
         },
         "live": {
           "type": "boolean",
-          "description": "Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item."
+          "description": "Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item."
         }
       },
       "requiredInputs": [
@@ -1210,7 +1214,7 @@
       ]
     },
     "webflow:index:InlineScript": {
-      "description": "Manages inline custom code scripts in the Webflow script registry. This resource allows you to register and manage inline JavaScript code that can be deployed across your Webflow site with version control.",
+      "description": "Registers inline JavaScript in a Webflow site's script registry (POST /v2/sites/{site_id}/registered_scripts/inline). Registered scripts are applied to a site or page with the SiteCustomCode and PageCustomCode resources.\n\n**Authentication:** this resource calls Webflow custom code endpoints, which require an OAuth Data Client app token with the `custom_code:read` and `custom_code:write` scopes. Webflow documents that these scopes are available only to Data Client apps: site API tokens cannot access custom code endpoints. \n\n**IMPORTANT LIMITATION:** Webflow has no endpoint to update or unregister a registered script. Registrations are versioned and permanent (a site can hold up to 800). Changing sourceCode, displayName, scriptVersion, canCopy or integrityHash therefore registers a new script (a new version when only scriptVersion changes) and the previous registration remains in the registry. Destroying the resource is a logged no-op: the script stays registered and Pulumi simply stops managing it. Applied code is removed by SiteCustomCode and PageCustomCode. The list endpoint does not return sourceCode, so after an import the source is unknown until it is set in the program; Diff does not report a change for it in that case.",
       "properties": {
         "canCopy": {
           "type": "boolean",
@@ -1222,7 +1226,7 @@
         },
         "displayName": {
           "type": "string",
-          "description": "The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'."
+          "description": "The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'."
         },
         "hostedLocation": {
           "type": "string",
@@ -1242,7 +1246,7 @@
         },
         "scriptVersion": {
           "type": "string",
-          "description": "The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning."
+          "description": "The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning."
         },
         "siteId": {
           "type": "string",
@@ -1250,7 +1254,7 @@
         },
         "sourceCode": {
           "type": "string",
-          "description": "The inline JavaScript code to register, limited to 2000 characters. This code will be directly embedded in your Webflow site. If your script exceeds 2000 characters, consider hosting it externally and using the RegisteredScript resource with a hostedLocation instead."
+          "description": "The inline JavaScript code to register, limited to 2000 characters. This code will be directly embedded in your Webflow site. If your script exceeds 2000 characters, consider hosting it externally and using the RegisteredScript resource with a hostedLocation instead. Webflow does not return the source code when listing scripts, so it cannot be read back after import."
         }
       },
       "required": [
@@ -1267,7 +1271,7 @@
         },
         "displayName": {
           "type": "string",
-          "description": "The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'."
+          "description": "The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'."
         },
         "integrityHash": {
           "type": "string",
@@ -1275,7 +1279,7 @@
         },
         "scriptVersion": {
           "type": "string",
-          "description": "The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning."
+          "description": "The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning."
         },
         "siteId": {
           "type": "string",
@@ -1283,7 +1287,7 @@
         },
         "sourceCode": {
           "type": "string",
-          "description": "The inline JavaScript code to register, limited to 2000 characters. This code will be directly embedded in your Webflow site. If your script exceeds 2000 characters, consider hosting it externally and using the RegisteredScript resource with a hostedLocation instead."
+          "description": "The inline JavaScript code to register, limited to 2000 characters. This code will be directly embedded in your Webflow site. If your script exceeds 2000 characters, consider hosting it externally and using the RegisteredScript resource with a hostedLocation instead. Webflow does not return the source code when listing scripts, so it cannot be read back after import."
         }
       },
       "requiredInputs": [
@@ -1294,52 +1298,54 @@
       ]
     },
     "webflow:index:PageContent": {
-      "description": "Manages static text content of a Webflow page (POST /v2/pages/{page_id}/dom). This resource updates text within existing DOM nodes; it does NOT manage page structure or layout. Find node IDs by fetching the page DOM (GET /v2/pages/{page_id}/dom). Set localeId to update a secondary locale; when omitted, Webflow targets the primary locale. Webflow reports per-node failures in the response; the update fails if any node was rejected. \n\n**IMPORTANT LIMITATION:** This resource does NOT detect drift for content changed outside of Pulumi; refresh only verifies that the page still exists. Destroying the resource leaves the content in place.",
+      "description": "Manages the static text content of a Webflow page in a secondary locale (POST /v2/pages/{page_id}/dom?localeId=...). Webflow's Update Page Content endpoint only edits secondary locales: localeId is required and must be a valid secondary locale of the site, and the primary locale's content cannot be changed via the API. This resource updates the HTML of existing text nodes; it does NOT manage page structure or layout. Find node IDs by fetching the page DOM (GET /v2/pages/{page_id}/dom?localeId=...). Each node's text is required, and its HTML tags must match the node's current content; an empty text does not clear a node and is rejected. At most 1000 nodes may be updated per resource. Webflow reports per-node failures in the response; the update fails if any node was rejected. Refresh reads the current text of the managed nodes from the page DOM, so content changed outside of Pulumi shows up as drift. Import with the ID {pageId}/content/{localeId} to adopt every text node of the page. Destroying the resource leaves the content in place.",
       "properties": {
         "localeId": {
           "type": "string",
-          "description": "Optional locale ID to update a secondary locale. When omitted the localeId query parameter is not sent and Webflow updates the primary locale."
+          "description": "The ID of the secondary locale to update (24-character lowercase hexadecimal string). Required: the Update Page Content endpoint only edits secondary locales, and Webflow rejects the request when the locale is the primary locale or not a locale of the site. Locale IDs are listed under Site Settings > Localization or via the Get Site endpoint. Changing it replaces the resource."
         },
         "nodes": {
           "type": "array",
           "items": {
             "$ref": "#/types/webflow:index:NodeContentUpdate"
           },
-          "description": "List of node content updates to apply. Each entry names a nodeId from the page's DOM and the new text (HTML allowed). Node IDs must be unique within the list."
+          "description": "List of node content updates to apply (1 to 1000 entries). Each entry names a nodeId from the page's DOM and the node's new HTML text. Node IDs must be unique within the list."
         },
         "pageId": {
           "type": "string",
-          "description": "The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs."
+          "description": "The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs. Changing it replaces the resource."
         }
       },
       "required": [
         "pageId",
+        "localeId",
         "nodes"
       ],
       "inputProperties": {
         "localeId": {
           "type": "string",
-          "description": "Optional locale ID to update a secondary locale. When omitted the localeId query parameter is not sent and Webflow updates the primary locale."
+          "description": "The ID of the secondary locale to update (24-character lowercase hexadecimal string). Required: the Update Page Content endpoint only edits secondary locales, and Webflow rejects the request when the locale is the primary locale or not a locale of the site. Locale IDs are listed under Site Settings > Localization or via the Get Site endpoint. Changing it replaces the resource."
         },
         "nodes": {
           "type": "array",
           "items": {
             "$ref": "#/types/webflow:index:NodeContentUpdate"
           },
-          "description": "List of node content updates to apply. Each entry names a nodeId from the page's DOM and the new text (HTML allowed). Node IDs must be unique within the list."
+          "description": "List of node content updates to apply (1 to 1000 entries). Each entry names a nodeId from the page's DOM and the node's new HTML text. Node IDs must be unique within the list."
         },
         "pageId": {
           "type": "string",
-          "description": "The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs."
+          "description": "The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs. Changing it replaces the resource."
         }
       },
       "requiredInputs": [
         "pageId",
+        "localeId",
         "nodes"
       ]
     },
     "webflow:index:PageCustomCode": {
-      "description": "Manages custom code (JavaScript) scripts applied to a Webflow page. This resource allows you to apply registered custom code scripts to specific pages. Scripts must first be registered using the RegisteredScript resource before they can be applied. All scripts in the configuration will be applied to the page; scripts not listed will be removed.",
+      "description": "Manages custom code (JavaScript) scripts applied to a Webflow page (PUT /v2/pages/{page_id}/custom_code). This resource allows you to apply registered custom code scripts to specific pages. Scripts must first be registered using the RegisteredScript or InlineScript resource before they can be applied. All scripts in the configuration will be applied to the page; scripts not listed will be removed. Destroying the resource removes all applied code (DELETE /v2/pages/{page_id}/custom_code) but leaves the scripts registered.\n\n**Authentication:** this resource calls Webflow custom code endpoints, which require an OAuth Data Client app token with the `custom_code:read` and `custom_code:write` scopes. Webflow documents that these scopes are available only to Data Client apps: site API tokens cannot access custom code endpoints. Removing applied code (Delete, or dropping scripts from the list) additionally requires the `sites:write` (site custom code) or `pages:write` (page custom code) scope.",
       "properties": {
         "createdOn": {
           "type": "string",
@@ -1541,11 +1547,11 @@
       ]
     },
     "webflow:index:Redirect": {
-      "description": "Manages HTTP redirects for a Webflow site. This resource allows you to define redirect rules for old URLs to new locations, supporting both permanent (301) and temporary (302) redirects.",
+      "description": "Manages HTTP redirects for a Webflow site (POST/PATCH/DELETE /v2/sites/{site_id}/redirects, scope sites:write; GET requires sites:read). Webflow redirects are always permanent (301) redirects from one site path to another; the API does not support other status codes. Changing `sourcePath` replaces the redirect; changing `destinationPath` updates it in place.",
       "properties": {
         "createdOn": {
           "type": "string",
-          "description": "The timestamp when the redirect was created (RFC3339 format), when reported by the Webflow API. Read-only; empty when the API does not return it."
+          "description": "The timestamp when the redirect was created (RFC3339 format), if the Webflow API reports it. The redirects API does not document this field, so it is normally empty. Read-only."
         },
         "destinationPath": {
           "type": "string",
@@ -1561,14 +1567,14 @@
         },
         "statusCode": {
           "type": "integer",
-          "description": "The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow."
+          "description": "Deprecated and ignored. Webflow redirects are always 301 (permanent) redirects: the redirect API object is {id, fromUrl, toUrl} and has no status code, so this value is never sent to Webflow, never validated and never produces a diff. Remove it from your program; it only remains for backwards compatibility.",
+          "deprecationMessage": "Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version."
         }
       },
       "required": [
         "siteId",
         "sourcePath",
-        "destinationPath",
-        "statusCode"
+        "destinationPath"
       ],
       "inputProperties": {
         "destinationPath": {
@@ -1585,18 +1591,18 @@
         },
         "statusCode": {
           "type": "integer",
-          "description": "The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow."
+          "description": "Deprecated and ignored. Webflow redirects are always 301 (permanent) redirects: the redirect API object is {id, fromUrl, toUrl} and has no status code, so this value is never sent to Webflow, never validated and never produces a diff. Remove it from your program; it only remains for backwards compatibility.",
+          "deprecationMessage": "Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version."
         }
       },
       "requiredInputs": [
         "siteId",
         "sourcePath",
-        "destinationPath",
-        "statusCode"
+        "destinationPath"
       ]
     },
     "webflow:index:RegisteredScript": {
-      "description": "Manages custom code scripts in the Webflow script registry. This resource allows you to register and manage externally hosted scripts that can be deployed across your Webflow site with version control and integrity verification.",
+      "description": "Registers an externally hosted script in a Webflow site's script registry (POST /v2/sites/{site_id}/registered_scripts/hosted). Registered scripts are applied to a site or page with the SiteCustomCode and PageCustomCode resources. scriptVersion is required: the register endpoint rejects requests without one.\n\n**Authentication:** this resource calls Webflow custom code endpoints, which require an OAuth Data Client app token with the `custom_code:read` and `custom_code:write` scopes. Webflow documents that these scopes are available only to Data Client apps: site API tokens cannot access custom code endpoints. \n\n**IMPORTANT LIMITATION:** Webflow has no endpoint to update or unregister a registered script. Registrations are versioned and permanent (a site can hold up to 800). Changing displayName, hostedLocation, integrityHash, scriptVersion or canCopy therefore registers a new script (a new version when only scriptVersion changes) and the previous registration remains in the registry. Destroying the resource is a logged no-op: the script stays registered and Pulumi simply stops managing it. Applied code is removed by SiteCustomCode and PageCustomCode.",
       "properties": {
         "canCopy": {
           "type": "boolean",
@@ -1608,7 +1614,7 @@
         },
         "displayName": {
           "type": "string",
-          "description": "The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'."
+          "description": "The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'."
         },
         "hostedLocation": {
           "type": "string",
@@ -1628,7 +1634,7 @@
         },
         "scriptVersion": {
           "type": "string",
-          "description": "The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning."
+          "description": "The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning."
         },
         "siteId": {
           "type": "string",
@@ -1640,6 +1646,7 @@
         "displayName",
         "hostedLocation",
         "integrityHash",
+        "scriptVersion",
         "scriptId"
       ],
       "inputProperties": {
@@ -1649,7 +1656,7 @@
         },
         "displayName": {
           "type": "string",
-          "description": "The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'."
+          "description": "The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'."
         },
         "hostedLocation": {
           "type": "string",
@@ -1661,7 +1668,7 @@
         },
         "scriptVersion": {
           "type": "string",
-          "description": "The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning."
+          "description": "The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning."
         },
         "siteId": {
           "type": "string",
@@ -1672,7 +1679,8 @@
         "siteId",
         "displayName",
         "hostedLocation",
-        "integrityHash"
+        "integrityHash",
+        "scriptVersion"
       ]
     },
     "webflow:index:RobotsTxt": {
@@ -1684,7 +1692,7 @@
         },
         "lastModified": {
           "type": "string",
-          "description": "RFC3339 timestamp of the last modification."
+          "description": "RFC3339 timestamp of the last modification made through this provider. The Webflow API does not report one, so the provider records the time of its last successful write."
         },
         "siteId": {
           "type": "string",
@@ -1712,7 +1720,7 @@
       ]
     },
     "webflow:index:Site": {
-      "description": "Manages Webflow sites programmatically. This resource allows you to create, configure, and manage Webflow sites through infrastructure code. Create, Read, Update, and Delete operations are fully supported for complete site lifecycle management.",
+      "description": "Manages Webflow sites programmatically. This resource allows you to create, configure, and manage Webflow sites through infrastructure code. Create, Read, Update, and Delete operations are fully supported for complete site lifecycle management. \n\n**Required scopes:** creating a site (POST /v2/workspaces/{workspace_id}/sites) requires the `workspace:write` scope and an Enterprise workspace; reading a site requires `sites:read`; updating, publishing and deleting a site require `sites:write`. \n\n**Import:** `pulumi import webflow:index:Site my-site <siteId>`. The Webflow API does not report the template a site was created from, so `templateName` is empty after import and only affects creation; it is compared only when both the program and the state hold a value.",
       "properties": {
         "customDomains": {
           "type": "array",
@@ -1743,7 +1751,7 @@
         },
         "parentFolderId": {
           "type": "string",
-          "description": "The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace."
+          "description": "The folder ID where the site will be organized in the Webflow dashboard (24-character lowercase hexadecimal string). Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace."
         },
         "previewUrl": {
           "type": "string",
@@ -1762,7 +1770,7 @@
         },
         "publishPageId": {
           "type": "string",
-          "description": "When `publish` is true, publish only the page with this ID instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint."
+          "description": "When `publish` is true, publish only the page with this ID (24-character lowercase hexadecimal string) instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint."
         },
         "publishScope": {
           "type": "string",
@@ -1778,7 +1786,7 @@
         },
         "templateName": {
           "type": "string",
-          "description": "The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **WARNING: This field is IMMUTABLE.** Once set, it cannot be changed. Changing this value will trigger a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement."
+          "description": "The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **This value only affects creation.** The Webflow API does not report which template a site was created from, so it cannot be read back: after `pulumi import` the state holds no templateName, and adding one to the program later does not change or replace the site. **WARNING:** changing from one non-empty template to a different non-empty template triggers a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement."
         },
         "timeZone": {
           "type": "string",
@@ -1786,7 +1794,7 @@
         },
         "workspaceId": {
           "type": "string",
-          "description": "The Webflow workspace ID where the site will be created. Required for site creation (Enterprise workspace required by Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings > Workspace."
+          "description": "The Webflow workspace ID where the site will be created (24-character lowercase hexadecimal string). Required for site creation (Enterprise workspace and the `workspace:write` scope are required by the Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings > Workspace. Changing this value replaces the site."
         }
       },
       "required": [
@@ -1800,7 +1808,7 @@
         },
         "parentFolderId": {
           "type": "string",
-          "description": "The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace."
+          "description": "The folder ID where the site will be organized in the Webflow dashboard (24-character lowercase hexadecimal string). Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace."
         },
         "publish": {
           "type": "boolean",
@@ -1815,7 +1823,7 @@
         },
         "publishPageId": {
           "type": "string",
-          "description": "When `publish` is true, publish only the page with this ID instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint."
+          "description": "When `publish` is true, publish only the page with this ID (24-character lowercase hexadecimal string) instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint."
         },
         "publishToWebflowSubdomain": {
           "type": "boolean",
@@ -1823,11 +1831,11 @@
         },
         "templateName": {
           "type": "string",
-          "description": "The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **WARNING: This field is IMMUTABLE.** Once set, it cannot be changed. Changing this value will trigger a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement."
+          "description": "The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **This value only affects creation.** The Webflow API does not report which template a site was created from, so it cannot be read back: after `pulumi import` the state holds no templateName, and adding one to the program later does not change or replace the site. **WARNING:** changing from one non-empty template to a different non-empty template triggers a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement."
         },
         "workspaceId": {
           "type": "string",
-          "description": "The Webflow workspace ID where the site will be created. Required for site creation (Enterprise workspace required by Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings > Workspace."
+          "description": "The Webflow workspace ID where the site will be created (24-character lowercase hexadecimal string). Required for site creation (Enterprise workspace and the `workspace:write` scope are required by the Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings > Workspace. Changing this value replaces the site."
         }
       },
       "requiredInputs": [
@@ -1836,7 +1844,7 @@
       ]
     },
     "webflow:index:SiteCustomCode": {
-      "description": "Manages custom JavaScript code applied to a Webflow site. This resource allows you to apply registered custom scripts to a site and control where they are placed (header or footer). Custom scripts must be registered to the site first via the RegisterScript resource.",
+      "description": "Manages custom JavaScript code applied to a Webflow site (PUT /v2/sites/{site_id}/custom_code). This resource allows you to apply registered custom scripts to a site and control where they are placed (header or footer). Custom scripts must be registered to the site first via the RegisteredScript or InlineScript resource. The full list is sent on every update, so scripts omitted from the list are removed from the site; destroying the resource removes all applied code (DELETE /v2/sites/{site_id}/custom_code) but leaves the scripts registered.\n\n**Authentication:** this resource calls Webflow custom code endpoints, which require an OAuth Data Client app token with the `custom_code:read` and `custom_code:write` scopes. Webflow documents that these scopes are available only to Data Client apps: site API tokens cannot access custom code endpoints. Removing applied code (Delete, or dropping scripts from the list) additionally requires the `sites:write` (site custom code) or `pages:write` (page custom code) scope.",
       "properties": {
         "createdOn": {
           "type": "string",
@@ -1881,7 +1889,7 @@
       ]
     },
     "webflow:index:Webhook": {
-      "description": "Manages webhooks for a Webflow site. Webhooks allow you to receive real-time notifications when events occur in your Webflow site, such as form submissions, page updates, e-commerce orders, and more. Note: Webhooks cannot be updated in-place; any change to triggerType, url, or filter requires replacement.",
+      "description": "Manages webhooks for a Webflow site. Webhooks allow you to receive real-time notifications when events occur in your Webflow site, such as form submissions, page updates, e-commerce orders, and more. \n\n**Authentication:** the webhook endpoints require a Data Client (OAuth) token with the `sites:write` scope plus the read scope of the event family being subscribed to (`forms:read`, `cms:read`, `pages:read`, `ecommerce:read` or `comments:read`); reading a webhook requires `sites:read`. \n\nWebhooks cannot be updated in place: any change to `triggerType`, `url` or `filter` replaces the webhook (the replacement is created before the old one is deleted, so there is no window without a webhook; Webflow allows several webhooks per trigger).",
       "properties": {
         "createdOn": {
           "type": "string",
@@ -1892,7 +1900,7 @@
           "additionalProperties": {
             "$ref": "pulumi.json#/Any"
           },
-          "description": "Optional filter for webhook events. The structure depends on the triggerType and allows you to receive only specific events. For example, for collection_item_created, you can filter by collection ID. Refer to Webflow API documentation for filter options for each trigger type."
+          "description": "Optional filter for webhook events. Only supported for the `form_submission` trigger type: it selects the form whose submissions should be sent, with the shape `{ name: string }` where `name` is the form name (e.g., `{ name: 'Contact Form' }`). Setting a filter for any other trigger type, or any key other than `name`, is rejected. When omitted the provider does not track the filter Webflow reports, so a filter set outside Pulumi does not cause a diff. Changing this value replaces the webhook."
         },
         "lastTriggered": {
           "type": "string",
@@ -1904,11 +1912,11 @@
         },
         "triggerType": {
           "type": "string",
-          "description": "The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, memberships_user_account_added, memberships_user_account_updated, memberships_user_account_deleted, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_unpublished. Example: 'form_submission' to receive notifications when forms are submitted."
+          "description": "The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_published, collection_item_unpublished, comment_created. Webhooks require a Data Client (OAuth) token with `sites:write` plus the read scope of the event family: `forms:read` (form_submission), `cms:read` (collection_item_*), `pages:read` (page_*), `ecommerce:read` (ecomm_*), `comments:read` (comment_created); site_publish needs `sites:read`. Example: 'form_submission' to receive notifications when forms are submitted. Changing this value replaces the webhook."
         },
         "url": {
           "type": "string",
-          "description": "The HTTPS endpoint where Webflow will send webhook events (e.g., 'https://example.com/webhooks/webflow', 'https://api.example.com/events'). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data."
+          "description": "The HTTPS endpoint where Webflow will send webhook events (e.g., 'https://example.com/webhooks/webflow', 'https://api.example.com/events'). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data. Changing this value replaces the webhook."
         }
       },
       "required": [
@@ -1922,7 +1930,7 @@
           "additionalProperties": {
             "$ref": "pulumi.json#/Any"
           },
-          "description": "Optional filter for webhook events. The structure depends on the triggerType and allows you to receive only specific events. For example, for collection_item_created, you can filter by collection ID. Refer to Webflow API documentation for filter options for each trigger type."
+          "description": "Optional filter for webhook events. Only supported for the `form_submission` trigger type: it selects the form whose submissions should be sent, with the shape `{ name: string }` where `name` is the form name (e.g., `{ name: 'Contact Form' }`). Setting a filter for any other trigger type, or any key other than `name`, is rejected. When omitted the provider does not track the filter Webflow reports, so a filter set outside Pulumi does not cause a diff. Changing this value replaces the webhook."
         },
         "siteId": {
           "type": "string",
@@ -1930,11 +1938,11 @@
         },
         "triggerType": {
           "type": "string",
-          "description": "The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, memberships_user_account_added, memberships_user_account_updated, memberships_user_account_deleted, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_unpublished. Example: 'form_submission' to receive notifications when forms are submitted."
+          "description": "The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_published, collection_item_unpublished, comment_created. Webhooks require a Data Client (OAuth) token with `sites:write` plus the read scope of the event family: `forms:read` (form_submission), `cms:read` (collection_item_*), `pages:read` (page_*), `ecommerce:read` (ecomm_*), `comments:read` (comment_created); site_publish needs `sites:read`. Example: 'form_submission' to receive notifications when forms are submitted. Changing this value replaces the webhook."
         },
         "url": {
           "type": "string",
-          "description": "The HTTPS endpoint where Webflow will send webhook events (e.g., 'https://example.com/webhooks/webflow', 'https://api.example.com/events'). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data."
+          "description": "The HTTPS endpoint where Webflow will send webhook events (e.g., 'https://example.com/webhooks/webflow', 'https://api.example.com/events'). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data. Changing this value replaces the webhook."
         }
       },
       "requiredInputs": [
@@ -2193,7 +2201,7 @@
       }
     },
     "webflow:index:getAnalyticsTopEvents": {
-      "description": "Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the 'referrer' filter. Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.",
+      "description": "Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the 'referrer' filter, nor the 'nextCollectionId', 'nextItemSlug', 'nextPageId', 'previousCollectionId', 'previousItemSlug' and 'previousPageId' filter dimensions. Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.",
       "inputs": {
         "properties": {
           "browser": {
@@ -2600,8 +2608,8 @@
             "description": "The Webflow page ID (24-character lowercase hexadecimal string)."
           },
           "translatable": {
-            "type": "boolean",
-            "description": "When true, adds ?translatable=true so the secondary locale's translation content is returned instead of content inherited from the primary locale."
+            "type": "string",
+            "description": "Optional ID of the secondary locale you are translating into (24-character lowercase hexadecimal string), sent verbatim as ?translatable=<localeId> to return the page's translatable content for that locale. Webflow returns a 400 error when this is the primary locale ID or any other value, and a 403 error when translation exclusions are not enabled for the site."
           }
         },
         "type": "object",
@@ -2813,7 +2821,7 @@
       }
     },
     "webflow:index:getTokenInfo": {
-      "description": "Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.",
+      "description": "Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings > Apps & integrations > API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.",
       "inputs": {
         "type": "object"
       },

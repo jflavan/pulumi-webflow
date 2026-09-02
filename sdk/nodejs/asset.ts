@@ -5,7 +5,7 @@ import * as pulumi from "@pulumi/pulumi";
 import * as utilities from "./utilities";
 
 /**
- * Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow's storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset.
+ * Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow's storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset. After 'pulumi import' the fileSource and fileHash are unknown; set them in your program and the first refresh adopts them without replacing the asset.
  */
 export class Asset extends pulumi.CustomResource {
     /**
@@ -55,7 +55,7 @@ export class Asset extends pulumi.CustomResource {
      */
     declare public readonly fileHash: pulumi.Output<string | undefined>;
     /**
-     * The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Must not exceed 255 characters or contain <, >, :, ", |, ?, *.
+     * The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, ", |, ?, *.
      */
     declare public readonly fileName: pulumi.Output<string>;
     /**
@@ -163,7 +163,7 @@ export interface AssetArgs {
      */
     fileHash?: pulumi.Input<string | undefined>;
     /**
-     * The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Must not exceed 255 characters or contain <, >, :, ", |, ?, *.
+     * The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, ", |, ?, *.
      */
     fileName: pulumi.Input<string>;
     /**

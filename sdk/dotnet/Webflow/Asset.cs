@@ -11,7 +11,7 @@ using Pulumi;
 namespace Community.Pulumi.Webflow
 {
     /// <summary>
-    /// Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow's storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset.
+    /// Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow's storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset. After 'pulumi import' the fileSource and fileHash are unknown; set them in your program and the first refresh adopts them without replacing the asset.
     /// </summary>
     [WebflowResourceType("webflow:index:Asset")]
     public partial class Asset : global::Pulumi.CustomResource
@@ -47,7 +47,7 @@ namespace Community.Pulumi.Webflow
         public Output<string?> FileHash { get; private set; } = null!;
 
         /// <summary>
-        /// The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Must not exceed 255 characters or contain &lt;, &gt;, :, ", |, ?, *.
+        /// The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain &lt;, &gt;, :, ", |, ?, *.
         /// </summary>
         [Output("fileName")]
         public Output<string> FileName { get; private set; } = null!;
@@ -164,7 +164,7 @@ namespace Community.Pulumi.Webflow
         public Input<string>? FileHash { get; set; }
 
         /// <summary>
-        /// The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Must not exceed 255 characters or contain &lt;, &gt;, :, ", |, ?, *.
+        /// The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain &lt;, &gt;, :, ", |, ?, *.
         /// </summary>
         [Input("fileName", required: true)]
         public Input<string> FileName { get; set; } = null!;

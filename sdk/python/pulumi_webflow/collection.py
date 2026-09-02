@@ -29,7 +29,7 @@ class CollectionArgs:
         :param pulumi.Input[_builtins.str] display_name: The human-readable name of the collection (e.g., 'Blog Posts', 'Products', 'Team Members'). This name appears in the Webflow CMS interface. Maximum length: 255 characters.
         :param pulumi.Input[_builtins.str] singular_name: The singular form of the collection name (e.g., 'Blog Post' for 'Blog Posts', 'Product' for 'Products'). Used in the CMS UI when referring to individual items. Maximum length: 255 characters.
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
-        :param pulumi.Input[_builtins.str] slug: The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation.
+        :param pulumi.Input[_builtins.str] slug: The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items; changing an explicit slug updates the collection in place, which changes the URLs of its items.
         """
         pulumi.set(__self__, "display_name", display_name)
         pulumi.set(__self__, "singular_name", singular_name)
@@ -77,7 +77,7 @@ class CollectionArgs:
     @pulumi.getter
     def slug(self) -> pulumi.Input[Optional[_builtins.str]]:
         """
-        The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation.
+        The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items; changing an explicit slug updates the collection in place, which changes the URLs of its items.
         """
         return pulumi.get(self, "slug")
 
@@ -98,14 +98,14 @@ class Collection(pulumi.CustomResource):
                  slug: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         """
-        Manages CMS collections for a Webflow site. Collections are containers for structured content items (blog posts, products, etc.). Note: Webflow collections do not support updates - any changes require replacement (delete + recreate).
+        Manages CMS collections for a Webflow site. Collections are containers for structured content items (blog posts, products, etc.). displayName, singularName and slug are updated in place (PATCH /v2/collections/{collection_id}); changing siteId requires replacement (delete + recreate).
 
         :param str resource_name: The name of the resource.
         :param pulumi.ResourceOptions opts: Options for the resource.
         :param pulumi.Input[_builtins.str] display_name: The human-readable name of the collection (e.g., 'Blog Posts', 'Products', 'Team Members'). This name appears in the Webflow CMS interface. Maximum length: 255 characters.
         :param pulumi.Input[_builtins.str] singular_name: The singular form of the collection name (e.g., 'Blog Post' for 'Blog Posts', 'Product' for 'Products'). Used in the CMS UI when referring to individual items. Maximum length: 255 characters.
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
-        :param pulumi.Input[_builtins.str] slug: The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation.
+        :param pulumi.Input[_builtins.str] slug: The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items; changing an explicit slug updates the collection in place, which changes the URLs of its items.
         """
         ...
     @overload
@@ -114,7 +114,7 @@ class Collection(pulumi.CustomResource):
                  args: CollectionArgs,
                  opts: Optional[pulumi.ResourceOptions] = None):
         """
-        Manages CMS collections for a Webflow site. Collections are containers for structured content items (blog posts, products, etc.). Note: Webflow collections do not support updates - any changes require replacement (delete + recreate).
+        Manages CMS collections for a Webflow site. Collections are containers for structured content items (blog posts, products, etc.). displayName, singularName and slug are updated in place (PATCH /v2/collections/{collection_id}); changing siteId requires replacement (delete + recreate).
 
         :param str resource_name: The name of the resource.
         :param CollectionArgs args: The arguments to use to populate this resource's properties.
@@ -240,7 +240,7 @@ class Collection(pulumi.CustomResource):
     @pulumi.getter
     def slug(self) -> pulumi.Output[Optional[_builtins.str]]:
         """
-        The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation.
+        The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items; changing an explicit slug updates the collection in place, which changes the URLs of its items.
         """
         return pulumi.get(self, "slug")
 

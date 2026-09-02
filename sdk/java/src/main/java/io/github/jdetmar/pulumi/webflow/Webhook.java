@@ -16,7 +16,11 @@ import java.util.Optional;
 import javax.annotation.Nullable;
 
 /**
- * Manages webhooks for a Webflow site. Webhooks allow you to receive real-time notifications when events occur in your Webflow site, such as form submissions, page updates, e-commerce orders, and more. Note: Webhooks cannot be updated in-place; any change to triggerType, url, or filter requires replacement.
+ * Manages webhooks for a Webflow site. Webhooks allow you to receive real-time notifications when events occur in your Webflow site, such as form submissions, page updates, e-commerce orders, and more.
+ * 
+ * **Authentication:** the webhook endpoints require a Data Client (OAuth) token with the `sites:write` scope plus the read scope of the event family being subscribed to (`forms:read`, `cms:read`, `pages:read`, `ecommerce:read` or `comments:read`); reading a webhook requires `sites:read`.
+ * 
+ * Webhooks cannot be updated in place: any change to `triggerType`, `url` or `filter` replaces the webhook (the replacement is created before the old one is deleted, so there is no window without a webhook; Webflow allows several webhooks per trigger).
  * 
  */
 @ResourceType(type="webflow:index:Webhook")
@@ -36,14 +40,14 @@ public class Webhook extends com.pulumi.resources.CustomResource {
         return Codegen.optional(this.createdOn);
     }
     /**
-     * Optional filter for webhook events. The structure depends on the triggerType and allows you to receive only specific events. For example, for collection_item_created, you can filter by collection ID. Refer to Webflow API documentation for filter options for each trigger type.
+     * Optional filter for webhook events. Only supported for the `form_submission` trigger type: it selects the form whose submissions should be sent, with the shape `{ name: string }` where `name` is the form name (e.g., `{ name: &#39;Contact Form&#39; }`). Setting a filter for any other trigger type, or any key other than `name`, is rejected. When omitted the provider does not track the filter Webflow reports, so a filter set outside Pulumi does not cause a diff. Changing this value replaces the webhook.
      * 
      */
     @Export(name="filter", refs={Map.class,String.class,Object.class}, tree="[0,1,2]")
     private Output</* @Nullable */ Map<String,Object>> filter;
 
     /**
-     * @return Optional filter for webhook events. The structure depends on the triggerType and allows you to receive only specific events. For example, for collection_item_created, you can filter by collection ID. Refer to Webflow API documentation for filter options for each trigger type.
+     * @return Optional filter for webhook events. Only supported for the `form_submission` trigger type: it selects the form whose submissions should be sent, with the shape `{ name: string }` where `name` is the form name (e.g., `{ name: &#39;Contact Form&#39; }`). Setting a filter for any other trigger type, or any key other than `name`, is rejected. When omitted the provider does not track the filter Webflow reports, so a filter set outside Pulumi does not cause a diff. Changing this value replaces the webhook.
      * 
      */
     public Output<Optional<Map<String,Object>>> filter() {
@@ -78,28 +82,28 @@ public class Webhook extends com.pulumi.resources.CustomResource {
         return this.siteId;
     }
     /**
-     * The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, memberships_user_account_added, memberships_user_account_updated, memberships_user_account_deleted, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_unpublished. Example: &#39;form_submission&#39; to receive notifications when forms are submitted.
+     * The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_published, collection_item_unpublished, comment_created. Webhooks require a Data Client (OAuth) token with `sites:write` plus the read scope of the event family: `forms:read` (form_submission), `cms:read` (collection_item_*), `pages:read` (page_*), `ecommerce:read` (ecomm_*), `comments:read` (comment_created); site_publish needs `sites:read`. Example: &#39;form_submission&#39; to receive notifications when forms are submitted. Changing this value replaces the webhook.
      * 
      */
     @Export(name="triggerType", refs={String.class}, tree="[0]")
     private Output<String> triggerType;
 
     /**
-     * @return The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, memberships_user_account_added, memberships_user_account_updated, memberships_user_account_deleted, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_unpublished. Example: &#39;form_submission&#39; to receive notifications when forms are submitted.
+     * @return The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_published, collection_item_unpublished, comment_created. Webhooks require a Data Client (OAuth) token with `sites:write` plus the read scope of the event family: `forms:read` (form_submission), `cms:read` (collection_item_*), `pages:read` (page_*), `ecommerce:read` (ecomm_*), `comments:read` (comment_created); site_publish needs `sites:read`. Example: &#39;form_submission&#39; to receive notifications when forms are submitted. Changing this value replaces the webhook.
      * 
      */
     public Output<String> triggerType() {
         return this.triggerType;
     }
     /**
-     * The HTTPS endpoint where Webflow will send webhook events (e.g., &#39;https://example.com/webhooks/webflow&#39;, &#39;https://api.example.com/events&#39;). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data.
+     * The HTTPS endpoint where Webflow will send webhook events (e.g., &#39;https://example.com/webhooks/webflow&#39;, &#39;https://api.example.com/events&#39;). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data. Changing this value replaces the webhook.
      * 
      */
     @Export(name="url", refs={String.class}, tree="[0]")
     private Output<String> url;
 
     /**
-     * @return The HTTPS endpoint where Webflow will send webhook events (e.g., &#39;https://example.com/webhooks/webflow&#39;, &#39;https://api.example.com/events&#39;). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data.
+     * @return The HTTPS endpoint where Webflow will send webhook events (e.g., &#39;https://example.com/webhooks/webflow&#39;, &#39;https://api.example.com/events&#39;). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data. Changing this value replaces the webhook.
      * 
      */
     public Output<String> url() {

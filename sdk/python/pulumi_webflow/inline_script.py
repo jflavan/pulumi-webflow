@@ -28,10 +28,10 @@ class InlineScriptArgs:
         """
         The set of arguments for constructing a InlineScript resource.
 
-        :param pulumi.Input[_builtins.str] display_name: The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'.
-        :param pulumi.Input[_builtins.str] script_version: The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
+        :param pulumi.Input[_builtins.str] display_name: The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'.
+        :param pulumi.Input[_builtins.str] script_version: The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning.
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
-        :param pulumi.Input[_builtins.str] source_code: The inline JavaScript code to register, limited to 2000 characters. This code will be directly embedded in your Webflow site. If your script exceeds 2000 characters, consider hosting it externally and using the RegisteredScript resource with a hostedLocation instead.
+        :param pulumi.Input[_builtins.str] source_code: The inline JavaScript code to register, limited to 2000 characters. This code will be directly embedded in your Webflow site. If your script exceeds 2000 characters, consider hosting it externally and using the RegisteredScript resource with a hostedLocation instead. Webflow does not return the source code when listing scripts, so it cannot be read back after import.
         :param pulumi.Input[_builtins.bool] can_copy: Indicates whether the script can be copied when the site is duplicated. Default: false. When true, the script will be included when creating a copy of the site.
         :param pulumi.Input[_builtins.str] integrity_hash: The Sub-Resource Integrity (SRI) hash for the script (optional). Format: 'sha384-<hash>', 'sha256-<hash>', or 'sha512-<hash>'. SRI hashes help ensure that the script hasn't been modified in transit. You can generate an SRI hash using https://www.srihash.org/
         """
@@ -48,7 +48,7 @@ class InlineScriptArgs:
     @pulumi.getter(name="displayName")
     def display_name(self) -> pulumi.Input[_builtins.str]:
         """
-        The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'.
+        The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'.
         """
         return pulumi.get(self, "display_name")
 
@@ -60,7 +60,7 @@ class InlineScriptArgs:
     @pulumi.getter(name="scriptVersion")
     def script_version(self) -> pulumi.Input[_builtins.str]:
         """
-        The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
+        The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning.
         """
         return pulumi.get(self, "script_version")
 
@@ -84,7 +84,7 @@ class InlineScriptArgs:
     @pulumi.getter(name="sourceCode")
     def source_code(self) -> pulumi.Input[_builtins.str]:
         """
-        The inline JavaScript code to register, limited to 2000 characters. This code will be directly embedded in your Webflow site. If your script exceeds 2000 characters, consider hosting it externally and using the RegisteredScript resource with a hostedLocation instead.
+        The inline JavaScript code to register, limited to 2000 characters. This code will be directly embedded in your Webflow site. If your script exceeds 2000 characters, consider hosting it externally and using the RegisteredScript resource with a hostedLocation instead. Webflow does not return the source code when listing scripts, so it cannot be read back after import.
         """
         return pulumi.get(self, "source_code")
 
@@ -131,16 +131,20 @@ class InlineScript(pulumi.CustomResource):
                  source_code: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         """
-        Manages inline custom code scripts in the Webflow script registry. This resource allows you to register and manage inline JavaScript code that can be deployed across your Webflow site with version control.
+        Registers inline JavaScript in a Webflow site's script registry (POST /v2/sites/{site_id}/registered_scripts/inline). Registered scripts are applied to a site or page with the SiteCustomCode and PageCustomCode resources.
+
+        **Authentication:** this resource calls Webflow custom code endpoints, which require an OAuth Data Client app token with the `custom_code:read` and `custom_code:write` scopes. Webflow documents that these scopes are available only to Data Client apps: site API tokens cannot access custom code endpoints.
+
+        **IMPORTANT LIMITATION:** Webflow has no endpoint to update or unregister a registered script. Registrations are versioned and permanent (a site can hold up to 800). Changing sourceCode, displayName, scriptVersion, canCopy or integrityHash therefore registers a new script (a new version when only scriptVersion changes) and the previous registration remains in the registry. Destroying the resource is a logged no-op: the script stays registered and Pulumi simply stops managing it. Applied code is removed by SiteCustomCode and PageCustomCode. The list endpoint does not return sourceCode, so after an import the source is unknown until it is set in the program; Diff does not report a change for it in that case.
 
         :param str resource_name: The name of the resource.
         :param pulumi.ResourceOptions opts: Options for the resource.
         :param pulumi.Input[_builtins.bool] can_copy: Indicates whether the script can be copied when the site is duplicated. Default: false. When true, the script will be included when creating a copy of the site.
-        :param pulumi.Input[_builtins.str] display_name: The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'.
+        :param pulumi.Input[_builtins.str] display_name: The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'.
         :param pulumi.Input[_builtins.str] integrity_hash: The Sub-Resource Integrity (SRI) hash for the script (optional). Format: 'sha384-<hash>', 'sha256-<hash>', or 'sha512-<hash>'. SRI hashes help ensure that the script hasn't been modified in transit. You can generate an SRI hash using https://www.srihash.org/
-        :param pulumi.Input[_builtins.str] script_version: The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
+        :param pulumi.Input[_builtins.str] script_version: The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning.
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
-        :param pulumi.Input[_builtins.str] source_code: The inline JavaScript code to register, limited to 2000 characters. This code will be directly embedded in your Webflow site. If your script exceeds 2000 characters, consider hosting it externally and using the RegisteredScript resource with a hostedLocation instead.
+        :param pulumi.Input[_builtins.str] source_code: The inline JavaScript code to register, limited to 2000 characters. This code will be directly embedded in your Webflow site. If your script exceeds 2000 characters, consider hosting it externally and using the RegisteredScript resource with a hostedLocation instead. Webflow does not return the source code when listing scripts, so it cannot be read back after import.
         """
         ...
     @overload
@@ -149,7 +153,11 @@ class InlineScript(pulumi.CustomResource):
                  args: InlineScriptArgs,
                  opts: Optional[pulumi.ResourceOptions] = None):
         """
-        Manages inline custom code scripts in the Webflow script registry. This resource allows you to register and manage inline JavaScript code that can be deployed across your Webflow site with version control.
+        Registers inline JavaScript in a Webflow site's script registry (POST /v2/sites/{site_id}/registered_scripts/inline). Registered scripts are applied to a site or page with the SiteCustomCode and PageCustomCode resources.
+
+        **Authentication:** this resource calls Webflow custom code endpoints, which require an OAuth Data Client app token with the `custom_code:read` and `custom_code:write` scopes. Webflow documents that these scopes are available only to Data Client apps: site API tokens cannot access custom code endpoints.
+
+        **IMPORTANT LIMITATION:** Webflow has no endpoint to update or unregister a registered script. Registrations are versioned and permanent (a site can hold up to 800). Changing sourceCode, displayName, scriptVersion, canCopy or integrityHash therefore registers a new script (a new version when only scriptVersion changes) and the previous registration remains in the registry. Destroying the resource is a logged no-op: the script stays registered and Pulumi simply stops managing it. Applied code is removed by SiteCustomCode and PageCustomCode. The list endpoint does not return sourceCode, so after an import the source is unknown until it is set in the program; Diff does not report a change for it in that case.
 
         :param str resource_name: The name of the resource.
         :param InlineScriptArgs args: The arguments to use to populate this resource's properties.
@@ -253,7 +261,7 @@ class InlineScript(pulumi.CustomResource):
     @pulumi.getter(name="displayName")
     def display_name(self) -> pulumi.Output[_builtins.str]:
         """
-        The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'.
+        The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'.
         """
         return pulumi.get(self, "display_name")
 
@@ -293,7 +301,7 @@ class InlineScript(pulumi.CustomResource):
     @pulumi.getter(name="scriptVersion")
     def script_version(self) -> pulumi.Output[_builtins.str]:
         """
-        The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
+        The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning.
         """
         return pulumi.get(self, "script_version")
 
@@ -309,7 +317,7 @@ class InlineScript(pulumi.CustomResource):
     @pulumi.getter(name="sourceCode")
     def source_code(self) -> pulumi.Output[_builtins.str]:
         """
-        The inline JavaScript code to register, limited to 2000 characters. This code will be directly embedded in your Webflow site. If your script exceeds 2000 characters, consider hosting it externally and using the RegisteredScript resource with a hostedLocation instead.
+        The inline JavaScript code to register, limited to 2000 characters. This code will be directly embedded in your Webflow site. If your script exceeds 2000 characters, consider hosting it externally and using the RegisteredScript resource with a hostedLocation instead. Webflow does not return the source code when listing scripts, so it cannot be read back after import.
         """
         return pulumi.get(self, "source_code")
 

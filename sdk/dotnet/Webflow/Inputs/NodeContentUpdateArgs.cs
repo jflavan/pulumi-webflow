@@ -14,13 +14,13 @@ namespace Community.Pulumi.Webflow.Inputs
     public sealed class NodeContentUpdateArgs : global::Pulumi.ResourceArgs
     {
         /// <summary>
-        /// The unique identifier for the DOM node to update. Retrieve node IDs using GET /pages/{page_id}/dom.
+        /// The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
         /// </summary>
         [Input("nodeId", required: true)]
         public Input<string> NodeId { get; set; } = null!;
 
         /// <summary>
-        /// The new text content for the node (HTML is allowed). An empty string clears the node's text.
+        /// The new HTML content for the node (required, non-empty). The HTML tags must match the node's current content as returned by GET /v2/pages/{page_id}/dom (e.g., '&lt;h1&gt;Hello&lt;/h1&gt;' for a heading). An empty string does not clear the node; Webflow rejects it.
         /// </summary>
         [Input("text", required: true)]
         public Input<string> Text { get; set; } = null!;

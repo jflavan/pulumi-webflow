@@ -11,27 +11,25 @@ using Pulumi;
 namespace Community.Pulumi.Webflow
 {
     /// <summary>
-    /// Manages static text content of a Webflow page (POST /v2/pages/{page_id}/dom). This resource updates text within existing DOM nodes; it does NOT manage page structure or layout. Find node IDs by fetching the page DOM (GET /v2/pages/{page_id}/dom). Set localeId to update a secondary locale; when omitted, Webflow targets the primary locale. Webflow reports per-node failures in the response; the update fails if any node was rejected.
-    /// 
-    /// **IMPORTANT LIMITATION:** This resource does NOT detect drift for content changed outside of Pulumi; refresh only verifies that the page still exists. Destroying the resource leaves the content in place.
+    /// Manages the static text content of a Webflow page in a secondary locale (POST /v2/pages/{page_id}/dom?localeId=...). Webflow's Update Page Content endpoint only edits secondary locales: localeId is required and must be a valid secondary locale of the site, and the primary locale's content cannot be changed via the API. This resource updates the HTML of existing text nodes; it does NOT manage page structure or layout. Find node IDs by fetching the page DOM (GET /v2/pages/{page_id}/dom?localeId=...). Each node's text is required, and its HTML tags must match the node's current content; an empty text does not clear a node and is rejected. At most 1000 nodes may be updated per resource. Webflow reports per-node failures in the response; the update fails if any node was rejected. Refresh reads the current text of the managed nodes from the page DOM, so content changed outside of Pulumi shows up as drift. Import with the ID {pageId}/content/{localeId} to adopt every text node of the page. Destroying the resource leaves the content in place.
     /// </summary>
     [WebflowResourceType("webflow:index:PageContent")]
     public partial class PageContent : global::Pulumi.CustomResource
     {
         /// <summary>
-        /// Optional locale ID to update a secondary locale. When omitted the localeId query parameter is not sent and Webflow updates the primary locale.
+        /// The ID of the secondary locale to update (24-character lowercase hexadecimal string). Required: the Update Page Content endpoint only edits secondary locales, and Webflow rejects the request when the locale is the primary locale or not a locale of the site. Locale IDs are listed under Site Settings &gt; Localization or via the Get Site endpoint. Changing it replaces the resource.
         /// </summary>
         [Output("localeId")]
-        public Output<string?> LocaleId { get; private set; } = null!;
+        public Output<string> LocaleId { get; private set; } = null!;
 
         /// <summary>
-        /// List of node content updates to apply. Each entry names a nodeId from the page's DOM and the new text (HTML allowed). Node IDs must be unique within the list.
+        /// List of node content updates to apply (1 to 1000 entries). Each entry names a nodeId from the page's DOM and the node's new HTML text. Node IDs must be unique within the list.
         /// </summary>
         [Output("nodes")]
         public Output<ImmutableArray<Outputs.NodeContentUpdate>> Nodes { get; private set; } = null!;
 
         /// <summary>
-        /// The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs.
+        /// The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs. Changing it replaces the resource.
         /// </summary>
         [Output("pageId")]
         public Output<string> PageId { get; private set; } = null!;
@@ -83,16 +81,16 @@ namespace Community.Pulumi.Webflow
     public sealed class PageContentArgs : global::Pulumi.ResourceArgs
     {
         /// <summary>
-        /// Optional locale ID to update a secondary locale. When omitted the localeId query parameter is not sent and Webflow updates the primary locale.
+        /// The ID of the secondary locale to update (24-character lowercase hexadecimal string). Required: the Update Page Content endpoint only edits secondary locales, and Webflow rejects the request when the locale is the primary locale or not a locale of the site. Locale IDs are listed under Site Settings &gt; Localization or via the Get Site endpoint. Changing it replaces the resource.
         /// </summary>
-        [Input("localeId")]
-        public Input<string>? LocaleId { get; set; }
+        [Input("localeId", required: true)]
+        public Input<string> LocaleId { get; set; } = null!;
 
         [Input("nodes", required: true)]
         private InputList<Inputs.NodeContentUpdateArgs>? _nodes;
 
         /// <summary>
-        /// List of node content updates to apply. Each entry names a nodeId from the page's DOM and the new text (HTML allowed). Node IDs must be unique within the list.
+        /// List of node content updates to apply (1 to 1000 entries). Each entry names a nodeId from the page's DOM and the node's new HTML text. Node IDs must be unique within the list.
         /// </summary>
         public InputList<Inputs.NodeContentUpdateArgs> Nodes
         {
@@ -101,7 +99,7 @@ namespace Community.Pulumi.Webflow
         }
 
         /// <summary>
-        /// The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs.
+        /// The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs. Changing it replaces the resource.
         /// </summary>
         [Input("pageId", required: true)]
         public Input<string> PageId { get; set; } = null!;

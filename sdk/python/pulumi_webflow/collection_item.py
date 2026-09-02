@@ -33,7 +33,7 @@ class CollectionItemArgs:
         :param pulumi.Input[_builtins.str] cms_locale_id: The CMS locale ID for localized sites (optional). Only required if your site uses Webflow's localization features; it is sent with every request for this item, including reads. Leave empty for non-localized sites.
         :param pulumi.Input[_builtins.bool] is_archived: Whether the item is archived (optional). Archived items are not visible on the published site but remain in the CMS. When omitted, the archived state is not managed and never causes a diff.
         :param pulumi.Input[_builtins.bool] is_draft: Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff.
-        :param pulumi.Input[_builtins.bool] live: Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+        :param pulumi.Input[_builtins.bool] live: Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item.
         """
         pulumi.set(__self__, "collection_id", collection_id)
         pulumi.set(__self__, "field_data", field_data)
@@ -110,7 +110,7 @@ class CollectionItemArgs:
     @pulumi.getter
     def live(self) -> pulumi.Input[Optional[_builtins.bool]]:
         """
-        Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+        Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item.
         """
         return pulumi.get(self, "live")
 
@@ -142,7 +142,7 @@ class CollectionItem(pulumi.CustomResource):
         :param pulumi.Input[Mapping[str, Any]] field_data: A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Only the fields listed here are managed; other fields of the item are left untouched. Example: {"name": "My Blog Post", "slug": "my-blog-post", "content": "Post content..."}
         :param pulumi.Input[_builtins.bool] is_archived: Whether the item is archived (optional). Archived items are not visible on the published site but remain in the CMS. When omitted, the archived state is not managed and never causes a diff.
         :param pulumi.Input[_builtins.bool] is_draft: Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff.
-        :param pulumi.Input[_builtins.bool] live: Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+        :param pulumi.Input[_builtins.bool] live: Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item.
         """
         ...
     @overload
@@ -307,7 +307,7 @@ class CollectionItem(pulumi.CustomResource):
     @pulumi.getter
     def live(self) -> pulumi.Output[Optional[_builtins.bool]]:
         """
-        Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+        Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item.
         """
         return pulumi.get(self, "live")
 

@@ -32,14 +32,14 @@ public final class AssetArgs extends com.pulumi.resources.ResourceArgs {
     }
 
     /**
-     * The name of the file as it will appear in Webflow, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. Must not exceed 255 characters or contain &lt;, &gt;, :, &#34;, |, ?, *.
+     * The name of the file as it will appear in Webflow, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. Webflow requires file names to be less than 100 characters; the name must not contain &lt;, &gt;, :, &#34;, |, ?, *.
      * 
      */
     @Import(name="fileName", required=true)
     private Output<String> fileName;
 
     /**
-     * @return The name of the file as it will appear in Webflow, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. Must not exceed 255 characters or contain &lt;, &gt;, :, &#34;, |, ?, *.
+     * @return The name of the file as it will appear in Webflow, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. Webflow requires file names to be less than 100 characters; the name must not contain &lt;, &gt;, :, &#34;, |, ?, *.
      * 
      */
     public Output<String> fileName() {
@@ -141,7 +141,7 @@ public final class AssetArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param fileName The name of the file as it will appear in Webflow, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. Must not exceed 255 characters or contain &lt;, &gt;, :, &#34;, |, ?, *.
+         * @param fileName The name of the file as it will appear in Webflow, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. Webflow requires file names to be less than 100 characters; the name must not contain &lt;, &gt;, :, &#34;, |, ?, *.
          * 
          * @return builder
          * 
@@ -152,7 +152,7 @@ public final class AssetArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param fileName The name of the file as it will appear in Webflow, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. Must not exceed 255 characters or contain &lt;, &gt;, :, &#34;, |, ?, *.
+         * @param fileName The name of the file as it will appear in Webflow, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. Webflow requires file names to be less than 100 characters; the name must not contain &lt;, &gt;, :, &#34;, |, ?, *.
          * 
          * @return builder
          * 

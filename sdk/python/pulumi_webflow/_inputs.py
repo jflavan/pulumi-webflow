@@ -286,11 +286,11 @@ class CustomScriptArgsArgs:
 class NodeContentUpdateArgsDict(TypedDict):
     node_id: pulumi.Input[_builtins.str]
     """
-    The unique identifier for the DOM node to update. Retrieve node IDs using GET /pages/{page_id}/dom.
+    The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
     """
     text: pulumi.Input[_builtins.str]
     """
-    The new text content for the node (HTML is allowed). An empty string clears the node's text.
+    The new HTML content for the node (required, non-empty). The HTML tags must match the node's current content as returned by GET /v2/pages/{page_id}/dom (e.g., '<h1>Hello</h1>' for a heading). An empty string does not clear the node; Webflow rejects it.
     """
 
 @pulumi.input_type
@@ -299,8 +299,8 @@ class NodeContentUpdateArgs:
                  node_id: pulumi.Input[_builtins.str],
                  text: pulumi.Input[_builtins.str]):
         """
-        :param pulumi.Input[_builtins.str] node_id: The unique identifier for the DOM node to update. Retrieve node IDs using GET /pages/{page_id}/dom.
-        :param pulumi.Input[_builtins.str] text: The new text content for the node (HTML is allowed). An empty string clears the node's text.
+        :param pulumi.Input[_builtins.str] node_id: The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
+        :param pulumi.Input[_builtins.str] text: The new HTML content for the node (required, non-empty). The HTML tags must match the node's current content as returned by GET /v2/pages/{page_id}/dom (e.g., '<h1>Hello</h1>' for a heading). An empty string does not clear the node; Webflow rejects it.
         """
         pulumi.set(__self__, "node_id", node_id)
         pulumi.set(__self__, "text", text)
@@ -309,7 +309,7 @@ class NodeContentUpdateArgs:
     @pulumi.getter(name="nodeId")
     def node_id(self) -> pulumi.Input[_builtins.str]:
         """
-        The unique identifier for the DOM node to update. Retrieve node IDs using GET /pages/{page_id}/dom.
+        The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
         """
         return pulumi.get(self, "node_id")
 
@@ -321,7 +321,7 @@ class NodeContentUpdateArgs:
     @pulumi.getter
     def text(self) -> pulumi.Input[_builtins.str]:
         """
-        The new text content for the node (HTML is allowed). An empty string clears the node's text.
+        The new HTML content for the node (required, non-empty). The HTML tags must match the node's current content as returned by GET /v2/pages/{page_id}/dom (e.g., '<h1>Hello</h1>' for a heading). An empty string does not clear the node; Webflow rejects it.
         """
         return pulumi.get(self, "text")
 

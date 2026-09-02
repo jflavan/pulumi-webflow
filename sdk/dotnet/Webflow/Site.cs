@@ -12,6 +12,10 @@ namespace Community.Pulumi.Webflow
 {
     /// <summary>
     /// Manages Webflow sites programmatically. This resource allows you to create, configure, and manage Webflow sites through infrastructure code. Create, Read, Update, and Delete operations are fully supported for complete site lifecycle management.
+    /// 
+    /// **Required scopes:** creating a site (POST /v2/workspaces/{workspace_id}/sites) requires the `workspace:write` scope and an Enterprise workspace; reading a site requires `sites:read`; updating, publishing and deleting a site require `sites:write`.
+    /// 
+    /// **Import:** `pulumi import webflow:index:Site my-site &lt;siteId&gt;`. The Webflow API does not report the template a site was created from, so `templateName` is empty after import and only affects creation; it is compared only when both the program and the state hold a value.
     /// </summary>
     [WebflowResourceType("webflow:index:Site")]
     public partial class Site : global::Pulumi.CustomResource
@@ -53,7 +57,7 @@ namespace Community.Pulumi.Webflow
         public Output<string?> LastUpdated { get; private set; } = null!;
 
         /// <summary>
-        /// The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
+        /// The folder ID where the site will be organized in the Webflow dashboard (24-character lowercase hexadecimal string). Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
         /// </summary>
         [Output("parentFolderId")]
         public Output<string?> ParentFolderId { get; private set; } = null!;
@@ -77,7 +81,7 @@ namespace Community.Pulumi.Webflow
         public Output<ImmutableArray<string>> PublishCustomDomains { get; private set; } = null!;
 
         /// <summary>
-        /// When `publish` is true, publish only the page with this ID instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
+        /// When `publish` is true, publish only the page with this ID (24-character lowercase hexadecimal string) instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
         /// </summary>
         [Output("publishPageId")]
         public Output<string?> PublishPageId { get; private set; } = null!;
@@ -101,7 +105,7 @@ namespace Community.Pulumi.Webflow
         public Output<string?> ShortName { get; private set; } = null!;
 
         /// <summary>
-        /// The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **WARNING: This field is IMMUTABLE.** Once set, it cannot be changed. Changing this value will trigger a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement.
+        /// The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **This value only affects creation.** The Webflow API does not report which template a site was created from, so it cannot be read back: after `pulumi import` the state holds no templateName, and adding one to the program later does not change or replace the site. **WARNING:** changing from one non-empty template to a different non-empty template triggers a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement.
         /// </summary>
         [Output("templateName")]
         public Output<string?> TemplateName { get; private set; } = null!;
@@ -113,7 +117,7 @@ namespace Community.Pulumi.Webflow
         public Output<string?> TimeZone { get; private set; } = null!;
 
         /// <summary>
-        /// The Webflow workspace ID where the site will be created. Required for site creation (Enterprise workspace required by Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings &gt; Workspace.
+        /// The Webflow workspace ID where the site will be created (24-character lowercase hexadecimal string). Required for site creation (Enterprise workspace and the `workspace:write` scope are required by the Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings &gt; Workspace. Changing this value replaces the site.
         /// </summary>
         [Output("workspaceId")]
         public Output<string> WorkspaceId { get; private set; } = null!;
@@ -171,7 +175,7 @@ namespace Community.Pulumi.Webflow
         public Input<string> DisplayName { get; set; } = null!;
 
         /// <summary>
-        /// The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
+        /// The folder ID where the site will be organized in the Webflow dashboard (24-character lowercase hexadecimal string). Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
         /// </summary>
         [Input("parentFolderId")]
         public Input<string>? ParentFolderId { get; set; }
@@ -195,7 +199,7 @@ namespace Community.Pulumi.Webflow
         }
 
         /// <summary>
-        /// When `publish` is true, publish only the page with this ID instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
+        /// When `publish` is true, publish only the page with this ID (24-character lowercase hexadecimal string) instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
         /// </summary>
         [Input("publishPageId")]
         public Input<string>? PublishPageId { get; set; }
@@ -207,13 +211,13 @@ namespace Community.Pulumi.Webflow
         public Input<bool>? PublishToWebflowSubdomain { get; set; }
 
         /// <summary>
-        /// The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **WARNING: This field is IMMUTABLE.** Once set, it cannot be changed. Changing this value will trigger a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement.
+        /// The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **This value only affects creation.** The Webflow API does not report which template a site was created from, so it cannot be read back: after `pulumi import` the state holds no templateName, and adding one to the program later does not change or replace the site. **WARNING:** changing from one non-empty template to a different non-empty template triggers a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement.
         /// </summary>
         [Input("templateName")]
         public Input<string>? TemplateName { get; set; }
 
         /// <summary>
-        /// The Webflow workspace ID where the site will be created. Required for site creation (Enterprise workspace required by Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings &gt; Workspace.
+        /// The Webflow workspace ID where the site will be created (24-character lowercase hexadecimal string). Required for site creation (Enterprise workspace and the `workspace:write` scope are required by the Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings &gt; Workspace. Changing this value replaces the site.
         /// </summary>
         [Input("workspaceId", required: true)]
         public Input<string> WorkspaceId { get; set; } = null!;

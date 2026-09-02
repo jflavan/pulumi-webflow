@@ -13,19 +13,19 @@ namespace Community.Pulumi.Webflow
     public static class GetAnalyticsTopEvents
     {
         /// <summary>
-        /// Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the 'referrer' filter. Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+        /// Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the 'referrer' filter, nor the 'nextCollectionId', 'nextItemSlug', 'nextPageId', 'previousCollectionId', 'previousItemSlug' and 'previousPageId' filter dimensions. Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
         /// </summary>
         public static Task<GetAnalyticsTopEventsResult> InvokeAsync(GetAnalyticsTopEventsArgs args, InvokeOptions? options = null)
             => global::Pulumi.Deployment.Instance.InvokeAsync<GetAnalyticsTopEventsResult>("webflow:index:getAnalyticsTopEvents", args ?? new GetAnalyticsTopEventsArgs(), options.WithDefaults());
 
         /// <summary>
-        /// Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the 'referrer' filter. Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+        /// Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the 'referrer' filter, nor the 'nextCollectionId', 'nextItemSlug', 'nextPageId', 'previousCollectionId', 'previousItemSlug' and 'previousPageId' filter dimensions. Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
         /// </summary>
         public static Output<GetAnalyticsTopEventsResult> Invoke(GetAnalyticsTopEventsInvokeArgs args, InvokeOptions? options = null)
             => global::Pulumi.Deployment.Instance.Invoke<GetAnalyticsTopEventsResult>("webflow:index:getAnalyticsTopEvents", args ?? new GetAnalyticsTopEventsInvokeArgs(), options.WithDefaults());
 
         /// <summary>
-        /// Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the 'referrer' filter. Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+        /// Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the 'referrer' filter, nor the 'nextCollectionId', 'nextItemSlug', 'nextPageId', 'previousCollectionId', 'previousItemSlug' and 'previousPageId' filter dimensions. Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
         /// </summary>
         public static Output<GetAnalyticsTopEventsResult> Invoke(GetAnalyticsTopEventsInvokeArgs args, InvokeOutputOptions options)
             => global::Pulumi.Deployment.Instance.Invoke<GetAnalyticsTopEventsResult>("webflow:index:getAnalyticsTopEvents", args ?? new GetAnalyticsTopEventsInvokeArgs(), options.WithDefaults());

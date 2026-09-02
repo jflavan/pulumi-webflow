@@ -71,7 +71,7 @@ export class CollectionItem extends pulumi.CustomResource {
      */
     declare public /*out*/ readonly lastUpdated: pulumi.Output<string | undefined>;
     /**
-     * Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+     * Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item.
      */
     declare public readonly live: pulumi.Output<boolean | undefined>;
 
@@ -144,7 +144,7 @@ export interface CollectionItemArgs {
      */
     isDraft?: pulumi.Input<boolean | undefined>;
     /**
-     * Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+     * Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item.
      */
     live?: pulumi.Input<boolean | undefined>;
 }

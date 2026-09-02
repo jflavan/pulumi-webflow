@@ -39,7 +39,7 @@ export class RobotsTxt extends pulumi.CustomResource {
      */
     declare public readonly content: pulumi.Output<string>;
     /**
-     * RFC3339 timestamp of the last modification.
+     * RFC3339 timestamp of the last modification made through this provider. The Webflow API does not report one, so the provider records the time of its last successful write.
      */
     declare public /*out*/ readonly lastModified: pulumi.Output<string>;
     /**

@@ -14,7 +14,7 @@ import java.util.Optional;
 import javax.annotation.Nullable;
 
 /**
- * Manages CMS collections for a Webflow site. Collections are containers for structured content items (blog posts, products, etc.). Note: Webflow collections do not support updates - any changes require replacement (delete + recreate).
+ * Manages CMS collections for a Webflow site. Collections are containers for structured content items (blog posts, products, etc.). displayName, singularName and slug are updated in place (PATCH /v2/collections/{collection_id}); changing siteId requires replacement (delete + recreate).
  * 
  */
 @ResourceType(type="webflow:index:Collection")
@@ -104,14 +104,14 @@ public class Collection extends com.pulumi.resources.CustomResource {
         return this.siteId;
     }
     /**
-     * The URL-friendly slug for the collection (optional, e.g., &#39;blog-posts&#39;, &#39;products&#39;). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation.
+     * The URL-friendly slug for the collection (optional, e.g., &#39;blog-posts&#39;, &#39;products&#39;). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items; changing an explicit slug updates the collection in place, which changes the URLs of its items.
      * 
      */
     @Export(name="slug", refs={String.class}, tree="[0]")
     private Output</* @Nullable */ String> slug;
 
     /**
-     * @return The URL-friendly slug for the collection (optional, e.g., &#39;blog-posts&#39;, &#39;products&#39;). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items and cannot be changed after creation.
+     * @return The URL-friendly slug for the collection (optional, e.g., &#39;blog-posts&#39;, &#39;products&#39;). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items; changing an explicit slug updates the collection in place, which changes the URLs of its items.
      * 
      */
     public Output<Optional<String>> slug() {

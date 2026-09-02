@@ -31,13 +31,13 @@ class SiteArgs:
         The set of arguments for constructing a Site resource.
 
         :param pulumi.Input[_builtins.str] display_name: The human-readable name of the site as shown in the Webflow dashboard. Required - must be a non-empty string. Examples: 'My Marketing Site', 'Company Blog', 'Product Landing Page'. This is the name users will see when managing the site.
-        :param pulumi.Input[_builtins.str] workspace_id: The Webflow workspace ID where the site will be created. Required for site creation (Enterprise workspace required by Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings > Workspace.
-        :param pulumi.Input[_builtins.str] parent_folder_id: The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
+        :param pulumi.Input[_builtins.str] workspace_id: The Webflow workspace ID where the site will be created (24-character lowercase hexadecimal string). Required for site creation (Enterprise workspace and the `workspace:write` scope are required by the Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings > Workspace. Changing this value replaces the site.
+        :param pulumi.Input[_builtins.str] parent_folder_id: The folder ID where the site will be organized in the Webflow dashboard (24-character lowercase hexadecimal string). Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
         :param pulumi.Input[_builtins.bool] publish: Automatically publish the site after creation or updates. When set to true, the provider calls the Webflow publish endpoint after successfully creating or updating the site, using `publishToWebflowSubdomain`, `publishCustomDomains` and `publishPageId` to build the publish request. If neither `publishToWebflowSubdomain` nor `publishCustomDomains` is set, the site is published to its webflow.io subdomain. Default: false (manual publishing required). If publishing fails, the operation fails with an error (the site may exist but Pulumi will report failure).
         :param pulumi.Input[Sequence[pulumi.Input[_builtins.str]]] publish_custom_domains: When `publish` is true, the list of custom domain IDs (not host names) to publish to. Maps to the `customDomains` field of the Webflow publish endpoint. Custom domain IDs can be read from the Webflow site settings or the sites API.
-        :param pulumi.Input[_builtins.str] publish_page_id: When `publish` is true, publish only the page with this ID instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
+        :param pulumi.Input[_builtins.str] publish_page_id: When `publish` is true, publish only the page with this ID (24-character lowercase hexadecimal string) instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
         :param pulumi.Input[_builtins.bool] publish_to_webflow_subdomain: When `publish` is true, publish to the site's default webflow.io subdomain. Maps to the `publishToWebflowSubdomain` field of the Webflow publish endpoint. Default: false.
-        :param pulumi.Input[_builtins.str] template_name: The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **WARNING: This field is IMMUTABLE.** Once set, it cannot be changed. Changing this value will trigger a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement.
+        :param pulumi.Input[_builtins.str] template_name: The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **This value only affects creation.** The Webflow API does not report which template a site was created from, so it cannot be read back: after `pulumi import` the state holds no templateName, and adding one to the program later does not change or replace the site. **WARNING:** changing from one non-empty template to a different non-empty template triggers a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement.
         """
         pulumi.set(__self__, "display_name", display_name)
         pulumi.set(__self__, "workspace_id", workspace_id)
@@ -70,7 +70,7 @@ class SiteArgs:
     @pulumi.getter(name="workspaceId")
     def workspace_id(self) -> pulumi.Input[_builtins.str]:
         """
-        The Webflow workspace ID where the site will be created. Required for site creation (Enterprise workspace required by Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings > Workspace.
+        The Webflow workspace ID where the site will be created (24-character lowercase hexadecimal string). Required for site creation (Enterprise workspace and the `workspace:write` scope are required by the Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings > Workspace. Changing this value replaces the site.
         """
         return pulumi.get(self, "workspace_id")
 
@@ -82,7 +82,7 @@ class SiteArgs:
     @pulumi.getter(name="parentFolderId")
     def parent_folder_id(self) -> pulumi.Input[Optional[_builtins.str]]:
         """
-        The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
+        The folder ID where the site will be organized in the Webflow dashboard (24-character lowercase hexadecimal string). Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
         """
         return pulumi.get(self, "parent_folder_id")
 
@@ -118,7 +118,7 @@ class SiteArgs:
     @pulumi.getter(name="publishPageId")
     def publish_page_id(self) -> pulumi.Input[Optional[_builtins.str]]:
         """
-        When `publish` is true, publish only the page with this ID instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
+        When `publish` is true, publish only the page with this ID (24-character lowercase hexadecimal string) instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
         """
         return pulumi.get(self, "publish_page_id")
 
@@ -142,7 +142,7 @@ class SiteArgs:
     @pulumi.getter(name="templateName")
     def template_name(self) -> pulumi.Input[Optional[_builtins.str]]:
         """
-        The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **WARNING: This field is IMMUTABLE.** Once set, it cannot be changed. Changing this value will trigger a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement.
+        The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **This value only affects creation.** The Webflow API does not report which template a site was created from, so it cannot be read back: after `pulumi import` the state holds no templateName, and adding one to the program later does not change or replace the site. **WARNING:** changing from one non-empty template to a different non-empty template triggers a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement.
         """
         return pulumi.get(self, "template_name")
 
@@ -169,16 +169,20 @@ class Site(pulumi.CustomResource):
         """
         Manages Webflow sites programmatically. This resource allows you to create, configure, and manage Webflow sites through infrastructure code. Create, Read, Update, and Delete operations are fully supported for complete site lifecycle management.
 
+        **Required scopes:** creating a site (POST /v2/workspaces/{workspace_id}/sites) requires the `workspace:write` scope and an Enterprise workspace; reading a site requires `sites:read`; updating, publishing and deleting a site require `sites:write`.
+
+        **Import:** `pulumi import webflow:index:Site my-site <siteId>`. The Webflow API does not report the template a site was created from, so `templateName` is empty after import and only affects creation; it is compared only when both the program and the state hold a value.
+
         :param str resource_name: The name of the resource.
         :param pulumi.ResourceOptions opts: Options for the resource.
         :param pulumi.Input[_builtins.str] display_name: The human-readable name of the site as shown in the Webflow dashboard. Required - must be a non-empty string. Examples: 'My Marketing Site', 'Company Blog', 'Product Landing Page'. This is the name users will see when managing the site.
-        :param pulumi.Input[_builtins.str] parent_folder_id: The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
+        :param pulumi.Input[_builtins.str] parent_folder_id: The folder ID where the site will be organized in the Webflow dashboard (24-character lowercase hexadecimal string). Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
         :param pulumi.Input[_builtins.bool] publish: Automatically publish the site after creation or updates. When set to true, the provider calls the Webflow publish endpoint after successfully creating or updating the site, using `publishToWebflowSubdomain`, `publishCustomDomains` and `publishPageId` to build the publish request. If neither `publishToWebflowSubdomain` nor `publishCustomDomains` is set, the site is published to its webflow.io subdomain. Default: false (manual publishing required). If publishing fails, the operation fails with an error (the site may exist but Pulumi will report failure).
         :param pulumi.Input[Sequence[pulumi.Input[_builtins.str]]] publish_custom_domains: When `publish` is true, the list of custom domain IDs (not host names) to publish to. Maps to the `customDomains` field of the Webflow publish endpoint. Custom domain IDs can be read from the Webflow site settings or the sites API.
-        :param pulumi.Input[_builtins.str] publish_page_id: When `publish` is true, publish only the page with this ID instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
+        :param pulumi.Input[_builtins.str] publish_page_id: When `publish` is true, publish only the page with this ID (24-character lowercase hexadecimal string) instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
         :param pulumi.Input[_builtins.bool] publish_to_webflow_subdomain: When `publish` is true, publish to the site's default webflow.io subdomain. Maps to the `publishToWebflowSubdomain` field of the Webflow publish endpoint. Default: false.
-        :param pulumi.Input[_builtins.str] template_name: The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **WARNING: This field is IMMUTABLE.** Once set, it cannot be changed. Changing this value will trigger a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement.
-        :param pulumi.Input[_builtins.str] workspace_id: The Webflow workspace ID where the site will be created. Required for site creation (Enterprise workspace required by Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings > Workspace.
+        :param pulumi.Input[_builtins.str] template_name: The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **This value only affects creation.** The Webflow API does not report which template a site was created from, so it cannot be read back: after `pulumi import` the state holds no templateName, and adding one to the program later does not change or replace the site. **WARNING:** changing from one non-empty template to a different non-empty template triggers a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement.
+        :param pulumi.Input[_builtins.str] workspace_id: The Webflow workspace ID where the site will be created (24-character lowercase hexadecimal string). Required for site creation (Enterprise workspace and the `workspace:write` scope are required by the Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings > Workspace. Changing this value replaces the site.
         """
         ...
     @overload
@@ -188,6 +192,10 @@ class Site(pulumi.CustomResource):
                  opts: Optional[pulumi.ResourceOptions] = None):
         """
         Manages Webflow sites programmatically. This resource allows you to create, configure, and manage Webflow sites through infrastructure code. Create, Read, Update, and Delete operations are fully supported for complete site lifecycle management.
+
+        **Required scopes:** creating a site (POST /v2/workspaces/{workspace_id}/sites) requires the `workspace:write` scope and an Enterprise workspace; reading a site requires `sites:read`; updating, publishing and deleting a site require `sites:write`.
+
+        **Import:** `pulumi import webflow:index:Site my-site <siteId>`. The Webflow API does not report the template a site was created from, so `templateName` is empty after import and only affects creation; it is compared only when both the program and the state hold a value.
 
         :param str resource_name: The name of the resource.
         :param SiteArgs args: The arguments to use to populate this resource's properties.
@@ -335,7 +343,7 @@ class Site(pulumi.CustomResource):
     @pulumi.getter(name="parentFolderId")
     def parent_folder_id(self) -> pulumi.Output[Optional[_builtins.str]]:
         """
-        The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
+        The folder ID where the site will be organized in the Webflow dashboard (24-character lowercase hexadecimal string). Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
         """
         return pulumi.get(self, "parent_folder_id")
 
@@ -367,7 +375,7 @@ class Site(pulumi.CustomResource):
     @pulumi.getter(name="publishPageId")
     def publish_page_id(self) -> pulumi.Output[Optional[_builtins.str]]:
         """
-        When `publish` is true, publish only the page with this ID instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
+        When `publish` is true, publish only the page with this ID (24-character lowercase hexadecimal string) instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
         """
         return pulumi.get(self, "publish_page_id")
 
@@ -399,7 +407,7 @@ class Site(pulumi.CustomResource):
     @pulumi.getter(name="templateName")
     def template_name(self) -> pulumi.Output[Optional[_builtins.str]]:
         """
-        The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **WARNING: This field is IMMUTABLE.** Once set, it cannot be changed. Changing this value will trigger a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement.
+        The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **This value only affects creation.** The Webflow API does not report which template a site was created from, so it cannot be read back: after `pulumi import` the state holds no templateName, and adding one to the program later does not change or replace the site. **WARNING:** changing from one non-empty template to a different non-empty template triggers a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement.
         """
         return pulumi.get(self, "template_name")
 
@@ -415,7 +423,7 @@ class Site(pulumi.CustomResource):
     @pulumi.getter(name="workspaceId")
     def workspace_id(self) -> pulumi.Output[_builtins.str]:
         """
-        The Webflow workspace ID where the site will be created. Required for site creation (Enterprise workspace required by Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings > Workspace.
+        The Webflow workspace ID where the site will be created (24-character lowercase hexadecimal string). Required for site creation (Enterprise workspace and the `workspace:write` scope are required by the Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings > Workspace. Changing this value replaces the site.
         """
         return pulumi.get(self, "workspace_id")
 

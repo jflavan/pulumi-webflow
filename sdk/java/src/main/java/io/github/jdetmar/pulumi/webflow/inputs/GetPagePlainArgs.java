@@ -5,7 +5,6 @@ package io.github.jdetmar.pulumi.webflow.inputs;
 
 import com.pulumi.core.annotations.Import;
 import com.pulumi.exceptions.MissingRequiredPropertyException;
-import java.lang.Boolean;
 import java.lang.String;
 import java.util.Objects;
 import java.util.Optional;
@@ -47,17 +46,17 @@ public final class GetPagePlainArgs extends com.pulumi.resources.InvokeArgs {
     }
 
     /**
-     * When true, adds ?translatable=true so the secondary locale&#39;s translation content is returned instead of content inherited from the primary locale.
+     * Optional ID of the secondary locale you are translating into (24-character lowercase hexadecimal string), sent verbatim as ?translatable=&lt;localeId&gt; to return the page&#39;s translatable content for that locale. Webflow returns a 400 error when this is the primary locale ID or any other value, and a 403 error when translation exclusions are not enabled for the site.
      * 
      */
     @Import(name="translatable")
-    private @Nullable Boolean translatable;
+    private @Nullable String translatable;
 
     /**
-     * @return When true, adds ?translatable=true so the secondary locale&#39;s translation content is returned instead of content inherited from the primary locale.
+     * @return Optional ID of the secondary locale you are translating into (24-character lowercase hexadecimal string), sent verbatim as ?translatable=&lt;localeId&gt; to return the page&#39;s translatable content for that locale. Webflow returns a 400 error when this is the primary locale ID or any other value, and a 403 error when translation exclusions are not enabled for the site.
      * 
      */
-    public Optional<Boolean> translatable() {
+    public Optional<String> translatable() {
         return Optional.ofNullable(this.translatable);
     }
 
@@ -110,12 +109,12 @@ public final class GetPagePlainArgs extends com.pulumi.resources.InvokeArgs {
         }
 
         /**
-         * @param translatable When true, adds ?translatable=true so the secondary locale&#39;s translation content is returned instead of content inherited from the primary locale.
+         * @param translatable Optional ID of the secondary locale you are translating into (24-character lowercase hexadecimal string), sent verbatim as ?translatable=&lt;localeId&gt; to return the page&#39;s translatable content for that locale. Webflow returns a 400 error when this is the primary locale ID or any other value, and a 403 error when translation exclusions are not enabled for the site.
          * 
          * @return builder
          * 
          */
-        public Builder translatable(@Nullable Boolean translatable) {
+        public Builder translatable(@Nullable String translatable) {
             $.translatable = translatable;
             return this;
         }

@@ -100,11 +100,11 @@ export interface CustomScriptArgsArgs {
 
 export interface NodeContentUpdateArgs {
     /**
-     * The unique identifier for the DOM node to update. Retrieve node IDs using GET /pages/{page_id}/dom.
+     * The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
      */
     nodeId: pulumi.Input<string>;
     /**
-     * The new text content for the node (HTML is allowed). An empty string clears the node's text.
+     * The new HTML content for the node (required, non-empty). The HTML tags must match the node's current content as returned by GET /v2/pages/{page_id}/dom (e.g., '<h1>Hello</h1>' for a heading). An empty string does not clear the node; Webflow rejects it.
      */
     text: pulumi.Input<string>;
 }

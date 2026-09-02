@@ -95,16 +95,24 @@ public final class CollectionFieldArgs extends com.pulumi.resources.ResourceArgs
     }
 
     /**
-     * The URL-friendly slug for the field (optional, e.g., &#39;title&#39;, &#39;description&#39;). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the outputs without causing a diff. The slug is used in API requests and exports and cannot be changed after creation - changing an explicit slug requires replacement.
+     * Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.
+     * 
+     * @deprecated
+     * The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs.
      * 
      */
+    @Deprecated /* The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs. */
     @Import(name="slug")
     private @Nullable Output<String> slug;
 
     /**
-     * @return The URL-friendly slug for the field (optional, e.g., &#39;title&#39;, &#39;description&#39;). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the outputs without causing a diff. The slug is used in API requests and exports and cannot be changed after creation - changing an explicit slug requires replacement.
+     * @return Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.
+     * 
+     * @deprecated
+     * The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs.
      * 
      */
+    @Deprecated /* The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs. */
     public Optional<Output<String>> slug() {
         return Optional.ofNullable(this.slug);
     }
@@ -125,16 +133,24 @@ public final class CollectionFieldArgs extends com.pulumi.resources.ResourceArgs
     }
 
     /**
-     * Type-specific validation rules (optional, create-only). Different field types support different validations. Example for Number type: {&#34;min&#34;: 0, &#34;max&#34;: 100}. Example for PlainText type: {&#34;maxLength&#34;: 500}. Changing validations requires replacement. Refer to Webflow API documentation for validation options for each field type.
+     * Deprecated: the Webflow API does not accept validations when creating a field (&#34;field validation is currently not available through the API&#34;). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.
+     * 
+     * @deprecated
+     * The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs.
      * 
      */
+    @Deprecated /* The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs. */
     @Import(name="validations")
     private @Nullable Output<Map<String,Object>> validations;
 
     /**
-     * @return Type-specific validation rules (optional, create-only). Different field types support different validations. Example for Number type: {&#34;min&#34;: 0, &#34;max&#34;: 100}. Example for PlainText type: {&#34;maxLength&#34;: 500}. Changing validations requires replacement. Refer to Webflow API documentation for validation options for each field type.
+     * @return Deprecated: the Webflow API does not accept validations when creating a field (&#34;field validation is currently not available through the API&#34;). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.
+     * 
+     * @deprecated
+     * The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs.
      * 
      */
+    @Deprecated /* The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs. */
     public Optional<Output<Map<String,Object>>> validations() {
         return Optional.ofNullable(this.validations);
     }
@@ -276,22 +292,30 @@ public final class CollectionFieldArgs extends com.pulumi.resources.ResourceArgs
         }
 
         /**
-         * @param slug The URL-friendly slug for the field (optional, e.g., &#39;title&#39;, &#39;description&#39;). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the outputs without causing a diff. The slug is used in API requests and exports and cannot be changed after creation - changing an explicit slug requires replacement.
+         * @param slug Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.
          * 
          * @return builder
          * 
+         * @deprecated
+         * The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs.
+         * 
          */
+        @Deprecated /* The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs. */
         public Builder slug(@Nullable Output<String> slug) {
             $.slug = slug;
             return this;
         }
 
         /**
-         * @param slug The URL-friendly slug for the field (optional, e.g., &#39;title&#39;, &#39;description&#39;). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the outputs without causing a diff. The slug is used in API requests and exports and cannot be changed after creation - changing an explicit slug requires replacement.
+         * @param slug Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.
          * 
          * @return builder
          * 
+         * @deprecated
+         * The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs.
+         * 
          */
+        @Deprecated /* The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs. */
         public Builder slug(String slug) {
             return slug(Output.of(slug));
         }
@@ -318,22 +342,30 @@ public final class CollectionFieldArgs extends com.pulumi.resources.ResourceArgs
         }
 
         /**
-         * @param validations Type-specific validation rules (optional, create-only). Different field types support different validations. Example for Number type: {&#34;min&#34;: 0, &#34;max&#34;: 100}. Example for PlainText type: {&#34;maxLength&#34;: 500}. Changing validations requires replacement. Refer to Webflow API documentation for validation options for each field type.
+         * @param validations Deprecated: the Webflow API does not accept validations when creating a field (&#34;field validation is currently not available through the API&#34;). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.
          * 
          * @return builder
          * 
+         * @deprecated
+         * The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs.
+         * 
          */
+        @Deprecated /* The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs. */
         public Builder validations(@Nullable Output<Map<String,Object>> validations) {
             $.validations = validations;
             return this;
         }
 
         /**
-         * @param validations Type-specific validation rules (optional, create-only). Different field types support different validations. Example for Number type: {&#34;min&#34;: 0, &#34;max&#34;: 100}. Example for PlainText type: {&#34;maxLength&#34;: 500}. Changing validations requires replacement. Refer to Webflow API documentation for validation options for each field type.
+         * @param validations Deprecated: the Webflow API does not accept validations when creating a field (&#34;field validation is currently not available through the API&#34;). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.
          * 
          * @return builder
          * 
+         * @deprecated
+         * The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs.
+         * 
          */
+        @Deprecated /* The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs. */
         public Builder validations(Map<String,Object> validations) {
             return validations(Output.of(validations));
         }

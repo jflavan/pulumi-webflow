@@ -18,7 +18,7 @@ type RobotsTxt struct {
 
 	// The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives. Comments and other directives are not stored by Webflow and are dropped with a warning. Formatting differences (blank lines, spacing, directive casing) do not cause a diff.
 	Content pulumi.StringOutput `pulumi:"content"`
-	// RFC3339 timestamp of the last modification.
+	// RFC3339 timestamp of the last modification made through this provider. The Webflow API does not report one, so the provider records the time of its last successful write.
 	LastModified pulumi.StringOutput `pulumi:"lastModified"`
 	// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3').
 	SiteId pulumi.StringOutput `pulumi:"siteId"`
@@ -126,7 +126,7 @@ func (o RobotsTxtOutput) Content() pulumi.StringOutput {
 	return o.ApplyT(func(v *RobotsTxt) pulumi.StringOutput { return v.Content }).(pulumi.StringOutput)
 }
 
-// RFC3339 timestamp of the last modification.
+// RFC3339 timestamp of the last modification made through this provider. The Webflow API does not report one, so the provider records the time of its last successful write.
 func (o RobotsTxtOutput) LastModified() pulumi.StringOutput {
 	return o.ApplyT(func(v *RobotsTxt) pulumi.StringOutput { return v.LastModified }).(pulumi.StringOutput)
 }

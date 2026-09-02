@@ -12,7 +12,11 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-// Manages custom code scripts in the Webflow script registry. This resource allows you to register and manage externally hosted scripts that can be deployed across your Webflow site with version control and integrity verification.
+// Registers an externally hosted script in a Webflow site's script registry (POST /v2/sites/{site_id}/registered_scripts/hosted). Registered scripts are applied to a site or page with the SiteCustomCode and PageCustomCode resources. scriptVersion is required: the register endpoint rejects requests without one.
+//
+// **Authentication:** this resource calls Webflow custom code endpoints, which require an OAuth Data Client app token with the `custom_code:read` and `custom_code:write` scopes. Webflow documents that these scopes are available only to Data Client apps: site API tokens cannot access custom code endpoints.
+//
+// **IMPORTANT LIMITATION:** Webflow has no endpoint to update or unregister a registered script. Registrations are versioned and permanent (a site can hold up to 800). Changing displayName, hostedLocation, integrityHash, scriptVersion or canCopy therefore registers a new script (a new version when only scriptVersion changes) and the previous registration remains in the registry. Destroying the resource is a logged no-op: the script stays registered and Pulumi simply stops managing it. Applied code is removed by SiteCustomCode and PageCustomCode.
 type RegisteredScript struct {
 	pulumi.CustomResourceState
 
@@ -20,7 +24,7 @@ type RegisteredScript struct {
 	CanCopy pulumi.BoolPtrOutput `pulumi:"canCopy"`
 	// The timestamp when the script was created (RFC3339 format). This is automatically set by Webflow when the script is created and is read-only.
 	CreatedOn pulumi.StringPtrOutput `pulumi:"createdOn"`
-	// The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'.
+	// The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'.
 	DisplayName pulumi.StringOutput `pulumi:"displayName"`
 	// The URI for the externally hosted script (e.g., 'https://cdn.example.com/my-script.js'). Must be a valid HTTP or HTTPS URL. The script should be publicly accessible and properly configured for cross-origin requests.
 	HostedLocation pulumi.StringOutput `pulumi:"hostedLocation"`
@@ -30,8 +34,8 @@ type RegisteredScript struct {
 	LastUpdated pulumi.StringPtrOutput `pulumi:"lastUpdated"`
 	// The Webflow-assigned script ID (read-only). This is typically the lowercase version of displayName. Use this value when referencing the script in SiteCustomCode or PageCustomCode resources.
 	ScriptId pulumi.StringOutput `pulumi:"scriptId"`
-	// The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
-	ScriptVersion pulumi.StringPtrOutput `pulumi:"scriptVersion"`
+	// The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning.
+	ScriptVersion pulumi.StringOutput `pulumi:"scriptVersion"`
 	// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
 	SiteId pulumi.StringOutput `pulumi:"siteId"`
 }
@@ -51,6 +55,9 @@ func NewRegisteredScript(ctx *pulumi.Context,
 	}
 	if args.IntegrityHash == nil {
 		return nil, errors.New("invalid value for required argument 'IntegrityHash'")
+	}
+	if args.ScriptVersion == nil {
+		return nil, errors.New("invalid value for required argument 'ScriptVersion'")
 	}
 	if args.SiteId == nil {
 		return nil, errors.New("invalid value for required argument 'SiteId'")
@@ -90,14 +97,14 @@ func (RegisteredScriptState) ElementType() reflect.Type {
 type registeredScriptArgs struct {
 	// Indicates whether the script can be copied when the site is duplicated. Default: false. When true, the script will be included when creating a copy of the site.
 	CanCopy *bool `pulumi:"canCopy"`
-	// The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'.
+	// The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'.
 	DisplayName string `pulumi:"displayName"`
 	// The URI for the externally hosted script (e.g., 'https://cdn.example.com/my-script.js'). Must be a valid HTTP or HTTPS URL. The script should be publicly accessible and properly configured for cross-origin requests.
 	HostedLocation string `pulumi:"hostedLocation"`
 	// The Sub-Resource Integrity (SRI) hash for the script. Format: 'sha384-<hash>', 'sha256-<hash>', or 'sha512-<hash>'. SRI hashes help ensure that the script hasn't been modified in transit. You can generate an SRI hash using https://www.srihash.org/
 	IntegrityHash string `pulumi:"integrityHash"`
-	// The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
-	ScriptVersion *string `pulumi:"scriptVersion"`
+	// The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning.
+	ScriptVersion string `pulumi:"scriptVersion"`
 	// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
 	SiteId string `pulumi:"siteId"`
 }
@@ -106,14 +113,14 @@ type registeredScriptArgs struct {
 type RegisteredScriptArgs struct {
 	// Indicates whether the script can be copied when the site is duplicated. Default: false. When true, the script will be included when creating a copy of the site.
 	CanCopy pulumi.BoolPtrInput
-	// The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'.
+	// The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'.
 	DisplayName pulumi.StringInput
 	// The URI for the externally hosted script (e.g., 'https://cdn.example.com/my-script.js'). Must be a valid HTTP or HTTPS URL. The script should be publicly accessible and properly configured for cross-origin requests.
 	HostedLocation pulumi.StringInput
 	// The Sub-Resource Integrity (SRI) hash for the script. Format: 'sha384-<hash>', 'sha256-<hash>', or 'sha512-<hash>'. SRI hashes help ensure that the script hasn't been modified in transit. You can generate an SRI hash using https://www.srihash.org/
 	IntegrityHash pulumi.StringInput
-	// The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
-	ScriptVersion pulumi.StringPtrInput
+	// The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning.
+	ScriptVersion pulumi.StringInput
 	// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
 	SiteId pulumi.StringInput
 }
@@ -165,7 +172,7 @@ func (o RegisteredScriptOutput) CreatedOn() pulumi.StringPtrOutput {
 	return o.ApplyT(func(v *RegisteredScript) pulumi.StringPtrOutput { return v.CreatedOn }).(pulumi.StringPtrOutput)
 }
 
-// The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'.
+// The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'.
 func (o RegisteredScriptOutput) DisplayName() pulumi.StringOutput {
 	return o.ApplyT(func(v *RegisteredScript) pulumi.StringOutput { return v.DisplayName }).(pulumi.StringOutput)
 }
@@ -190,9 +197,9 @@ func (o RegisteredScriptOutput) ScriptId() pulumi.StringOutput {
 	return o.ApplyT(func(v *RegisteredScript) pulumi.StringOutput { return v.ScriptId }).(pulumi.StringOutput)
 }
 
-// The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
-func (o RegisteredScriptOutput) ScriptVersion() pulumi.StringPtrOutput {
-	return o.ApplyT(func(v *RegisteredScript) pulumi.StringPtrOutput { return v.ScriptVersion }).(pulumi.StringPtrOutput)
+// The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning.
+func (o RegisteredScriptOutput) ScriptVersion() pulumi.StringOutput {
+	return o.ApplyT(func(v *RegisteredScript) pulumi.StringOutput { return v.ScriptVersion }).(pulumi.StringOutput)
 }
 
 // The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.

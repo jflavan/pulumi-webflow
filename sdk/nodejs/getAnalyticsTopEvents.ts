@@ -7,7 +7,7 @@ import * as outputs from "./types/output";
 import * as utilities from "./utilities";
 
 /**
- * Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the 'referrer' filter. Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+ * Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the 'referrer' filter, nor the 'nextCollectionId', 'nextItemSlug', 'nextPageId', 'previousCollectionId', 'previousItemSlug' and 'previousPageId' filter dimensions. Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
  */
 export function getAnalyticsTopEvents(args: GetAnalyticsTopEventsArgs, opts?: pulumi.InvokeOptions): Promise<GetAnalyticsTopEventsResult> {
     opts = pulumi.mergeOptions(utilities.resourceOptsDefaults(), opts || {});
@@ -120,7 +120,7 @@ export interface GetAnalyticsTopEventsResult {
     readonly window: outputs.AnalyticsWindow;
 }
 /**
- * Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the 'referrer' filter. Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+ * Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the 'referrer' filter, nor the 'nextCollectionId', 'nextItemSlug', 'nextPageId', 'previousCollectionId', 'previousItemSlug' and 'previousPageId' filter dimensions. Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
  */
 export function getAnalyticsTopEventsOutput(args: GetAnalyticsTopEventsOutputArgs, opts?: pulumi.InvokeOutputOptions): pulumi.Output<GetAnalyticsTopEventsResult> {
     opts = pulumi.mergeOptions(utilities.resourceOptsDefaults(), opts || {});

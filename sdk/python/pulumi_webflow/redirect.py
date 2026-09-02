@@ -22,19 +22,23 @@ class RedirectArgs:
                  destination_path: pulumi.Input[_builtins.str],
                  site_id: pulumi.Input[_builtins.str],
                  source_path: pulumi.Input[_builtins.str],
-                 status_code: pulumi.Input[_builtins.int]):
+                 status_code: pulumi.Input[Optional[_builtins.int]] = None):
         """
         The set of arguments for constructing a Redirect resource.
 
         :param pulumi.Input[_builtins.str] destination_path: The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
         :param pulumi.Input[_builtins.str] source_path: The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
-        :param pulumi.Input[_builtins.int] status_code: The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
+        :param pulumi.Input[_builtins.int] status_code: Deprecated and ignored. Webflow redirects are always 301 (permanent) redirects: the redirect API object is {id, fromUrl, toUrl} and has no status code, so this value is never sent to Webflow, never validated and never produces a diff. Remove it from your program; it only remains for backwards compatibility.
         """
         pulumi.set(__self__, "destination_path", destination_path)
         pulumi.set(__self__, "site_id", site_id)
         pulumi.set(__self__, "source_path", source_path)
-        pulumi.set(__self__, "status_code", status_code)
+        if status_code is not None:
+            warnings.warn("""Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version.""", DeprecationWarning)
+            pulumi.log.warn("""status_code is deprecated: Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version.""")
+        if status_code is not None:
+            pulumi.set(__self__, "status_code", status_code)
 
     @_builtins.property
     @pulumi.getter(name="destinationPath")
@@ -74,14 +78,15 @@ class RedirectArgs:
 
     @_builtins.property
     @pulumi.getter(name="statusCode")
-    def status_code(self) -> pulumi.Input[_builtins.int]:
+    @_utilities.deprecated("""Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version.""")
+    def status_code(self) -> pulumi.Input[Optional[_builtins.int]]:
         """
-        The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
+        Deprecated and ignored. Webflow redirects are always 301 (permanent) redirects: the redirect API object is {id, fromUrl, toUrl} and has no status code, so this value is never sent to Webflow, never validated and never produces a diff. Remove it from your program; it only remains for backwards compatibility.
         """
         return pulumi.get(self, "status_code")
 
     @status_code.setter
-    def status_code(self, value: pulumi.Input[_builtins.int]):
+    def status_code(self, value: pulumi.Input[Optional[_builtins.int]]):
         pulumi.set(self, "status_code", value)
 
 
@@ -97,14 +102,14 @@ class Redirect(pulumi.CustomResource):
                  status_code: pulumi.Input[Optional[_builtins.int]] = None,
                  __props__=None):
         """
-        Manages HTTP redirects for a Webflow site. This resource allows you to define redirect rules for old URLs to new locations, supporting both permanent (301) and temporary (302) redirects.
+        Manages HTTP redirects for a Webflow site (POST/PATCH/DELETE /v2/sites/{site_id}/redirects, scope sites:write; GET requires sites:read). Webflow redirects are always permanent (301) redirects from one site path to another; the API does not support other status codes. Changing `sourcePath` replaces the redirect; changing `destinationPath` updates it in place.
 
         :param str resource_name: The name of the resource.
         :param pulumi.ResourceOptions opts: Options for the resource.
         :param pulumi.Input[_builtins.str] destination_path: The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
         :param pulumi.Input[_builtins.str] source_path: The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
-        :param pulumi.Input[_builtins.int] status_code: The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
+        :param pulumi.Input[_builtins.int] status_code: Deprecated and ignored. Webflow redirects are always 301 (permanent) redirects: the redirect API object is {id, fromUrl, toUrl} and has no status code, so this value is never sent to Webflow, never validated and never produces a diff. Remove it from your program; it only remains for backwards compatibility.
         """
         ...
     @overload
@@ -113,7 +118,7 @@ class Redirect(pulumi.CustomResource):
                  args: RedirectArgs,
                  opts: Optional[pulumi.ResourceOptions] = None):
         """
-        Manages HTTP redirects for a Webflow site. This resource allows you to define redirect rules for old URLs to new locations, supporting both permanent (301) and temporary (302) redirects.
+        Manages HTTP redirects for a Webflow site (POST/PATCH/DELETE /v2/sites/{site_id}/redirects, scope sites:write; GET requires sites:read). Webflow redirects are always permanent (301) redirects from one site path to another; the API does not support other status codes. Changing `sourcePath` replaces the redirect; changing `destinationPath` updates it in place.
 
         :param str resource_name: The name of the resource.
         :param RedirectArgs args: The arguments to use to populate this resource's properties.
@@ -152,8 +157,6 @@ class Redirect(pulumi.CustomResource):
             if source_path is None and not opts.urn:
                 raise TypeError("Missing required property 'source_path'")
             __props__.__dict__["source_path"] = source_path
-            if status_code is None and not opts.urn:
-                raise TypeError("Missing required property 'status_code'")
             __props__.__dict__["status_code"] = status_code
             __props__.__dict__["created_on"] = None
         super(Redirect, __self__).__init__(
@@ -189,7 +192,7 @@ class Redirect(pulumi.CustomResource):
     @pulumi.getter(name="createdOn")
     def created_on(self) -> pulumi.Output[Optional[_builtins.str]]:
         """
-        The timestamp when the redirect was created (RFC3339 format), when reported by the Webflow API. Read-only; empty when the API does not return it.
+        The timestamp when the redirect was created (RFC3339 format), if the Webflow API reports it. The redirects API does not document this field, so it is normally empty. Read-only.
         """
         return pulumi.get(self, "created_on")
 
@@ -219,9 +222,10 @@ class Redirect(pulumi.CustomResource):
 
     @_builtins.property
     @pulumi.getter(name="statusCode")
-    def status_code(self) -> pulumi.Output[_builtins.int]:
+    @_utilities.deprecated("""Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version.""")
+    def status_code(self) -> pulumi.Output[Optional[_builtins.int]]:
         """
-        The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
+        Deprecated and ignored. Webflow redirects are always 301 (permanent) redirects: the redirect API object is {id, fromUrl, toUrl} and has no status code, so this value is never sent to Webflow, never validated and never produces a diff. Remove it from your program; it only remains for backwards compatibility.
         """
         return pulumi.get(self, "status_code")
 

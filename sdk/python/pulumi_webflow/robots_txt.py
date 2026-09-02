@@ -153,7 +153,7 @@ class RobotsTxt(pulumi.CustomResource):
     @pulumi.getter(name="lastModified")
     def last_modified(self) -> pulumi.Output[_builtins.str]:
         """
-        RFC3339 timestamp of the last modification.
+        RFC3339 timestamp of the last modification made through this provider. The Webflow API does not report one, so the provider records the time of its last successful write.
         """
         return pulumi.get(self, "last_modified")
 

@@ -125,7 +125,7 @@ def get_analytics_top_events(browser: Optional[_builtins.str] = None,
                              utm_source: Optional[_builtins.str] = None,
                              opts: Optional[pulumi.InvokeOptions] = None) -> AwaitableGetAnalyticsTopEventsResult:
     """
-    Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the 'referrer' filter. Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+    Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the 'referrer' filter, nor the 'nextCollectionId', 'nextItemSlug', 'nextPageId', 'previousCollectionId', 'previousItemSlug' and 'previousPageId' filter dimensions. Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
 
     :param _builtins.str browser: Restrict the report to a single browser name (e.g., 'Chrome').
     :param _builtins.str country: Restrict the report to a single country, as an ISO 3166-1 alpha-2 code (e.g., 'US'). Normalized to uppercase.
@@ -186,7 +186,7 @@ def get_analytics_top_events_output(browser: pulumi.Input[Optional[Optional[_bui
                                     utm_source: pulumi.Input[Optional[Optional[_builtins.str]]] = None,
                                     opts: Optional[Union[pulumi.InvokeOptions, pulumi.InvokeOutputOptions]] = None) -> pulumi.Output[GetAnalyticsTopEventsResult]:
     """
-    Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the 'referrer' filter. Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+    Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the 'referrer' filter, nor the 'nextCollectionId', 'nextItemSlug', 'nextPageId', 'previousCollectionId', 'previousItemSlug' and 'previousPageId' filter dimensions. Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
 
     :param _builtins.str browser: Restrict the report to a single browser name (e.g., 'Chrome').
     :param _builtins.str country: Restrict the report to a single country, as an ISO 3166-1 alpha-2 code (e.g., 'US'). Normalized to uppercase.

@@ -23,7 +23,7 @@ namespace Community.Pulumi.Webflow
         public Output<string> Content { get; private set; } = null!;
 
         /// <summary>
-        /// RFC3339 timestamp of the last modification.
+        /// RFC3339 timestamp of the last modification made through this provider. The Webflow API does not report one, so the provider records the time of its last successful write.
         /// </summary>
         [Output("lastModified")]
         public Output<string> LastModified { get; private set; } = null!;

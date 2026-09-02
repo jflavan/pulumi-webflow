@@ -149,14 +149,14 @@ public class CollectionItem extends com.pulumi.resources.CustomResource {
         return Codegen.optional(this.lastUpdated);
     }
     /**
-     * Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+     * Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item.
      * 
      */
     @Export(name="live", refs={Boolean.class}, tree="[0]")
     private Output</* @Nullable */ Boolean> live;
 
     /**
-     * @return Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+     * @return Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item.
      * 
      */
     public Output<Optional<Boolean>> live() {

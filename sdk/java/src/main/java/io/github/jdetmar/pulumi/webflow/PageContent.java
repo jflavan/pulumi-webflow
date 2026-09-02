@@ -12,54 +12,51 @@ import io.github.jdetmar.pulumi.webflow.Utilities;
 import io.github.jdetmar.pulumi.webflow.outputs.NodeContentUpdate;
 import java.lang.String;
 import java.util.List;
-import java.util.Optional;
 import javax.annotation.Nullable;
 
 /**
- * Manages static text content of a Webflow page (POST /v2/pages/{page_id}/dom). This resource updates text within existing DOM nodes; it does NOT manage page structure or layout. Find node IDs by fetching the page DOM (GET /v2/pages/{page_id}/dom). Set localeId to update a secondary locale; when omitted, Webflow targets the primary locale. Webflow reports per-node failures in the response; the update fails if any node was rejected.
- * 
- * **IMPORTANT LIMITATION:** This resource does NOT detect drift for content changed outside of Pulumi; refresh only verifies that the page still exists. Destroying the resource leaves the content in place.
+ * Manages the static text content of a Webflow page in a secondary locale (POST /v2/pages/{page_id}/dom?localeId=...). Webflow&#39;s Update Page Content endpoint only edits secondary locales: localeId is required and must be a valid secondary locale of the site, and the primary locale&#39;s content cannot be changed via the API. This resource updates the HTML of existing text nodes; it does NOT manage page structure or layout. Find node IDs by fetching the page DOM (GET /v2/pages/{page_id}/dom?localeId=...). Each node&#39;s text is required, and its HTML tags must match the node&#39;s current content; an empty text does not clear a node and is rejected. At most 1000 nodes may be updated per resource. Webflow reports per-node failures in the response; the update fails if any node was rejected. Refresh reads the current text of the managed nodes from the page DOM, so content changed outside of Pulumi shows up as drift. Import with the ID {pageId}/content/{localeId} to adopt every text node of the page. Destroying the resource leaves the content in place.
  * 
  */
 @ResourceType(type="webflow:index:PageContent")
 public class PageContent extends com.pulumi.resources.CustomResource {
     /**
-     * Optional locale ID to update a secondary locale. When omitted the localeId query parameter is not sent and Webflow updates the primary locale.
+     * The ID of the secondary locale to update (24-character lowercase hexadecimal string). Required: the Update Page Content endpoint only edits secondary locales, and Webflow rejects the request when the locale is the primary locale or not a locale of the site. Locale IDs are listed under Site Settings &gt; Localization or via the Get Site endpoint. Changing it replaces the resource.
      * 
      */
     @Export(name="localeId", refs={String.class}, tree="[0]")
-    private Output</* @Nullable */ String> localeId;
+    private Output<String> localeId;
 
     /**
-     * @return Optional locale ID to update a secondary locale. When omitted the localeId query parameter is not sent and Webflow updates the primary locale.
+     * @return The ID of the secondary locale to update (24-character lowercase hexadecimal string). Required: the Update Page Content endpoint only edits secondary locales, and Webflow rejects the request when the locale is the primary locale or not a locale of the site. Locale IDs are listed under Site Settings &gt; Localization or via the Get Site endpoint. Changing it replaces the resource.
      * 
      */
-    public Output<Optional<String>> localeId() {
-        return Codegen.optional(this.localeId);
+    public Output<String> localeId() {
+        return this.localeId;
     }
     /**
-     * List of node content updates to apply. Each entry names a nodeId from the page&#39;s DOM and the new text (HTML allowed). Node IDs must be unique within the list.
+     * List of node content updates to apply (1 to 1000 entries). Each entry names a nodeId from the page&#39;s DOM and the node&#39;s new HTML text. Node IDs must be unique within the list.
      * 
      */
     @Export(name="nodes", refs={List.class,NodeContentUpdate.class}, tree="[0,1]")
     private Output<List<NodeContentUpdate>> nodes;
 
     /**
-     * @return List of node content updates to apply. Each entry names a nodeId from the page&#39;s DOM and the new text (HTML allowed). Node IDs must be unique within the list.
+     * @return List of node content updates to apply (1 to 1000 entries). Each entry names a nodeId from the page&#39;s DOM and the node&#39;s new HTML text. Node IDs must be unique within the list.
      * 
      */
     public Output<List<NodeContentUpdate>> nodes() {
         return this.nodes;
     }
     /**
-     * The Webflow page ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c4&#39;). Use the getPages function to find page IDs.
+     * The Webflow page ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c4&#39;). Use the getPages function to find page IDs. Changing it replaces the resource.
      * 
      */
     @Export(name="pageId", refs={String.class}, tree="[0]")
     private Output<String> pageId;
 
     /**
-     * @return The Webflow page ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c4&#39;). Use the getPages function to find page IDs.
+     * @return The Webflow page ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c4&#39;). Use the getPages function to find page IDs. Changing it replaces the resource.
      * 
      */
     public Output<String> pageId() {

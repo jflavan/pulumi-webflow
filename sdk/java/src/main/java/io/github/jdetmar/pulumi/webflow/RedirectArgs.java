@@ -9,6 +9,8 @@ import com.pulumi.exceptions.MissingRequiredPropertyException;
 import java.lang.Integer;
 import java.lang.String;
 import java.util.Objects;
+import java.util.Optional;
+import javax.annotation.Nullable;
 
 
 public final class RedirectArgs extends com.pulumi.resources.ResourceArgs {
@@ -61,18 +63,26 @@ public final class RedirectArgs extends com.pulumi.resources.ResourceArgs {
     }
 
     /**
-     * The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
+     * Deprecated and ignored. Webflow redirects are always 301 (permanent) redirects: the redirect API object is {id, fromUrl, toUrl} and has no status code, so this value is never sent to Webflow, never validated and never produces a diff. Remove it from your program; it only remains for backwards compatibility.
+     * 
+     * @deprecated
+     * Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version.
      * 
      */
-    @Import(name="statusCode", required=true)
-    private Output<Integer> statusCode;
+    @Deprecated /* Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version. */
+    @Import(name="statusCode")
+    private @Nullable Output<Integer> statusCode;
 
     /**
-     * @return The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
+     * @return Deprecated and ignored. Webflow redirects are always 301 (permanent) redirects: the redirect API object is {id, fromUrl, toUrl} and has no status code, so this value is never sent to Webflow, never validated and never produces a diff. Remove it from your program; it only remains for backwards compatibility.
+     * 
+     * @deprecated
+     * Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version.
      * 
      */
-    public Output<Integer> statusCode() {
-        return this.statusCode;
+    @Deprecated /* Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version. */
+    public Optional<Output<Integer>> statusCode() {
+        return Optional.ofNullable(this.statusCode);
     }
 
     private RedirectArgs() {}
@@ -166,22 +176,30 @@ public final class RedirectArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param statusCode The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
+         * @param statusCode Deprecated and ignored. Webflow redirects are always 301 (permanent) redirects: the redirect API object is {id, fromUrl, toUrl} and has no status code, so this value is never sent to Webflow, never validated and never produces a diff. Remove it from your program; it only remains for backwards compatibility.
          * 
          * @return builder
          * 
+         * @deprecated
+         * Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version.
+         * 
          */
-        public Builder statusCode(Output<Integer> statusCode) {
+        @Deprecated /* Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version. */
+        public Builder statusCode(@Nullable Output<Integer> statusCode) {
             $.statusCode = statusCode;
             return this;
         }
 
         /**
-         * @param statusCode The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves). Note: the Webflow redirects API does not currently report a status code, so this value is kept in Pulumi state and is not verified against Webflow.
+         * @param statusCode Deprecated and ignored. Webflow redirects are always 301 (permanent) redirects: the redirect API object is {id, fromUrl, toUrl} and has no status code, so this value is never sent to Webflow, never validated and never produces a diff. Remove it from your program; it only remains for backwards compatibility.
          * 
          * @return builder
          * 
+         * @deprecated
+         * Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version.
+         * 
          */
+        @Deprecated /* Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version. */
         public Builder statusCode(Integer statusCode) {
             return statusCode(Output.of(statusCode));
         }
@@ -195,9 +213,6 @@ public final class RedirectArgs extends com.pulumi.resources.ResourceArgs {
             }
             if ($.sourcePath == null) {
                 throw new MissingRequiredPropertyException("RedirectArgs", "sourcePath");
-            }
-            if ($.statusCode == null) {
-                throw new MissingRequiredPropertyException("RedirectArgs", "statusCode");
             }
             return $;
         }

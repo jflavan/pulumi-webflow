@@ -22,33 +22,32 @@ class RegisteredScriptArgs:
                  display_name: pulumi.Input[_builtins.str],
                  hosted_location: pulumi.Input[_builtins.str],
                  integrity_hash: pulumi.Input[_builtins.str],
+                 script_version: pulumi.Input[_builtins.str],
                  site_id: pulumi.Input[_builtins.str],
-                 can_copy: pulumi.Input[Optional[_builtins.bool]] = None,
-                 script_version: pulumi.Input[Optional[_builtins.str]] = None):
+                 can_copy: pulumi.Input[Optional[_builtins.bool]] = None):
         """
         The set of arguments for constructing a RegisteredScript resource.
 
-        :param pulumi.Input[_builtins.str] display_name: The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'.
+        :param pulumi.Input[_builtins.str] display_name: The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'.
         :param pulumi.Input[_builtins.str] hosted_location: The URI for the externally hosted script (e.g., 'https://cdn.example.com/my-script.js'). Must be a valid HTTP or HTTPS URL. The script should be publicly accessible and properly configured for cross-origin requests.
         :param pulumi.Input[_builtins.str] integrity_hash: The Sub-Resource Integrity (SRI) hash for the script. Format: 'sha384-<hash>', 'sha256-<hash>', or 'sha512-<hash>'. SRI hashes help ensure that the script hasn't been modified in transit. You can generate an SRI hash using https://www.srihash.org/
+        :param pulumi.Input[_builtins.str] script_version: The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning.
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
         :param pulumi.Input[_builtins.bool] can_copy: Indicates whether the script can be copied when the site is duplicated. Default: false. When true, the script will be included when creating a copy of the site.
-        :param pulumi.Input[_builtins.str] script_version: The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
         """
         pulumi.set(__self__, "display_name", display_name)
         pulumi.set(__self__, "hosted_location", hosted_location)
         pulumi.set(__self__, "integrity_hash", integrity_hash)
+        pulumi.set(__self__, "script_version", script_version)
         pulumi.set(__self__, "site_id", site_id)
         if can_copy is not None:
             pulumi.set(__self__, "can_copy", can_copy)
-        if script_version is not None:
-            pulumi.set(__self__, "script_version", script_version)
 
     @_builtins.property
     @pulumi.getter(name="displayName")
     def display_name(self) -> pulumi.Input[_builtins.str]:
         """
-        The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'.
+        The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'.
         """
         return pulumi.get(self, "display_name")
 
@@ -81,6 +80,18 @@ class RegisteredScriptArgs:
         pulumi.set(self, "integrity_hash", value)
 
     @_builtins.property
+    @pulumi.getter(name="scriptVersion")
+    def script_version(self) -> pulumi.Input[_builtins.str]:
+        """
+        The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning.
+        """
+        return pulumi.get(self, "script_version")
+
+    @script_version.setter
+    def script_version(self, value: pulumi.Input[_builtins.str]):
+        pulumi.set(self, "script_version", value)
+
+    @_builtins.property
     @pulumi.getter(name="siteId")
     def site_id(self) -> pulumi.Input[_builtins.str]:
         """
@@ -104,18 +115,6 @@ class RegisteredScriptArgs:
     def can_copy(self, value: pulumi.Input[Optional[_builtins.bool]]):
         pulumi.set(self, "can_copy", value)
 
-    @_builtins.property
-    @pulumi.getter(name="scriptVersion")
-    def script_version(self) -> pulumi.Input[Optional[_builtins.str]]:
-        """
-        The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
-        """
-        return pulumi.get(self, "script_version")
-
-    @script_version.setter
-    def script_version(self, value: pulumi.Input[Optional[_builtins.str]]):
-        pulumi.set(self, "script_version", value)
-
 
 @pulumi.type_token("webflow:index:RegisteredScript")
 class RegisteredScript(pulumi.CustomResource):
@@ -131,15 +130,19 @@ class RegisteredScript(pulumi.CustomResource):
                  site_id: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         """
-        Manages custom code scripts in the Webflow script registry. This resource allows you to register and manage externally hosted scripts that can be deployed across your Webflow site with version control and integrity verification.
+        Registers an externally hosted script in a Webflow site's script registry (POST /v2/sites/{site_id}/registered_scripts/hosted). Registered scripts are applied to a site or page with the SiteCustomCode and PageCustomCode resources. scriptVersion is required: the register endpoint rejects requests without one.
+
+        **Authentication:** this resource calls Webflow custom code endpoints, which require an OAuth Data Client app token with the `custom_code:read` and `custom_code:write` scopes. Webflow documents that these scopes are available only to Data Client apps: site API tokens cannot access custom code endpoints.
+
+        **IMPORTANT LIMITATION:** Webflow has no endpoint to update or unregister a registered script. Registrations are versioned and permanent (a site can hold up to 800). Changing displayName, hostedLocation, integrityHash, scriptVersion or canCopy therefore registers a new script (a new version when only scriptVersion changes) and the previous registration remains in the registry. Destroying the resource is a logged no-op: the script stays registered and Pulumi simply stops managing it. Applied code is removed by SiteCustomCode and PageCustomCode.
 
         :param str resource_name: The name of the resource.
         :param pulumi.ResourceOptions opts: Options for the resource.
         :param pulumi.Input[_builtins.bool] can_copy: Indicates whether the script can be copied when the site is duplicated. Default: false. When true, the script will be included when creating a copy of the site.
-        :param pulumi.Input[_builtins.str] display_name: The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'.
+        :param pulumi.Input[_builtins.str] display_name: The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'.
         :param pulumi.Input[_builtins.str] hosted_location: The URI for the externally hosted script (e.g., 'https://cdn.example.com/my-script.js'). Must be a valid HTTP or HTTPS URL. The script should be publicly accessible and properly configured for cross-origin requests.
         :param pulumi.Input[_builtins.str] integrity_hash: The Sub-Resource Integrity (SRI) hash for the script. Format: 'sha384-<hash>', 'sha256-<hash>', or 'sha512-<hash>'. SRI hashes help ensure that the script hasn't been modified in transit. You can generate an SRI hash using https://www.srihash.org/
-        :param pulumi.Input[_builtins.str] script_version: The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
+        :param pulumi.Input[_builtins.str] script_version: The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning.
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
         """
         ...
@@ -149,7 +152,11 @@ class RegisteredScript(pulumi.CustomResource):
                  args: RegisteredScriptArgs,
                  opts: Optional[pulumi.ResourceOptions] = None):
         """
-        Manages custom code scripts in the Webflow script registry. This resource allows you to register and manage externally hosted scripts that can be deployed across your Webflow site with version control and integrity verification.
+        Registers an externally hosted script in a Webflow site's script registry (POST /v2/sites/{site_id}/registered_scripts/hosted). Registered scripts are applied to a site or page with the SiteCustomCode and PageCustomCode resources. scriptVersion is required: the register endpoint rejects requests without one.
+
+        **Authentication:** this resource calls Webflow custom code endpoints, which require an OAuth Data Client app token with the `custom_code:read` and `custom_code:write` scopes. Webflow documents that these scopes are available only to Data Client apps: site API tokens cannot access custom code endpoints.
+
+        **IMPORTANT LIMITATION:** Webflow has no endpoint to update or unregister a registered script. Registrations are versioned and permanent (a site can hold up to 800). Changing displayName, hostedLocation, integrityHash, scriptVersion or canCopy therefore registers a new script (a new version when only scriptVersion changes) and the previous registration remains in the registry. Destroying the resource is a logged no-op: the script stays registered and Pulumi simply stops managing it. Applied code is removed by SiteCustomCode and PageCustomCode.
 
         :param str resource_name: The name of the resource.
         :param RegisteredScriptArgs args: The arguments to use to populate this resource's properties.
@@ -191,6 +198,8 @@ class RegisteredScript(pulumi.CustomResource):
             if integrity_hash is None and not opts.urn:
                 raise TypeError("Missing required property 'integrity_hash'")
             __props__.__dict__["integrity_hash"] = integrity_hash
+            if script_version is None and not opts.urn:
+                raise TypeError("Missing required property 'script_version'")
             __props__.__dict__["script_version"] = script_version
             if site_id is None and not opts.urn:
                 raise TypeError("Missing required property 'site_id'")
@@ -251,7 +260,7 @@ class RegisteredScript(pulumi.CustomResource):
     @pulumi.getter(name="displayName")
     def display_name(self) -> pulumi.Output[_builtins.str]:
         """
-        The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'.
+        The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'.
         """
         return pulumi.get(self, "display_name")
 
@@ -289,9 +298,9 @@ class RegisteredScript(pulumi.CustomResource):
 
     @_builtins.property
     @pulumi.getter(name="scriptVersion")
-    def script_version(self) -> pulumi.Output[Optional[_builtins.str]]:
+    def script_version(self) -> pulumi.Output[_builtins.str]:
         """
-        The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
+        The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning.
         """
         return pulumi.get(self, "script_version")
 

@@ -71,7 +71,7 @@ namespace Community.Pulumi.Webflow
         public Output<string?> LastUpdated { get; private set; } = null!;
 
         /// <summary>
-        /// Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+        /// Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item.
         /// </summary>
         [Output("live")]
         public Output<bool?> Live { get; private set; } = null!;
@@ -159,7 +159,7 @@ namespace Community.Pulumi.Webflow
         public Input<bool>? IsDraft { get; set; }
 
         /// <summary>
-        /// Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Publishing requires the site to have been published at least once. Setting this back to false stops publishing future changes but does not unpublish the item.
+        /// Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item.
         /// </summary>
         [Input("live")]
         public Input<bool>? Live { get; set; }
