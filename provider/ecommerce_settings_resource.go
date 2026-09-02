@@ -68,6 +68,16 @@ func (state *EcommerceSettingsState) Annotate(a infer.Annotator) {
 // Diff determines what changes need to be made to the ecommerce settings resource.
 // Only siteId changes trigger replacement since this is a read-only resource. Delete is a
 // state-only no-op, so the default create-before-delete ordering is kept.
+// Check validates known inputs during preview so a malformed site ID is reported before apply.
+func (r *EcommerceSettings) Check(
+	ctx context.Context, req infer.CheckRequest,
+) (infer.CheckResponse[EcommerceSettingsArgs], error) {
+	inputs, failures, err := checkStrings[EcommerceSettingsArgs](ctx, req.NewInputs,
+		stringValidator{property: "siteId", validate: ValidateSiteID},
+	)
+	return infer.CheckResponse[EcommerceSettingsArgs]{Inputs: inputs, Failures: failures}, err
+}
+
 func (r *EcommerceSettings) Diff(
 	ctx context.Context, req infer.DiffRequest[EcommerceSettingsArgs, EcommerceSettingsState],
 ) (infer.DiffResponse, error) {
