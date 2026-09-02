@@ -7,16 +7,111 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
+	"sync"
 	"testing"
-	"time"
 
+	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
 )
+
+// Shared fixtures for the collection, collection field and collection item resource tests.
+const (
+	testCollectionID = "6a1b2c3d4e5f607182930a1b"
+	testFieldID      = "7b2c3d4e5f60718293a4b5c6"
+	testItemID       = "8c3d4e5f60718293a4b5c6d7"
+	testAPIToken     = "test-token-abc123def456"
+)
+
+// cmsCall is one request received by the mock Webflow API.
+type cmsCall struct {
+	Method string
+	Path   string
+	Query  url.Values
+	Body   map[string]interface{}
+}
+
+// cmsMock is a small method+path router for resource-level tests. It records every
+// request so tests can assert on HTTP methods, paths, query strings and JSON bodies.
+type cmsMock struct {
+	t      *testing.T
+	mu     sync.Mutex
+	calls  []cmsCall
+	routes map[string]http.HandlerFunc
+}
+
+// newCMSMock starts a mock API, points the provider at it (fast retries, no real sleeps)
+// and sets the API token in the environment for GetHTTPClient.
+func newCMSMock(t *testing.T) *cmsMock {
+	t.Helper()
+	m := &cmsMock{t: t, routes: map[string]http.HandlerFunc{}}
+	server := httptest.NewServer(m)
+	t.Cleanup(server.Close)
+	useMockAPI(t, server)
+	t.Setenv("WEBFLOW_API_TOKEN", testAPIToken)
+	return m
+}
+
+// handle registers a handler for METHOD path.
+func (m *cmsMock) handle(method, path string, h http.HandlerFunc) {
+	m.routes[method+" "+path] = h
+}
+
+func (m *cmsMock) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	raw, _ := io.ReadAll(r.Body)
+	call := cmsCall{Method: r.Method, Path: r.URL.Path, Query: r.URL.Query()}
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &call.Body); err != nil {
+			m.t.Errorf("%s %s: request body is not a JSON object: %v", r.Method, r.URL.Path, err)
+		}
+	}
+	m.mu.Lock()
+	m.calls = append(m.calls, call)
+	m.mu.Unlock()
+
+	h, ok := m.routes[r.Method+" "+r.URL.Path]
+	if !ok {
+		m.t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(raw))
+	h(w, r)
+}
+
+// requests returns a copy of every call received so far.
+func (m *cmsMock) requests() []cmsCall {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]cmsCall(nil), m.calls...)
+}
+
+// callsTo returns the calls matching METHOD path.
+func (m *cmsMock) callsTo(method, path string) []cmsCall {
+	var out []cmsCall
+	for _, c := range m.requests() {
+		if c.Method == method && c.Path == path {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// writeCMSJSON writes a JSON response with the given status (headers before WriteHeader).
+func writeCMSJSON(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+func ptrBool(b bool) *bool { return &b }
 
 // TestValidateCollectionID tests collectionID validation
 func TestValidateCollectionID(t *testing.T) {
@@ -97,12 +192,8 @@ func TestValidateSingularName(t *testing.T) {
 
 // TestGenerateCollectionResourceID tests resource ID generation
 func TestGenerateCollectionResourceID(t *testing.T) {
-	siteID := "5f0c8c9e1c9d440000e8d8c3"
-	collectionID := "abc123def456789012345678"
-
-	resourceID := GenerateCollectionResourceID(siteID, collectionID)
-	expected := "5f0c8c9e1c9d440000e8d8c3/collections/abc123def456789012345678"
-
+	resourceID := GenerateCollectionResourceID(testSiteID, testCollectionID)
+	expected := testSiteID + "/collections/" + testCollectionID
 	if resourceID != expected {
 		t.Errorf("GenerateCollectionResourceID() = %q, want %q", resourceID, expected)
 	}
@@ -110,490 +201,385 @@ func TestGenerateCollectionResourceID(t *testing.T) {
 
 // TestExtractIDsFromCollectionResourceID_Valid tests extracting IDs from valid resource ID
 func TestExtractIDsFromCollectionResourceID_Valid(t *testing.T) {
-	resourceID := "5f0c8c9e1c9d440000e8d8c3/collections/abc123def456789012345678"
-
-	siteID, collectionID, err := ExtractIDsFromCollectionResourceID(resourceID)
+	siteID, collectionID, err := ExtractIDsFromCollectionResourceID(testSiteID + "/collections/" + testCollectionID)
 	if err != nil {
 		t.Errorf("ExtractIDsFromCollectionResourceID() error = %v, want nil", err)
 	}
-	if siteID != "5f0c8c9e1c9d440000e8d8c3" {
-		t.Errorf("ExtractIDsFromCollectionResourceID() siteID = %q, want %q", siteID, "5f0c8c9e1c9d440000e8d8c3")
+	if siteID != testSiteID {
+		t.Errorf("siteID = %q, want %q", siteID, testSiteID)
 	}
-	if collectionID != "abc123def456789012345678" {
-		t.Errorf("ExtractIDsFromCollectionResourceID() collectionID = %q, want %q", collectionID, "abc123def456789012345678")
-	}
-}
-
-// TestExtractIDsFromCollectionResourceID_Empty tests empty resource ID
-func TestExtractIDsFromCollectionResourceID_Empty(t *testing.T) {
-	_, _, err := ExtractIDsFromCollectionResourceID("")
-	if err == nil {
-		t.Error("ExtractIDsFromCollectionResourceID(\"\") error = nil, want error")
+	if collectionID != testCollectionID {
+		t.Errorf("collectionID = %q, want %q", collectionID, testCollectionID)
 	}
 }
 
-// TestExtractIDsFromCollectionResourceID_InvalidFormat tests invalid format
+// TestExtractIDsFromCollectionResourceID_InvalidFormat tests invalid resource IDs
 func TestExtractIDsFromCollectionResourceID_InvalidFormat(t *testing.T) {
 	tests := []struct {
 		name       string
 		resourceID string
 	}{
-		{"missing collections part", "5f0c8c9e1c9d440000e8d8c3/abc123def456789012345678"},
-		{"wrong middle part", "5f0c8c9e1c9d440000e8d8c3/redirects/abc123def456789012345678"},
-		{"too few parts", "5f0c8c9e1c9d440000e8d8c3"},
+		{"empty", ""},
+		{"missing collections part", testSiteID + "/" + testCollectionID},
+		{"wrong middle part", testSiteID + "/redirects/" + testCollectionID},
+		{"too few parts", testSiteID},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := ExtractIDsFromCollectionResourceID(tt.resourceID)
-			if err == nil {
+			if _, _, err := ExtractIDsFromCollectionResourceID(tt.resourceID); err == nil {
 				t.Errorf("ExtractIDsFromCollectionResourceID(%q) error = nil, want error", tt.resourceID)
 			}
 		})
 	}
 }
 
-// TestGetCollections_Valid tests retrieving collections successfully
-func TestGetCollections_Valid(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Errorf("Expected GET, got %s", r.Method)
-		}
-		if !strings.Contains(r.URL.Path, "/collections") {
-			t.Errorf("Expected /collections in path, got %s", r.URL.Path)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		response := CollectionListResponse{
-			Collections: []Collection{
-				{
-					ID:           "collection1",
-					DisplayName:  "Blog Posts",
-					SingularName: "Blog Post",
-					Slug:         "blog-posts",
-					CreatedOn:    "2024-01-01T00:00:00Z",
-					LastUpdated:  "2024-01-02T00:00:00Z",
-				},
-				{
-					ID:           "collection2",
-					DisplayName:  "Products",
-					SingularName: "Product",
-					Slug:         "products",
-					CreatedOn:    "2024-01-01T00:00:00Z",
-					LastUpdated:  "2024-01-02T00:00:00Z",
-				},
-			},
-		}
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
-
-	// Override the API base URL for this test
-	oldURL := getCollectionsBaseURL
-	getCollectionsBaseURL = server.URL
-	defer func() { getCollectionsBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	result, err := GetCollections(ctx, client, "5f0c8c9e1c9d440000e8d8c3")
-	if err != nil {
-		t.Fatalf("GetCollections failed: %v", err)
-	}
-
-	if len(result.Collections) != 2 {
-		t.Errorf("Expected 2 collections, got %d", len(result.Collections))
-	}
-	if result.Collections[0].ID != "collection1" {
-		t.Errorf("Expected collection1, got %s", result.Collections[0].ID)
-	}
-}
-
-// TestGetCollections_NotFound tests 404 handling
-func TestGetCollections_NotFound(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte("site not found"))
-	}))
-	defer server.Close()
-
-	oldURL := getCollectionsBaseURL
-	getCollectionsBaseURL = server.URL
-	defer func() { getCollectionsBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	_, err := GetCollections(ctx, client, "nonexistent")
-	if err == nil {
-		t.Error("Expected error for 404, got nil")
-	}
-	if !strings.Contains(err.Error(), "not found") {
-		t.Errorf("Expected 'not found' in error, got: %v", err)
-	}
-}
-
-// TestGetCollection_Valid tests retrieving a single collection successfully
-func TestGetCollection_Valid(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Errorf("Expected GET, got %s", r.Method)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		response := Collection{
-			ID:           "collection1",
-			DisplayName:  "Blog Posts",
-			SingularName: "Blog Post",
-			Slug:         "blog-posts",
-			CreatedOn:    "2024-01-01T00:00:00Z",
-			LastUpdated:  "2024-01-02T00:00:00Z",
-		}
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
-
-	oldURL := getCollectionBaseURL
-	getCollectionBaseURL = server.URL
-	defer func() { getCollectionBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	result, err := GetCollection(ctx, client, "collection1")
-	if err != nil {
-		t.Fatalf("GetCollection failed: %v", err)
-	}
-
-	if result.ID != "collection1" {
-		t.Errorf("Expected collection1, got %s", result.ID)
-	}
-	if result.DisplayName != "Blog Posts" {
-		t.Errorf("Expected 'Blog Posts', got %s", result.DisplayName)
-	}
-}
-
-// TestPostCollection_Valid tests creating a collection successfully
-func TestPostCollection_Valid(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			t.Errorf("Expected POST, got %s", r.Method)
-		}
-
-		var req CollectionRequest
-		_ = json.NewDecoder(r.Body).Decode(&req)
-
-		if req.DisplayName != "Blog Posts" {
-			t.Errorf("Expected displayName 'Blog Posts', got %s", req.DisplayName)
-		}
-		if req.SingularName != "Blog Post" {
-			t.Errorf("Expected singularName 'Blog Post', got %s", req.SingularName)
-		}
-		if req.Slug != "blog-posts" {
-			t.Errorf("Expected slug 'blog-posts', got %s", req.Slug)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		response := Collection{
-			ID:           "new-collection-1",
-			DisplayName:  "Blog Posts",
-			SingularName: "Blog Post",
-			Slug:         "blog-posts",
-			CreatedOn:    "2024-01-01T00:00:00Z",
-			LastUpdated:  "2024-01-01T00:00:00Z",
-		}
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
-
-	oldURL := postCollectionBaseURL
-	postCollectionBaseURL = server.URL
-	defer func() { postCollectionBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	result, err := PostCollection(ctx, client, "5f0c8c9e1c9d440000e8d8c3", "Blog Posts", "Blog Post", "blog-posts")
-	if err != nil {
-		t.Fatalf("PostCollection failed: %v", err)
-	}
-
-	if result.ID != "new-collection-1" {
-		t.Errorf("Expected ID new-collection-1, got %s", result.ID)
-	}
-	if result.DisplayName != "Blog Posts" {
-		t.Errorf("Expected displayName 'Blog Posts', got %s", result.DisplayName)
-	}
-}
-
-// TestPostCollection_ValidationError tests 400 handling
-func TestPostCollection_ValidationError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte("invalid collection configuration"))
-	}))
-	defer server.Close()
-
-	oldURL := postCollectionBaseURL
-	postCollectionBaseURL = server.URL
-	defer func() { postCollectionBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	_, err := PostCollection(ctx, client, "5f0c8c9e1c9d440000e8d8c3", "", "Blog Post", "")
-	if err == nil {
-		t.Error("Expected error for 400, got nil")
-	}
-	if !strings.Contains(err.Error(), "bad request") {
-		t.Errorf("Expected 'bad request' in error, got: %v", err)
-	}
-}
-
-// TestDeleteCollection_Valid tests deleting a collection successfully
-func TestDeleteCollection_Valid(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "DELETE" {
-			t.Errorf("Expected DELETE, got %s", r.Method)
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer server.Close()
-
-	oldURL := deleteCollectionBaseURL
-	deleteCollectionBaseURL = server.URL
-	defer func() { deleteCollectionBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	err := DeleteCollection(ctx, client, "collection1")
-	if err != nil {
-		t.Fatalf("DeleteCollection failed: %v", err)
-	}
-}
-
-// TestDeleteCollection_NotFound_Idempotent tests that 404 on delete is treated as success (idempotent)
-func TestDeleteCollection_NotFound_Idempotent(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte("collection not found"))
-	}))
-	defer server.Close()
-
-	oldURL := deleteCollectionBaseURL
-	deleteCollectionBaseURL = server.URL
-	defer func() { deleteCollectionBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	err := DeleteCollection(ctx, client, "nonexistent")
-	if err != nil {
-		t.Errorf("DeleteCollection should handle 404 as success (idempotent), got error: %v", err)
-	}
-}
-
-// TestDeleteCollection_ServerError tests error handling
-func TestDeleteCollection_ServerError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte("server error"))
-	}))
-	defer server.Close()
-
-	oldURL := deleteCollectionBaseURL
-	deleteCollectionBaseURL = server.URL
-	defer func() { deleteCollectionBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	err := DeleteCollection(ctx, client, "collection1")
-	if err == nil {
-		t.Error("Expected error for 500, got nil")
-	}
-	if !strings.Contains(err.Error(), "server error") {
-		t.Errorf("Expected 'server error' in error, got: %v", err)
-	}
-}
-
-// TestErrorMessagesAreActionable verifies error messages contain guidance
+// TestCollectionErrorMessagesAreActionable verifies error messages contain guidance
 func TestCollectionErrorMessagesAreActionable(t *testing.T) {
 	tests := []struct {
 		name     string
 		testFunc func() error
 		contains []string
 	}{
-		{
-			"ValidateCollectionID empty",
-			func() error { return ValidateCollectionID("") },
-			[]string{"required", "24-character"},
-		},
-		{
-			"ValidateCollectionID invalid format",
-			func() error { return ValidateCollectionID("invalid") },
-			[]string{"invalid format", "24-character", "hexadecimal"},
-		},
-		{
-			"ValidateCollectionDisplayName empty",
-			func() error { return ValidateCollectionDisplayName("") },
-			[]string{"required", "name"},
-		},
-		{
-			"ValidateSingularName empty",
-			func() error { return ValidateSingularName("") },
-			[]string{"required", "singular"},
-		},
+		{"ValidateCollectionID empty", func() error { return ValidateCollectionID("") }, []string{"required", "24-character"}},
+		{"ValidateCollectionID invalid format", func() error { return ValidateCollectionID("invalid") },
+			[]string{"invalid format", "24-character", "hexadecimal"}},
+		{"ValidateCollectionDisplayName empty", func() error { return ValidateCollectionDisplayName("") },
+			[]string{"required", "name"}},
+		{"ValidateSingularName empty", func() error { return ValidateSingularName("") }, []string{"required", "singular"}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.testFunc()
 			if err == nil {
-				t.Errorf("%s: expected error, got nil", tt.name)
-				return
+				t.Fatalf("%s: expected error, got nil", tt.name)
 			}
-
-			errMsg := err.Error()
 			for _, expectedStr := range tt.contains {
-				if !strings.Contains(errMsg, expectedStr) {
-					t.Errorf("%s: error message missing %q. Got: %s", tt.name, expectedStr, errMsg)
+				if !strings.Contains(err.Error(), expectedStr) {
+					t.Errorf("%s: error message missing %q. Got: %s", tt.name, expectedStr, err.Error())
 				}
 			}
 		})
 	}
 }
 
-// TestGetCollections_RateLimited tests 429 rate limiting with retry
-func TestGetCollections_RateLimited(t *testing.T) {
-	attempts := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attempts++
-		if attempts < 2 {
-			w.Header().Set("Retry-After", "0") // Use 0 seconds for fast test
-			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte("rate limited"))
-			return
+// =============================================================================
+// Collection resource: Create
+// =============================================================================
+
+func TestCollectionResource_Create_RecordsGeneratedSlug(t *testing.T) {
+	mock := newCMSMock(t)
+	mock.handle(http.MethodPost, "/v2/sites/"+testSiteID+"/collections", func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if body["displayName"] != "Blog Posts" || body["singularName"] != "Blog Post" {
+			t.Errorf("unexpected body: %v", body)
 		}
-		// Succeed on second attempt
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		response := CollectionListResponse{
-			Collections: []Collection{
-				{
-					ID:           "collection1",
-					DisplayName:  "Blog Posts",
-					SingularName: "Blog Post",
-					Slug:         "blog-posts",
-					CreatedOn:    "2024-01-01T00:00:00Z",
-					LastUpdated:  "2024-01-02T00:00:00Z",
-				},
-			},
+		if _, ok := body["slug"]; ok {
+			t.Errorf("omitted slug must not be sent, got body %v", body)
 		}
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
+		writeCMSJSON(w, http.StatusCreated, Collection{
+			ID: testCollectionID, DisplayName: "Blog Posts", SingularName: "Blog Post", Slug: "blog-posts",
+			CreatedOn: "2024-01-01T00:00:00Z", LastUpdated: "2024-01-01T00:00:00Z",
+		})
+	})
 
-	oldURL := getCollectionsBaseURL
-	getCollectionsBaseURL = server.URL
-	defer func() { getCollectionsBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	result, err := GetCollections(ctx, client, "5f0c8c9e1c9d440000e8d8c3")
+	resp, err := (&CollectionResource{}).Create(context.Background(), infer.CreateRequest[CollectionArgs]{
+		Inputs: CollectionArgs{SiteID: testSiteID, DisplayName: "Blog Posts", SingularName: "Blog Post"},
+	})
 	if err != nil {
-		t.Fatalf("GetCollections should succeed after rate limit retry, got error: %v", err)
+		t.Fatalf("Create() error = %v", err)
 	}
-
-	if attempts != 2 {
-		t.Errorf("Expected 2 attempts (1 rate limited + 1 success), got %d", attempts)
+	if want := testSiteID + "/collections/" + testCollectionID; resp.ID != want {
+		t.Errorf("ID = %q, want %q", resp.ID, want)
 	}
-	if len(result.Collections) != 1 {
-		t.Errorf("Expected 1 collection, got %d", len(result.Collections))
+	if resp.Output.CollectionID != testCollectionID {
+		t.Errorf("CollectionID = %q, want %q", resp.Output.CollectionID, testCollectionID)
+	}
+	if resp.Output.Slug != "blog-posts" {
+		t.Errorf("state slug = %q, want the Webflow-generated %q", resp.Output.Slug, "blog-posts")
+	}
+	if resp.Output.CreatedOn != "2024-01-01T00:00:00Z" {
+		t.Errorf("CreatedOn = %q, want API value", resp.Output.CreatedOn)
+	}
+	if len(mock.requests()) != 1 {
+		t.Errorf("expected exactly 1 API call, got %d", len(mock.requests()))
 	}
 }
 
-// TestPostCollection_RateLimited tests 429 rate limiting with retry
-func TestPostCollection_RateLimited(t *testing.T) {
-	attempts := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attempts++
-		if attempts < 2 {
-			w.Header().Set("Retry-After", "0")
-			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte("rate limited"))
-			return
-		}
-		// Succeed on second attempt
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		response := Collection{
-			ID:           "newcollection",
-			DisplayName:  "Blog Posts",
-			SingularName: "Blog Post",
-			Slug:         "blog-posts",
-			CreatedOn:    "2024-01-01T00:00:00Z",
-			LastUpdated:  "2024-01-01T00:00:00Z",
-		}
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
+func TestCollectionResource_Create_SendsExplicitSlug(t *testing.T) {
+	mock := newCMSMock(t)
+	mock.handle(http.MethodPost, "/v2/sites/"+testSiteID+"/collections", func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusOK, Collection{ID: testCollectionID, Slug: "posts"})
+	})
 
-	oldURL := postCollectionBaseURL
-	postCollectionBaseURL = server.URL
-	defer func() { postCollectionBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	result, err := PostCollection(ctx, client, "5f0c8c9e1c9d440000e8d8c3", "Blog Posts", "Blog Post", "blog-posts")
+	_, err := (&CollectionResource{}).Create(context.Background(), infer.CreateRequest[CollectionArgs]{
+		Inputs: CollectionArgs{SiteID: testSiteID, DisplayName: "Blog Posts", SingularName: "Blog Post", Slug: "posts"},
+	})
 	if err != nil {
-		t.Fatalf("PostCollection should succeed after rate limit retry, got error: %v", err)
+		t.Fatalf("Create() error = %v", err)
 	}
-
-	if attempts != 2 {
-		t.Errorf("Expected 2 attempts (1 rate limited + 1 success), got %d", attempts)
-	}
-	if result.ID != "newcollection" {
-		t.Errorf("Expected ID newcollection, got %s", result.ID)
+	calls := mock.callsTo(http.MethodPost, "/v2/sites/"+testSiteID+"/collections")
+	if len(calls) != 1 || calls[0].Body["slug"] != "posts" {
+		t.Errorf("expected slug in POST body, got %+v", calls)
 	}
 }
 
-// TestDeleteCollection_RateLimited tests 429 rate limiting with retry
-func TestDeleteCollection_RateLimited(t *testing.T) {
+func TestCollectionResource_Create_DryRunSkipsValidationAndAPI(t *testing.T) {
+	mock := newCMSMock(t)
+
+	// siteId is unknown during preview when it comes from another resource
+	resp, err := (&CollectionResource{}).Create(context.Background(), infer.CreateRequest[CollectionArgs]{
+		Inputs: CollectionArgs{SiteID: "", DisplayName: "Blog Posts", SingularName: "Blog Post"},
+		DryRun: true,
+	})
+	if err != nil {
+		t.Fatalf("Create(DryRun) error = %v", err)
+	}
+	if len(mock.requests()) != 0 {
+		t.Errorf("dry run must not call the API, got %d calls", len(mock.requests()))
+	}
+	if resp.Output.CreatedOn != "" || resp.Output.LastUpdated != "" || resp.Output.CollectionID != "" {
+		t.Errorf("dry run must not fabricate server-assigned outputs: %+v", resp.Output)
+	}
+}
+
+func TestCollectionResource_Create_ValidationError(t *testing.T) {
+	mock := newCMSMock(t)
+
+	_, err := (&CollectionResource{}).Create(context.Background(), infer.CreateRequest[CollectionArgs]{
+		Inputs: CollectionArgs{SiteID: "invalid", DisplayName: "Blog Posts", SingularName: "Blog Post"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "validation failed") {
+		t.Fatalf("expected validation error, got %v", err)
+	}
+	if len(mock.requests()) != 0 {
+		t.Errorf("validation failure must not call the API")
+	}
+}
+
+func TestCollectionResource_Create_APIError(t *testing.T) {
+	mock := newCMSMock(t)
+	mock.handle(http.MethodPost, "/v2/sites/"+testSiteID+"/collections", func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusBadRequest, map[string]string{"message": "invalid collection configuration"})
+	})
+
+	_, err := (&CollectionResource{}).Create(context.Background(), infer.CreateRequest[CollectionArgs]{
+		Inputs: CollectionArgs{SiteID: testSiteID, DisplayName: "Blog Posts", SingularName: "Blog Post"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "bad request") {
+		t.Fatalf("expected bad request error, got %v", err)
+	}
+}
+
+func TestCollectionResource_Create_RetriesRateLimit(t *testing.T) {
+	mock := newCMSMock(t)
 	attempts := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mock.handle(http.MethodPost, "/v2/sites/"+testSiteID+"/collections", func(w http.ResponseWriter, r *http.Request) {
 		attempts++
-		if attempts < 2 {
+		if attempts == 1 {
 			w.Header().Set("Retry-After", "0")
 			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte("rate limited"))
 			return
 		}
-		// Succeed on second attempt
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer server.Close()
+		writeCMSJSON(w, http.StatusCreated, Collection{ID: testCollectionID})
+	})
 
-	oldURL := deleteCollectionBaseURL
-	deleteCollectionBaseURL = server.URL
-	defer func() { deleteCollectionBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	err := DeleteCollection(ctx, client, "collection1")
+	resp, err := (&CollectionResource{}).Create(context.Background(), infer.CreateRequest[CollectionArgs]{
+		Inputs: CollectionArgs{SiteID: testSiteID, DisplayName: "Blog Posts", SingularName: "Blog Post"},
+	})
 	if err != nil {
-		t.Fatalf("DeleteCollection should succeed after rate limit retry, got error: %v", err)
+		t.Fatalf("Create() should succeed after rate limit retry, got %v", err)
 	}
-
 	if attempts != 2 {
-		t.Errorf("Expected 2 attempts (1 rate limited + 1 success), got %d", attempts)
+		t.Errorf("expected 2 attempts, got %d", attempts)
+	}
+	if resp.Output.CollectionID != testCollectionID {
+		t.Errorf("CollectionID = %q", resp.Output.CollectionID)
+	}
+}
+
+// =============================================================================
+// Collection resource: Read
+// =============================================================================
+
+func TestCollectionResource_Read(t *testing.T) {
+	mock := newCMSMock(t)
+	mock.handle(http.MethodGet, "/v2/collections/"+testCollectionID, func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusOK, Collection{
+			ID: testCollectionID, DisplayName: "Blog Posts", SingularName: "Blog Post", Slug: "blog-posts",
+			CreatedOn: "2024-01-01T00:00:00Z", LastUpdated: "2024-01-02T00:00:00Z",
+		})
+	})
+	resourceID := testSiteID + "/collections/" + testCollectionID
+
+	t.Run("omitted slug stays omitted in inputs but is recorded in state", func(t *testing.T) {
+		resp, err := (&CollectionResource{}).Read(context.Background(), infer.ReadRequest[CollectionArgs, CollectionState]{
+			ID:     resourceID,
+			Inputs: CollectionArgs{SiteID: testSiteID, DisplayName: "Blog Posts", SingularName: "Blog Post"},
+		})
+		if err != nil {
+			t.Fatalf("Read() error = %v", err)
+		}
+		if resp.ID != resourceID {
+			t.Errorf("ID = %q, want %q", resp.ID, resourceID)
+		}
+		if resp.Inputs.Slug != "" {
+			t.Errorf("Read must not overwrite an omitted slug input, got %q", resp.Inputs.Slug)
+		}
+		if resp.State.Slug != "blog-posts" || resp.State.CollectionID != testCollectionID ||
+			resp.State.LastUpdated != "2024-01-02T00:00:00Z" || resp.State.DisplayName != "Blog Posts" {
+			t.Errorf("unexpected state: %+v", resp.State)
+		}
+	})
+
+	t.Run("explicit slug is refreshed from the API", func(t *testing.T) {
+		resp, err := (&CollectionResource{}).Read(context.Background(), infer.ReadRequest[CollectionArgs, CollectionState]{
+			ID:     resourceID,
+			Inputs: CollectionArgs{SiteID: testSiteID, DisplayName: "Blog Posts", SingularName: "Blog Post", Slug: "old"},
+		})
+		if err != nil {
+			t.Fatalf("Read() error = %v", err)
+		}
+		if resp.Inputs.Slug != "blog-posts" {
+			t.Errorf("explicit slug should reflect API drift, got %q", resp.Inputs.Slug)
+		}
+	})
+
+	if got := mock.callsTo(http.MethodGet, "/v2/collections/"+testCollectionID); len(got) != 2 {
+		t.Errorf("expected 2 GET calls, got %d", len(got))
+	}
+}
+
+func TestCollectionResource_Read_NotFound(t *testing.T) {
+	mock := newCMSMock(t)
+	mock.handle(http.MethodGet, "/v2/collections/"+testCollectionID, func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusNotFound, map[string]string{"message": "Requested resource not found"})
+	})
+
+	resp, err := (&CollectionResource{}).Read(context.Background(), infer.ReadRequest[CollectionArgs, CollectionState]{
+		ID: testSiteID + "/collections/" + testCollectionID,
+	})
+	if err != nil {
+		t.Fatalf("Read() on 404 should not error, got %v", err)
+	}
+	if resp.ID != "" {
+		t.Errorf("Read() on 404 should return empty ID, got %q", resp.ID)
+	}
+}
+
+func TestCollectionResource_Read_ServerErrorIsNotTreatedAsMissing(t *testing.T) {
+	mock := newCMSMock(t)
+	mock.handle(http.MethodGet, "/v2/collections/"+testCollectionID, func(w http.ResponseWriter, r *http.Request) {
+		writeCMSJSON(w, http.StatusInternalServerError, map[string]string{"message": "collection not found in cache"})
+	})
+
+	_, err := (&CollectionResource{}).Read(context.Background(), infer.ReadRequest[CollectionArgs, CollectionState]{
+		ID: testSiteID + "/collections/" + testCollectionID,
+	})
+	if err == nil {
+		t.Fatal("expected error for 500 even when the body mentions 'not found'")
+	}
+}
+
+func TestCollectionResource_Read_InvalidResourceID(t *testing.T) {
+	mock := newCMSMock(t)
+	for _, id := range []string{"", "bad/collections/" + testCollectionID, testSiteID + "/collections/../x"} {
+		_, err := (&CollectionResource{}).Read(context.Background(), infer.ReadRequest[CollectionArgs, CollectionState]{ID: id})
+		if err == nil {
+			t.Errorf("Read(%q) expected error", id)
+		}
+	}
+	if len(mock.requests()) != 0 {
+		t.Errorf("invalid IDs must be rejected before any API call, got %d calls", len(mock.requests()))
+	}
+}
+
+// =============================================================================
+// Collection resource: Delete
+// =============================================================================
+
+func TestCollectionResource_Delete(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  int
+		wantErr bool
+	}{
+		{"204 success", http.StatusNoContent, false},
+		{"404 idempotent", http.StatusNotFound, false},
+		{"500 error", http.StatusInternalServerError, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mock := newCMSMock(t)
+			mock.handle(http.MethodDelete, "/v2/collections/"+testCollectionID, func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.status)
+			})
+			_, err := (&CollectionResource{}).Delete(context.Background(), infer.DeleteRequest[CollectionState]{
+				ID: testSiteID + "/collections/" + testCollectionID,
+			})
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Delete() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if len(mock.callsTo(http.MethodDelete, "/v2/collections/"+testCollectionID)) != 1 {
+				t.Errorf("expected one DELETE call, got %+v", mock.requests())
+			}
+		})
+	}
+}
+
+func TestCollectionResource_Delete_InvalidResourceID(t *testing.T) {
+	mock := newCMSMock(t)
+	_, err := (&CollectionResource{}).Delete(context.Background(), infer.DeleteRequest[CollectionState]{
+		ID: testSiteID + "/collections/not-a-valid-id",
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid collection ID")
+	}
+	if len(mock.requests()) != 0 {
+		t.Errorf("invalid IDs must be rejected before any API call")
+	}
+}
+
+// =============================================================================
+// Collection resource: Diff
+// =============================================================================
+
+func TestCollectionDiff_OmittedSlugAfterRefreshDoesNotReplace(t *testing.T) {
+	// State as recorded by Create/Read: Webflow generated the slug.
+	state := CollectionState{
+		CollectionArgs: CollectionArgs{SiteID: testSiteID, DisplayName: "Blog Posts", SingularName: "Blog Post", Slug: "blog-posts"},
+		CollectionID:   testCollectionID,
+	}
+	// Program inputs: slug omitted.
+	inputs := CollectionArgs{SiteID: testSiteID, DisplayName: "Blog Posts", SingularName: "Blog Post"}
+
+	resp, err := (&CollectionResource{}).Diff(context.Background(), infer.DiffRequest[CollectionArgs, CollectionState]{
+		State: state, Inputs: inputs,
+	})
+	if err != nil {
+		t.Fatalf("Diff() error = %v", err)
+	}
+	if resp.HasChanges || len(resp.DetailedDiff) != 0 {
+		t.Errorf("omitted slug must not diff against the generated slug: %+v", resp)
+	}
+}
+
+func TestCollectionDiff_ExplicitSlugChangeReplaces(t *testing.T) {
+	state := CollectionState{
+		CollectionArgs: CollectionArgs{SiteID: testSiteID, DisplayName: "Blog Posts", SingularName: "Blog Post", Slug: "blog-posts"},
+	}
+	inputs := CollectionArgs{SiteID: testSiteID, DisplayName: "Blog Posts", SingularName: "Blog Post", Slug: "posts"}
+
+	resp, err := (&CollectionResource{}).Diff(context.Background(), infer.DiffRequest[CollectionArgs, CollectionState]{
+		State: state, Inputs: inputs,
+	})
+	if err != nil {
+		t.Fatalf("Diff() error = %v", err)
+	}
+	if d, ok := resp.DetailedDiff["slug"]; !ok || d.Kind != p.UpdateReplace || !resp.DeleteBeforeReplace {
+		t.Errorf("explicit slug change must replace: %+v", resp)
 	}
 }
 
@@ -603,121 +589,64 @@ func TestCollectionDiff_MultipleChanges(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name                string
-		oldState            CollectionState
-		newInputs           CollectionArgs
-		expectedChangeCount int
-		expectedKeys        []string
+		name         string
+		oldState     CollectionState
+		newInputs    CollectionArgs
+		expectedKeys []string
 	}{
 		{
 			name: "all fields changed",
-			oldState: CollectionState{
-				CollectionArgs: CollectionArgs{
-					SiteID:       "oldsite123456789012345678",
-					DisplayName:  "Old Name",
-					SingularName: "Old Singular",
-					Slug:         "old-slug",
-				},
-			},
+			oldState: CollectionState{CollectionArgs: CollectionArgs{
+				SiteID: "oldsite123456789012345678", DisplayName: "Old Name", SingularName: "Old Singular", Slug: "old-slug",
+			}},
 			newInputs: CollectionArgs{
-				SiteID:       "newsite123456789012345678",
-				DisplayName:  "New Name",
-				SingularName: "New Singular",
-				Slug:         "new-slug",
+				SiteID: "newsite123456789012345678", DisplayName: "New Name", SingularName: "New Singular", Slug: "new-slug",
 			},
-			expectedChangeCount: 4,
-			expectedKeys:        []string{"siteId", "displayName", "singularName", "slug"},
+			expectedKeys: []string{"siteId", "displayName", "singularName", "slug"},
 		},
 		{
 			name: "two fields changed",
-			oldState: CollectionState{
-				CollectionArgs: CollectionArgs{
-					SiteID:       "site123456789012345678901",
-					DisplayName:  "Old Name",
-					SingularName: "Old Singular",
-					Slug:         "same-slug",
-				},
-			},
+			oldState: CollectionState{CollectionArgs: CollectionArgs{
+				SiteID: "site123456789012345678901", DisplayName: "Old Name", SingularName: "Old Singular", Slug: "same-slug",
+			}},
 			newInputs: CollectionArgs{
-				SiteID:       "site123456789012345678901",
-				DisplayName:  "New Name",
-				SingularName: "New Singular",
-				Slug:         "same-slug",
+				SiteID: "site123456789012345678901", DisplayName: "New Name", SingularName: "New Singular", Slug: "same-slug",
 			},
-			expectedChangeCount: 2,
-			expectedKeys:        []string{"displayName", "singularName"},
+			expectedKeys: []string{"displayName", "singularName"},
 		},
 		{
 			name: "no changes",
-			oldState: CollectionState{
-				CollectionArgs: CollectionArgs{
-					SiteID:       "site123456789012345678901",
-					DisplayName:  "Same Name",
-					SingularName: "Same Singular",
-					Slug:         "same-slug",
-				},
-			},
+			oldState: CollectionState{CollectionArgs: CollectionArgs{
+				SiteID: "site123456789012345678901", DisplayName: "Same Name", SingularName: "Same Singular", Slug: "same-slug",
+			}},
 			newInputs: CollectionArgs{
-				SiteID:       "site123456789012345678901",
-				DisplayName:  "Same Name",
-				SingularName: "Same Singular",
-				Slug:         "same-slug",
+				SiteID: "site123456789012345678901", DisplayName: "Same Name", SingularName: "Same Singular", Slug: "same-slug",
 			},
-			expectedChangeCount: 0,
-			expectedKeys:        []string{},
+			expectedKeys: []string{},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := infer.DiffRequest[CollectionArgs, CollectionState]{
-				State:  tt.oldState,
-				Inputs: tt.newInputs,
-			}
-
-			result, err := resource.Diff(ctx, req)
+			result, err := resource.Diff(ctx, infer.DiffRequest[CollectionArgs, CollectionState]{
+				State: tt.oldState, Inputs: tt.newInputs,
+			})
 			if err != nil {
 				t.Fatalf("Diff() error = %v, want nil", err)
 			}
-
-			// Check number of changes
-			actualCount := len(result.DetailedDiff)
-			if actualCount != tt.expectedChangeCount {
-				t.Errorf("Expected %d changes in DetailedDiff, got %d", tt.expectedChangeCount, actualCount)
+			if len(result.DetailedDiff) != len(tt.expectedKeys) {
+				t.Errorf("Expected %d changes in DetailedDiff, got %d: %v", len(tt.expectedKeys), len(result.DetailedDiff), result.DetailedDiff)
 			}
-
-			// Check that HasChanges is set correctly
-			if tt.expectedChangeCount > 0 {
-				if !result.HasChanges {
-					t.Error("Expected HasChanges=true when changes detected")
-				}
-				if !result.DeleteBeforeReplace {
-					t.Error("Expected DeleteBeforeReplace=true when changes detected")
+			if len(tt.expectedKeys) > 0 {
+				if !result.HasChanges || !result.DeleteBeforeReplace {
+					t.Error("Expected HasChanges and DeleteBeforeReplace when changes detected")
 				}
 			} else if result.HasChanges {
 				t.Error("Expected HasChanges=false when no changes")
 			}
-
-			// Check that all expected keys are present
-			for _, expectedKey := range tt.expectedKeys {
-				if _, found := result.DetailedDiff[expectedKey]; !found {
-					t.Errorf("Expected key %q in DetailedDiff, but it was not found", expectedKey)
-				}
-			}
-
-			// Check that there are no unexpected keys
-			if len(tt.expectedKeys) > 0 {
-				for actualKey := range result.DetailedDiff {
-					found := false
-					for _, expectedKey := range tt.expectedKeys {
-						if actualKey == expectedKey {
-							found = true
-							break
-						}
-					}
-					if !found {
-						t.Errorf("Unexpected key %q in DetailedDiff", actualKey)
-					}
+			for _, key := range tt.expectedKeys {
+				if d, found := result.DetailedDiff[key]; !found || d.Kind != p.UpdateReplace {
+					t.Errorf("Expected key %q with UpdateReplace in DetailedDiff, got %+v", key, result.DetailedDiff)
 				}
 			}
 		})
