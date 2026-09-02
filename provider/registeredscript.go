@@ -13,6 +13,9 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"unicode/utf8"
+
+	p "github.com/pulumi/pulumi-go-provider"
 )
 
 // RegisteredScript represents a registered custom code script in Webflow.
@@ -51,28 +54,33 @@ type RegisteredScriptRequest struct {
 	Version        string `json:"version"`
 }
 
-// displayNamePattern validates that display names are between 1-50 alphanumeric characters.
-var displayNamePattern = regexp.MustCompile(`^[a-zA-Z0-9]{1,50}$`)
+// maxDisplayNameLength is the maximum number of characters in a script display name.
+const maxDisplayNameLength = 50
 
-// ValidateScriptDisplayName validates that a displayName is a valid Webflow script name.
-// Must be 1-50 alphanumeric characters.
+// displayNamePattern validates that display names are 1-50 letters, digits or spaces.
+// Webflow's own request example is "CMS Slider", so spaces must be accepted; anything
+// stricter is left to the API.
+var displayNamePattern = regexp.MustCompile(`^[a-zA-Z0-9 ]{1,50}$`)
+
+// ValidateScriptDisplayName validates that a displayName is a valid Webflow script name:
+// 1-50 characters made of letters, digits and spaces.
 // Returns actionable error messages that explain what's wrong and how to fix it.
 func ValidateScriptDisplayName(name string) error {
 	if name == "" {
 		return errors.New("displayName is required but was not provided. " +
-			"Please provide a user-facing name for the script between 1 and 50 alphanumeric characters. " +
-			"Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'")
+			"Please provide a user-facing name for the script between 1 and 50 characters " +
+			"(letters, digits and spaces). " +
+			"Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'")
 	}
-	if len(name) > 50 {
-		return fmt.Errorf("displayName is too long: got %d characters, maximum is 50. "+
+	if n := utf8.RuneCountInString(name); n > maxDisplayNameLength {
+		return fmt.Errorf("displayName is too long: got %d characters, maximum is %d. "+
 			"Please shorten the name. "+
-			"Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'", len(name))
+			"Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'", n, maxDisplayNameLength)
 	}
 	if !displayNamePattern.MatchString(name) {
 		return fmt.Errorf("displayName contains invalid characters: got '%s'. "+
-			"Allowed characters: A-Z, a-z, 0-9. Spaces and special characters are not allowed. "+
-			"Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'. "+
-			"Please use only alphanumeric characters", name)
+			"Allowed characters: A-Z, a-z, 0-9 and spaces. "+
+			"Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'", name)
 	}
 	return nil
 }
@@ -227,9 +235,24 @@ func PostRegisteredScript(
 	return &out, nil
 }
 
-// DeleteRegisteredScript removes a registered (hosted or inline) script from a Webflow site.
-// It calls DELETE /v2/sites/{site_id}/registered_scripts/{script_id}; 404 is treated as
-// success (idempotent).
-func DeleteRegisteredScript(ctx context.Context, client *http.Client, siteID, scriptID string) error {
-	return doDelete(ctx, client, apiURL("/v2/sites/%s/registered_scripts/%s", siteID, scriptID), nil)
+// Note: the Webflow Data API has no endpoint to delete or unregister a registered script.
+// The custom code reference lists only List Registered Scripts, Register Hosted Script,
+// Register Inline Script and List Custom Code Blocks, so registrations are permanent (a
+// site can hold up to 800). RegisteredScript.Delete and InlineScript.Delete are therefore
+// no-ops; applied code is removed through SiteCustomCode and PageCustomCode instead.
+
+// scriptDeleteNoOpWarning logs that a registered script stays registered after Delete.
+func scriptDeleteNoOpWarning(ctx context.Context, resource, siteID, scriptID string) {
+	p.GetLogger(ctx).Warningf(
+		"%s '%s' on site '%s': the Webflow API has no endpoint to unregister a script, so the "+
+			"registration stays in the site's script registry (Pulumi simply stops managing it). "+
+			"Scripts applied via SiteCustomCode or PageCustomCode are removed by those resources.",
+		resource, scriptID, siteID)
 }
+
+// customCodeScopesNote is the shared documentation on token requirements for the custom
+// code endpoints.
+const customCodeScopesNote = "**Authentication:** this resource calls Webflow custom code endpoints, which " +
+	"require an OAuth Data Client app token with the `custom_code:read` and `custom_code:write` scopes. " +
+	"Webflow documents that these scopes are available only to Data Client apps: site API tokens " +
+	"cannot access custom code endpoints. "

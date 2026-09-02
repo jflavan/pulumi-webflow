@@ -16,6 +16,7 @@ import (
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
 )
 
 const testScriptID = "test-script-123"
@@ -135,24 +136,29 @@ func TestRegisteredScriptCreate_ValidationErrors(t *testing.T) {
 	}
 }
 
-// TestRegisteredScriptCreate_DryRun tests dry-run behavior
+// TestRegisteredScriptCreate_DryRun tests dry-run behavior: no API call, an empty ID (so
+// dependents see unknown) and no fabricated outputs.
 func TestRegisteredScriptCreate_DryRun(t *testing.T) {
+	mockAPI(t, func(_ http.ResponseWriter, _ *http.Request) { t.Error("no API call expected during preview") })
 	resource := &RegisteredScriptResource{}
+	inputs := RegisteredScriptResourceArgs{
+		SiteID: testSiteID, DisplayName: "Test Script", HostedLocation: "https://example.com/script.js",
+		IntegrityHash: "sha384-abc123", Version: "1.0.0", CanCopy: true,
+	}
 	resp, err := resource.Create(context.Background(), infer.CreateRequest[RegisteredScriptResourceArgs]{
-		Inputs: RegisteredScriptResourceArgs{
-			SiteID: testSiteID, DisplayName: "TestScript", HostedLocation: "https://example.com/script.js",
-			IntegrityHash: "sha384-abc123", Version: "1.0.0", CanCopy: true,
-		},
-		DryRun: true,
+		Inputs: inputs, DryRun: true,
 	})
 	if err != nil {
 		t.Fatalf("Create() dry-run failed: %v", err)
 	}
-	if resp.ID == "" || !containsStr(resp.ID, testSiteID) {
-		t.Errorf("Create() dry-run ID should contain siteId: %q", resp.ID)
+	if resp.ID != "" {
+		t.Errorf("Create() dry-run must return an empty ID, got %q", resp.ID)
 	}
-	if resp.Output.CreatedOn == "" || resp.Output.LastUpdated == "" {
-		t.Errorf("Create() dry-run should set timestamps: %+v", resp.Output)
+	if resp.Output.CreatedOn != "" || resp.Output.LastUpdated != "" || resp.Output.ScriptID != "" {
+		t.Errorf("Create() dry-run must not fabricate outputs: %+v", resp.Output)
+	}
+	if resp.Output.RegisteredScriptResourceArgs != inputs {
+		t.Errorf("Create() dry-run should echo inputs: %+v", resp.Output)
 	}
 }
 
@@ -160,14 +166,101 @@ func TestRegisteredScriptCreate_DryRun(t *testing.T) {
 // (zero-value) inputs, since validation happens at apply time.
 func TestRegisteredScriptCreate_DryRun_DefersValidation(t *testing.T) {
 	resource := &RegisteredScriptResource{}
-	resp, err := resource.Create(context.Background(), infer.CreateRequest[RegisteredScriptResourceArgs]{
+	if _, err := resource.Create(context.Background(), infer.CreateRequest[RegisteredScriptResourceArgs]{
 		Inputs: RegisteredScriptResourceArgs{}, DryRun: true,
-	})
-	if err != nil {
+	}); err != nil {
 		t.Fatalf("Create() dry-run with unknown inputs should succeed: %v", err)
 	}
-	if resp.ID == "" {
-		t.Error("Create() dry-run should return an ID")
+}
+
+// TestRegisteredScriptCheck verifies preview-time validation of known values only.
+func TestRegisteredScriptCheck(t *testing.T) {
+	resource := &RegisteredScriptResource{}
+	valid := map[string]property.Value{
+		"siteId":         property.New(testSiteID),
+		"displayName":    property.New("CMS Slider"),
+		"hostedLocation": property.New("https://cdn.example.com/slider.js"),
+		"integrityHash":  property.New("sha384-abc123"),
+		"scriptVersion":  property.New("1.0.0"),
+	}
+	with := func(overrides map[string]property.Value) property.Map {
+		m := make(map[string]property.Value, len(valid))
+		for k, v := range valid {
+			m[k] = v
+		}
+		for k, v := range overrides {
+			if v.IsNull() {
+				delete(m, k) // a null override removes the property entirely
+				continue
+			}
+			m[k] = v
+		}
+		return property.NewMap(m)
+	}
+
+	t.Run("valid inputs (display name with a space) pass", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{NewInputs: with(nil)})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Fatalf("Check() = %+v, %v; want no failures", resp.Failures, err)
+		}
+		if resp.Inputs.DisplayName != "CMS Slider" || resp.Inputs.Version != "1.0.0" {
+			t.Errorf("inputs not decoded: %+v", resp.Inputs)
+		}
+	})
+
+	t.Run("unknown values are skipped", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{NewInputs: with(map[string]property.Value{
+			"siteId":         property.New(property.Computed),
+			"hostedLocation": property.New(property.Computed),
+			"integrityHash":  property.New(property.Computed),
+			"scriptVersion":  property.New(property.Computed),
+		})})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Fatalf("Check() with computed values = %+v, %v; want no failures", resp.Failures, err)
+		}
+	})
+
+	tests := []struct {
+		name     string
+		override map[string]property.Value
+		property string
+		reason   string
+	}{
+		{"bad siteId", map[string]property.Value{"siteId": property.New("nope")}, "siteId", "invalid format"},
+		{
+			"bad displayName",
+			map[string]property.Value{"displayName": property.New("a-b")},
+			"displayName", "invalid characters",
+		},
+		{
+			"bad hostedLocation",
+			map[string]property.Value{"hostedLocation": property.New("ftp://x")},
+			"hostedLocation", "http://",
+		},
+		{"bad integrityHash", map[string]property.Value{"integrityHash": property.New("md5-x")}, "integrityHash", "sha"},
+		{"bad scriptVersion", map[string]property.Value{"scriptVersion": property.New("1")}, "scriptVersion", "Semantic"},
+		{
+			"missing scriptVersion (required by the schema)",
+			map[string]property.Value{"scriptVersion": property.New(property.Null)},
+			"scriptVersion", "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := resource.Check(context.Background(), infer.CheckRequest{NewInputs: with(tt.override)})
+			if err != nil {
+				t.Fatalf("Check() error = %v", err)
+			}
+			found := false
+			for _, f := range resp.Failures {
+				if f.Property == tt.property && strings.Contains(f.Reason, tt.reason) {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("Check() failures = %+v, want one on %q containing %q", resp.Failures, tt.property, tt.reason)
+			}
+		})
 	}
 }
 
@@ -201,22 +294,6 @@ func TestPostRegisteredScript_Success(t *testing.T) {
 	}
 	if resp.ID != testScriptID || resp.DisplayName != "TestScript" || !resp.CanCopy {
 		t.Errorf("PostRegisteredScript() = %+v", resp)
-	}
-}
-
-func TestDeleteRegisteredScript(t *testing.T) {
-	for _, status := range []int{http.StatusNoContent, http.StatusNotFound} {
-		t.Run(http.StatusText(status), func(t *testing.T) {
-			client := mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
-				if r.Method != http.MethodDelete || r.URL.Path != "/v2/sites/"+testSiteID+"/registered_scripts/"+testScriptID {
-					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
-				}
-				w.WriteHeader(status)
-			})
-			if err := DeleteRegisteredScript(context.Background(), client, testSiteID, testScriptID); err != nil {
-				t.Fatalf("DeleteRegisteredScript() failed: %v", err)
-			}
-		})
 	}
 }
 
@@ -370,11 +447,13 @@ func TestValidateScriptDisplayName(t *testing.T) {
 		{"valid alphanumeric", "TestScript123", false},
 		{"valid single char", "A", false},
 		{"valid 50 chars", strings.Repeat("a", 50), false},
+		{"documented example with a space", "CMS Slider", false},
+		{"with spaces", "Test Script 2", false},
 		{"empty", "", true},
 		{"too long", strings.Repeat("a", 51), true},
-		{"with spaces", "Test Script", true},
 		{"with dashes", "Test-Script", true},
 		{"with underscores", "Test_Script", true},
+		{"non-ascii letters", "Café", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -500,6 +579,7 @@ func TestRegisteredScriptDiff_EmptyStateVersion_NoChange(t *testing.T) {
 
 // TestRegisteredScriptDiff_ChangesRequireReplacement tests that all property changes
 // trigger UpdateReplace since Webflow API doesn't support PATCH for registered scripts.
+// Delete cannot unregister the old script, so the replacement is create-before-delete.
 func TestRegisteredScriptDiff_ChangesRequireReplacement(t *testing.T) {
 	resource := &RegisteredScriptResource{}
 	baseInputs := RegisteredScriptResourceArgs{
@@ -539,8 +619,11 @@ func TestRegisteredScriptDiff_ChangesRequireReplacement(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Diff() error = %v", err)
 			}
-			if !diffResp.HasChanges || !diffResp.DeleteBeforeReplace {
+			if !diffResp.HasChanges {
 				t.Errorf("Diff() should detect a replacement for %s: %+v", tt.fieldName, diffResp)
+			}
+			if diffResp.DeleteBeforeReplace {
+				t.Errorf("Diff() must not delete first: Delete is a no-op and a failed registration would drop state")
 			}
 			if d, ok := diffResp.DetailedDiff[tt.fieldName]; !ok || d.Kind != p.UpdateReplace {
 				t.Errorf("Diff() DetailedDiff[%s] = %+v (present=%v), want UpdateReplace", tt.fieldName, d, ok)
@@ -689,6 +772,31 @@ func TestRegisteredScriptRead(t *testing.T) {
 		}
 	})
 
+	t.Run("import: omitted version stays empty and does not force a replace", func(t *testing.T) {
+		mockAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+			writeJSON(t, w, http.StatusOK, RegisteredScriptsResponse{
+				RegisteredScripts: []RegisteredScript{{
+					ID: "script120", DisplayName: "Script120", HostedLocation: "https://x.example.com/s.js", IntegrityHash: "sha384-x",
+				}},
+				Pagination: PaginationInfo{Limit: 100, Offset: 0, Total: 1},
+			})
+		})
+		// Import: no inputs and no state.
+		resp, err := resource.Read(context.Background(), readReq)
+		if err != nil {
+			t.Fatalf("Read() error = %v", err)
+		}
+		if resp.State.Version != "" || resp.Inputs.Version != "" {
+			t.Errorf("Read() must not fabricate a version, got %q/%q", resp.State.Version, resp.Inputs.Version)
+		}
+		program := resp.Inputs
+		program.Version = "2.0.0"
+		diffResp, err := resource.Diff(context.Background(), rsDiffRequest{Inputs: program, State: resp.State})
+		if err != nil || diffResp.HasChanges {
+			t.Errorf("Diff() after import = %+v, %v; the unknown version must not force a replace", diffResp.DetailedDiff, err)
+		}
+	})
+
 	t.Run("invalid site id in resource id", func(t *testing.T) {
 		mockAPI(t, func(_ http.ResponseWriter, _ *http.Request) { t.Error("no API call expected") })
 		_, err := resource.Read(context.Background(), rsReadRequest{
@@ -700,14 +808,14 @@ func TestRegisteredScriptRead(t *testing.T) {
 	})
 }
 
+// TestRegisteredScriptDelete verifies Delete is a no-op: Webflow has no endpoint to
+// unregister a script, so no HTTP request may be made.
 func TestRegisteredScriptDelete(t *testing.T) {
 	calls := 0
 	mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
 		calls++
-		if r.Method != http.MethodDelete || r.URL.Path != "/v2/sites/"+testSiteID+"/registered_scripts/"+testScriptID {
-			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
-		}
-		w.WriteHeader(http.StatusNoContent)
+		t.Errorf("unexpected request %s %s: there is no unregister endpoint", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusNotFound)
 	})
 	resource := &RegisteredScriptResource{}
 	if _, err := resource.Delete(context.Background(), infer.DeleteRequest[RegisteredScriptResourceState]{
@@ -716,11 +824,11 @@ func TestRegisteredScriptDelete(t *testing.T) {
 		t.Fatalf("Delete() error = %v", err)
 	}
 	if _, err := resource.Delete(context.Background(), infer.DeleteRequest[RegisteredScriptResourceState]{
-		ID: "site123/registered_scripts/" + testScriptID,
-	}); err == nil {
-		t.Error("Delete() should reject an invalid site id before calling the API")
+		ID: "not-a-resource-id",
+	}); err == nil || !strings.Contains(err.Error(), "invalid resource ID") {
+		t.Errorf("Delete() should reject a malformed resource ID, got %v", err)
 	}
-	if calls != 1 {
-		t.Errorf("expected exactly 1 API call, got %d", calls)
+	if calls != 0 {
+		t.Errorf("Delete() must not call the API, got %d calls", calls)
 	}
 }

@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
@@ -25,8 +24,8 @@ type RegisteredScriptResourceArgs struct {
 	// SiteID is the Webflow site ID (24-character lowercase hexadecimal string).
 	// Example: "5f0c8c9e1c9d440000e8d8c3"
 	SiteID string `pulumi:"siteId"`
-	// DisplayName is the user-facing name for the script (1-50 alphanumeric characters).
-	// Example: "CmsSlider", "AnalyticsScript", "MyCustomScript123"
+	// DisplayName is the user-facing name for the script (1-50 letters, digits or spaces).
+	// Example: "CMS Slider", "AnalyticsScript", "MyCustomScript123"
 	DisplayName string `pulumi:"displayName"`
 	// HostedLocation is the URI for the externally hosted script.
 	// Example: "https://cdn.example.com/my-script.js"
@@ -38,9 +37,9 @@ type RegisteredScriptResourceArgs struct {
 	// Version is the Semantic Version (SemVer) string for the script.
 	// Format: "major.minor.patch" (e.g., "1.0.0", "2.3.1")
 	// See https://semver.org/ for more information.
-	// Note: Marked optional for backwards compatibility with existing state, but
-	// Create validates that version is provided for new resources.
-	Version string `pulumi:"scriptVersion,optional"`
+	// Required: the Webflow register endpoint rejects requests without a version, so the
+	// schema requires it too and a missing value surfaces at preview time.
+	Version string `pulumi:"scriptVersion"`
 	// CanCopy indicates whether the script can be copied on site duplication.
 	// Default: false
 	CanCopy bool `pulumi:"canCopy,optional"`
@@ -63,9 +62,17 @@ type RegisteredScriptResourceState struct {
 // Annotate adds descriptions and constraints to the RegisteredScript resource.
 func (r *RegisteredScriptResource) Annotate(a infer.Annotator) {
 	a.SetToken("index", "RegisteredScript")
-	a.Describe(r, "Manages custom code scripts in the Webflow script registry. "+
-		"This resource allows you to register and manage externally hosted scripts that can be "+
-		"deployed across your Webflow site with version control and integrity verification.")
+	a.Describe(r, "Registers an externally hosted script in a Webflow site's script registry "+
+		"(POST /v2/sites/{site_id}/registered_scripts/hosted). Registered scripts are applied to a site "+
+		"or page with the SiteCustomCode and PageCustomCode resources. "+
+		"scriptVersion is required: the register endpoint rejects requests without one.\n\n"+
+		customCodeScopesNote+"\n\n"+
+		"**IMPORTANT LIMITATION:** Webflow has no endpoint to update or unregister a registered script. "+
+		"Registrations are versioned and permanent (a site can hold up to 800). "+
+		"Changing displayName, hostedLocation, integrityHash, scriptVersion or canCopy therefore registers "+
+		"a new script (a new version when only scriptVersion changes) and the previous registration "+
+		"remains in the registry. Destroying the resource is a logged no-op: the script stays registered "+
+		"and Pulumi simply stops managing it. Applied code is removed by SiteCustomCode and PageCustomCode.")
 }
 
 // Annotate adds descriptions to the RegisteredScriptResourceArgs fields.
@@ -77,10 +84,10 @@ func (args *RegisteredScriptResourceArgs) Annotate(a infer.Annotator) {
 			"This field will be validated before making any API calls.")
 
 	a.Describe(&args.DisplayName,
-		"The user-facing name for the script (1-50 alphanumeric characters). "+
-			"This name is used to identify the script in the Webflow interface. "+
-			"Only letters (A-Z, a-z) and numbers (0-9) are allowed. "+
-			"Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'.")
+		"The user-facing name for the script (1-50 characters: letters, digits and spaces). "+
+			"This name is used to identify the script in the Webflow interface and derives the scriptId. "+
+			"Changing it registers a new script; the previous registration remains. "+
+			"Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'.")
 
 	a.Describe(&args.HostedLocation,
 		"The URI for the externally hosted script (e.g., 'https://cdn.example.com/my-script.js'). "+
@@ -95,8 +102,9 @@ func (args *RegisteredScriptResourceArgs) Annotate(a infer.Annotator) {
 
 	a.Describe(&args.Version,
 		"The Semantic Version (SemVer) string for the script "+
-			"(e.g., '1.0.0', '2.3.1'). "+
-			"This helps track different versions of your script. "+
+			"(e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. "+
+			"Registered scripts are versioned: changing this value registers a new version of the script "+
+			"and the previous version remains registered. "+
 			"See https://semver.org/ for more information on semantic versioning.")
 
 	a.Describe(&args.CanCopy,
@@ -121,16 +129,31 @@ func (state *RegisteredScriptResourceState) Annotate(a infer.Annotator) {
 			"This is automatically updated by Webflow when the script is modified and is read-only.")
 }
 
+// Check validates the known inputs at preview time. Values that are still unknown
+// (computed from other resources) are skipped and validated again in Create.
+func (r *RegisteredScriptResource) Check(
+	ctx context.Context, req infer.CheckRequest,
+) (infer.CheckResponse[RegisteredScriptResourceArgs], error) {
+	inputs, failures, err := checkStrings[RegisteredScriptResourceArgs](ctx, req.NewInputs,
+		stringValidator{"siteId", ValidateSiteID},
+		stringValidator{"displayName", ValidateScriptDisplayName},
+		stringValidator{"hostedLocation", ValidateHostedLocation},
+		stringValidator{"integrityHash", ValidateIntegrityHash},
+		stringValidator{"scriptVersion", ValidateVersion},
+	)
+	return infer.CheckResponse[RegisteredScriptResourceArgs]{Inputs: inputs, Failures: failures}, err
+}
+
 // Diff determines what changes need to be made to the registered script resource.
-// NOTE: Webflow API does not support updating registered scripts (no PATCH endpoint).
-// All changes require replacement (delete + recreate), similar to Webhook resources.
+// Webflow has neither an update nor a delete endpoint for registered scripts, so every
+// change is a replacement that registers a new script (or a new version of it); the
+// previous registration stays in the registry because Delete cannot remove it.
 func (r *RegisteredScriptResource) Diff(
 	ctx context.Context, req infer.DiffRequest[RegisteredScriptResourceArgs, RegisteredScriptResourceState],
 ) (infer.DiffResponse, error) {
 	diff := infer.DiffResponse{}
 	detailedDiff := map[string]p.PropertyDiff{}
 
-	// All field changes trigger replacement since Webflow API doesn't support PATCH
 	if req.State.SiteID != req.Inputs.SiteID {
 		detailedDiff["siteId"] = p.PropertyDiff{Kind: p.UpdateReplace}
 	}
@@ -147,12 +170,10 @@ func (r *RegisteredScriptResource) Diff(
 		detailedDiff["integrityHash"] = p.PropertyDiff{Kind: p.UpdateReplace}
 	}
 
-	// Compare version only when both sides have one. scriptVersion is optional for
-	// backwards compatibility: state written before the field existed has no version,
-	// and an omitted input means "don't care", so neither case should force a replace.
-	stateVersion := req.State.Version
-	inputVersion := req.Inputs.Version
-	if stateVersion != "" && inputVersion != "" && stateVersion != inputVersion {
+	// An empty state version means Read could not recover it (the list endpoint may omit
+	// version, e.g. right after import) or the state predates scriptVersion. It is unknown
+	// rather than different, so it must not force a replacement.
+	if req.State.Version != "" && req.Inputs.Version != "" && req.State.Version != req.Inputs.Version {
 		detailedDiff["scriptVersion"] = p.PropertyDiff{Kind: p.UpdateReplace}
 	}
 
@@ -160,72 +181,57 @@ func (r *RegisteredScriptResource) Diff(
 		detailedDiff["canCopy"] = p.PropertyDiff{Kind: p.UpdateReplace}
 	}
 
-	// If any changes were detected, all require replacement
+	// The new registration is created before the old resource is dropped from state
+	// (Pulumi's default order): Delete is a no-op, so nothing is gained by deleting first
+	// and a failed registration would otherwise leave the resource missing from state.
 	if len(detailedDiff) > 0 {
 		diff.HasChanges = true
-		diff.DeleteBeforeReplace = true
 		diff.DetailedDiff = detailedDiff
 	}
 
 	return diff, nil
 }
 
-// Create creates a new registered script on the Webflow site.
+// validateRegisteredScriptArgs validates fully-resolved inputs at apply time.
+func validateRegisteredScriptArgs(args RegisteredScriptResourceArgs) error {
+	checks := []error{
+		ValidateSiteID(args.SiteID),
+		ValidateScriptDisplayName(args.DisplayName),
+		ValidateHostedLocation(args.HostedLocation),
+		ValidateIntegrityHash(args.IntegrityHash),
+		ValidateVersion(args.Version),
+	}
+	for _, err := range checks {
+		if err != nil {
+			return fmt.Errorf("validation failed for RegisteredScript resource: %w", err)
+		}
+	}
+	return nil
+}
+
+// Create registers a new hosted script on the Webflow site.
 func (r *RegisteredScriptResource) Create(
 	ctx context.Context, req infer.CreateRequest[RegisteredScriptResourceArgs],
 ) (infer.CreateResponse[RegisteredScriptResourceState], error) {
-	state := RegisteredScriptResourceState{
-		RegisteredScriptResourceArgs: req.Inputs,
-		CreatedOn:                    "", // Will be populated after creation
-		LastUpdated:                  "", // Will be populated after creation
-	}
+	state := RegisteredScriptResourceState{RegisteredScriptResourceArgs: req.Inputs}
 
-	// During preview, return expected state without making API calls.
-	// Validation is deferred to apply-time because inputs may contain Pulumi unknowns
-	// (e.g., siteId from a Site output) which the infer framework deserializes as zero values.
+	// During preview, return the inputs without calling the API. The ID and the
+	// Webflow-assigned outputs (scriptId, timestamps) are unknown until apply, so an
+	// empty ID is returned and dependents see unknown values. Inputs may be unknown, so
+	// full validation is deferred to apply time (Check already validated known values).
 	if req.DryRun {
-		// Set a preview timestamp
-		now := time.Now().Format(time.RFC3339)
-		state.CreatedOn = now
-		state.LastUpdated = now
-		// Generate a predictable ID for dry-run
-		previewID := fmt.Sprintf("preview-%d", time.Now().Unix())
-		state.ScriptID = previewID
-		return infer.CreateResponse[RegisteredScriptResourceState]{
-			ID:     GenerateRegisteredScriptResourceID(req.Inputs.SiteID, previewID),
-			Output: state,
-		}, nil
+		return infer.CreateResponse[RegisteredScriptResourceState]{Output: state}, nil
 	}
 
-	// Validate inputs BEFORE making API calls (all values are resolved at apply-time)
-	if err := ValidateSiteID(req.Inputs.SiteID); err != nil {
-		return infer.CreateResponse[RegisteredScriptResourceState]{},
-			fmt.Errorf("validation failed for RegisteredScript resource: %w", err)
-	}
-	if err := ValidateScriptDisplayName(req.Inputs.DisplayName); err != nil {
-		return infer.CreateResponse[RegisteredScriptResourceState]{},
-			fmt.Errorf("validation failed for RegisteredScript resource: %w", err)
-	}
-	if err := ValidateHostedLocation(req.Inputs.HostedLocation); err != nil {
-		return infer.CreateResponse[RegisteredScriptResourceState]{},
-			fmt.Errorf("validation failed for RegisteredScript resource: %w", err)
-	}
-	if err := ValidateIntegrityHash(req.Inputs.IntegrityHash); err != nil {
-		return infer.CreateResponse[RegisteredScriptResourceState]{},
-			fmt.Errorf("validation failed for RegisteredScript resource: %w", err)
-	}
-	if err := ValidateVersion(req.Inputs.Version); err != nil {
-		return infer.CreateResponse[RegisteredScriptResourceState]{},
-			fmt.Errorf("validation failed for RegisteredScript resource: %w", err)
+	if err := validateRegisteredScriptArgs(req.Inputs); err != nil {
+		return infer.CreateResponse[RegisteredScriptResourceState]{}, err
 	}
 
-	// Get HTTP client
 	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.CreateResponse[RegisteredScriptResourceState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API
 	response, err := PostRegisteredScript(ctx, client, req.Inputs.SiteID, RegisteredScriptRequest{
 		DisplayName:    req.Inputs.DisplayName,
 		HostedLocation: req.Inputs.HostedLocation,
@@ -245,25 +251,22 @@ func (r *RegisteredScriptResource) Create(
 				"this is unexpected and may indicate an API issue")
 	}
 
-	// Update state with values from API response
+	// Outputs come from the API response only; nothing is fabricated.
 	state.ScriptID = response.ID
 	state.CreatedOn = response.CreatedOn
 	state.LastUpdated = response.LastUpdated
 
-	resourceID := GenerateRegisteredScriptResourceID(req.Inputs.SiteID, response.ID)
-
 	return infer.CreateResponse[RegisteredScriptResourceState]{
-		ID:     resourceID,
+		ID:     GenerateRegisteredScriptResourceID(req.Inputs.SiteID, response.ID),
 		Output: state,
 	}, nil
 }
 
 // Read retrieves the current state of a registered script from Webflow.
-// Used for drift detection and import operations.
+// Used for drift detection and import operations (empty inputs and state).
 func (r *RegisteredScriptResource) Read(
 	ctx context.Context, req infer.ReadRequest[RegisteredScriptResourceArgs, RegisteredScriptResourceState],
 ) (infer.ReadResponse[RegisteredScriptResourceArgs, RegisteredScriptResourceState], error) {
-	// Extract siteID and scriptID from resource ID
 	siteID, scriptID, err := ExtractIDsFromRegisteredScriptResourceID(req.ID)
 	if err != nil {
 		return infer.ReadResponse[RegisteredScriptResourceArgs, RegisteredScriptResourceState]{},
@@ -274,7 +277,6 @@ func (r *RegisteredScriptResource) Read(
 			fmt.Errorf("invalid resource ID: %w", err)
 	}
 
-	// Get HTTP client
 	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[RegisteredScriptResourceArgs, RegisteredScriptResourceState]{},
@@ -293,28 +295,15 @@ func (r *RegisteredScriptResource) Read(
 			fmt.Errorf("failed to read registered script: %w", err)
 	}
 
-	// Build current state from API response
-	// Note: Webflow's list scripts API may not return the version field,
-	// so we preserve it from the existing inputs/state if the API returns empty.
+	// The list endpoint may omit version. Fall back to the configured or recorded value;
+	// when neither exists (import) it stays empty, which Diff treats as unknown rather
+	// than inventing a version that was never registered.
 	version := foundScript.Version
 	if version == "" {
-		// Try to get version from inputs first, then from state, then use fallback
-		switch {
-		case req.Inputs.Version != "":
-			version = req.Inputs.Version
-		case req.State.Version != "":
-			version = req.State.Version
-		default:
-			// Last resort fallback - API doesn't return version and no state available
-			// This can happen during import when state is empty
-			version = "0.0.0"
-			p.GetLogger(ctx).Warningf(
-				"RegisteredScript '%s': Webflow API did not return version and no previous state available. "+
-					"Using fallback version '0.0.0'. The actual registered script version may differ. "+
-					"To set the correct version, update your Pulumi configuration with the actual version.",
-				foundScript.DisplayName,
-			)
-		}
+		version = req.Inputs.Version
+	}
+	if version == "" {
+		version = req.State.Version
 	}
 
 	currentInputs := RegisteredScriptResourceArgs{
@@ -348,33 +337,20 @@ func (r *RegisteredScriptResource) Update(
 	return infer.UpdateResponse[RegisteredScriptResourceState]{},
 		errors.New("registered scripts cannot be updated in-place: " +
 			"Webflow API does not support PATCH for registered scripts. " +
-			"All changes require replacement (delete + recreate). " +
+			"All changes require replacement (a new registration). " +
 			"If you see this error, please report it as a provider bug")
 }
 
-// Delete removes a registered script from the Webflow site.
+// Delete is a logged no-op: the Webflow API has no endpoint to unregister a script, so the
+// registration stays in the site's registry and Pulumi simply stops managing it. No HTTP
+// request is made.
 func (r *RegisteredScriptResource) Delete(
 	ctx context.Context, req infer.DeleteRequest[RegisteredScriptResourceState],
 ) (infer.DeleteResponse, error) {
-	// Extract siteID and scriptID from resource ID
 	siteID, scriptID, err := ExtractIDsFromRegisteredScriptResourceID(req.ID)
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
-	if err := validateScriptResourceIDs(siteID, scriptID); err != nil {
-		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
-	}
-
-	// Get HTTP client
-	client, err := GetHTTPClient(ctx, currentProviderVersion())
-	if err != nil {
-		return infer.DeleteResponse{}, fmt.Errorf("failed to create HTTP client: %w", err)
-	}
-
-	// Call Webflow API (handles 404 gracefully for idempotency)
-	if err := DeleteRegisteredScript(ctx, client, siteID, scriptID); err != nil {
-		return infer.DeleteResponse{}, fmt.Errorf("failed to delete registered script: %w", err)
-	}
-
+	scriptDeleteNoOpWarning(ctx, "RegisteredScript", siteID, scriptID)
 	return infer.DeleteResponse{}, nil
 }

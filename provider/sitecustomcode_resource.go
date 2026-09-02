@@ -9,7 +9,6 @@ package provider
 import (
 	"context"
 	"fmt"
-	"time"
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
@@ -60,9 +59,29 @@ type SiteCustomCodeState struct {
 // Annotate adds descriptions and constraints to the SiteCustomCode resource.
 func (r *SiteCustomCode) Annotate(a infer.Annotator) {
 	a.SetToken("index", "SiteCustomCode")
-	a.Describe(r, "Manages custom JavaScript code applied to a Webflow site. "+
+	a.Describe(r, "Manages custom JavaScript code applied to a Webflow site "+
+		"(PUT /v2/sites/{site_id}/custom_code). "+
 		"This resource allows you to apply registered custom scripts to a site and control where they are placed "+
-		"(header or footer). Custom scripts must be registered to the site first via the RegisterScript resource.")
+		"(header or footer). Custom scripts must be registered to the site first via the RegisteredScript "+
+		"or InlineScript resource. The full list is sent on every update, so scripts omitted from the list "+
+		"are removed from the site; destroying the resource removes all applied code "+
+		"(DELETE /v2/sites/{site_id}/custom_code) but leaves the scripts registered.\n\n"+
+		customCodeScopesNote+appliedCodeScopesNote)
+}
+
+// Check validates the known inputs at preview time. Unknown values (for example a script id
+// taken from a RegisteredScript output) are skipped and validated again at apply time.
+func (r *SiteCustomCode) Check(
+	ctx context.Context, req infer.CheckRequest,
+) (infer.CheckResponse[SiteCustomCodeArgs], error) {
+	inputs, failures, err := checkStrings[SiteCustomCodeArgs](ctx, req.NewInputs,
+		stringValidator{"siteId", ValidateSiteID},
+	)
+	if err != nil {
+		return infer.CheckResponse[SiteCustomCodeArgs]{Inputs: inputs, Failures: failures}, err
+	}
+	failures = append(failures, checkCustomCodeScripts(req.NewInputs)...)
+	return infer.CheckResponse[SiteCustomCodeArgs]{Inputs: inputs, Failures: failures}, nil
 }
 
 // Annotate adds descriptions to the SiteCustomCodeArgs fields.
@@ -150,25 +169,15 @@ func (r *SiteCustomCode) Diff(
 func (r *SiteCustomCode) Create(
 	ctx context.Context, req infer.CreateRequest[SiteCustomCodeArgs],
 ) (infer.CreateResponse[SiteCustomCodeState], error) {
-	state := SiteCustomCodeState{
-		SiteCustomCodeArgs: req.Inputs,
-		LastUpdated:        "",
-		CreatedOn:          "",
-	}
+	state := SiteCustomCodeState{SiteCustomCodeArgs: req.Inputs}
 
-	// During preview, return expected state without making API calls.
-	// Validation is deferred to apply-time because inputs may contain Pulumi unknowns
+	// During preview, return the inputs without calling the API. The ID and the timestamps
+	// are unknown until apply, so an empty ID is returned and nothing is fabricated.
+	// Full validation is deferred to apply time because inputs may contain Pulumi unknowns
 	// (e.g., scripts[].id from a RegisteredScript output) which the infer framework
-	// deserializes as zero values. Validating during preview would incorrectly reject these.
+	// deserializes as zero values; Check already validated the known values.
 	if req.DryRun {
-		// Set preview timestamps
-		now := time.Now().Format(time.RFC3339)
-		state.LastUpdated = now
-		state.CreatedOn = now
-		return infer.CreateResponse[SiteCustomCodeState]{
-			ID:     GenerateSiteCustomCodeResourceID(req.Inputs.SiteID),
-			Output: state,
-		}, nil
+		return infer.CreateResponse[SiteCustomCodeState]{Output: state}, nil
 	}
 
 	// Validate inputs BEFORE making API calls (all values are resolved at apply-time)
@@ -193,7 +202,7 @@ func (r *SiteCustomCode) Create(
 		return infer.CreateResponse[SiteCustomCodeState]{}, fmt.Errorf("failed to create site custom code: %w", err)
 	}
 
-	// Set response timestamps
+	// Timestamps come from the API response only.
 	state.LastUpdated = response.LastUpdated
 	state.CreatedOn = response.CreatedOn
 
@@ -264,13 +273,11 @@ func (r *SiteCustomCode) Update(
 		CreatedOn:          req.State.CreatedOn,
 	}
 
-	// During preview, return expected state without making API calls.
-	// Validation is deferred to apply-time because inputs may contain Pulumi unknowns.
+	// During preview, return the expected state without calling the API. The timestamps
+	// recorded in state are carried over rather than fabricated; the real values come
+	// from the API at apply time. Validation is deferred because inputs may be unknown.
 	if req.DryRun {
-		state.LastUpdated = time.Now().Format(time.RFC3339)
-		return infer.UpdateResponse[SiteCustomCodeState]{
-			Output: state,
-		}, nil
+		return infer.UpdateResponse[SiteCustomCodeState]{Output: state}, nil
 	}
 
 	// Validate inputs BEFORE making API calls (all values are resolved at apply-time)
@@ -295,9 +302,13 @@ func (r *SiteCustomCode) Update(
 		return infer.UpdateResponse[SiteCustomCodeState]{}, fmt.Errorf("failed to update site custom code: %w", err)
 	}
 
-	// Update response timestamps
-	state.LastUpdated = response.LastUpdated
-	state.CreatedOn = response.CreatedOn
+	// Timestamps come from the API response; a value the response omits keeps the recorded one.
+	if response.LastUpdated != "" {
+		state.LastUpdated = response.LastUpdated
+	}
+	if response.CreatedOn != "" {
+		state.CreatedOn = response.CreatedOn
+	}
 
 	return infer.UpdateResponse[SiteCustomCodeState]{
 		Output: state,

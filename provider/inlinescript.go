@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"unicode/utf8"
 )
 
 // InlineScriptResponse represents the Webflow API response for an inline script.
@@ -40,7 +41,8 @@ type InlineScriptRequest struct {
 const maxSourceCodeLength = 2000
 
 // ValidateSourceCode validates that a sourceCode value is valid for an inline script.
-// Must be non-empty and at most 2000 characters.
+// Must be non-empty and at most 2000 characters (counted as Unicode code points, not bytes,
+// so multi-byte characters are not penalised).
 // Returns actionable error messages that explain what's wrong and how to fix it.
 func ValidateSourceCode(code string) error {
 	if code == "" {
@@ -49,14 +51,23 @@ func ValidateSourceCode(code string) error {
 			"The code is limited to 2000 characters. " +
 			"Example: 'console.log(\"Hello from Webflow\");'")
 	}
-	if len(code) > maxSourceCodeLength {
+	if n := utf8.RuneCountInString(code); n > maxSourceCodeLength {
 		return fmt.Errorf("sourceCode is too long: got %d characters, maximum is %d. "+
 			"Please shorten your inline script code. "+
 			"If your script is too large for inline registration, consider hosting it externally "+
 			"and using the RegisteredScript resource with a hostedLocation instead",
-			len(code), maxSourceCodeLength)
+			n, maxSourceCodeLength)
 	}
 	return nil
+}
+
+// validateOptionalIntegrityHash accepts an empty hash (the field is optional for inline
+// scripts) and otherwise applies ValidateIntegrityHash.
+func validateOptionalIntegrityHash(hash string) error {
+	if hash == "" {
+		return nil
+	}
+	return ValidateIntegrityHash(hash)
 }
 
 // GenerateInlineScriptResourceID generates a Pulumi resource ID for an InlineScript resource.

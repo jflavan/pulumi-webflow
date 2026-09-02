@@ -15,6 +15,7 @@ import (
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
 )
 
 const testInlineScriptID = "test-inline-script-123"
@@ -71,9 +72,10 @@ func TestInlineScriptCreate_ValidationErrors(t *testing.T) {
 	}
 }
 
-// TestInlineScriptCreate_DryRun tests dry-run behavior, including that an optional
-// integrityHash may be set or omitted and that validation is deferred to apply time.
+// TestInlineScriptCreate_DryRun tests dry-run behavior: no API call, an empty ID (so
+// dependents see unknown), no fabricated outputs, and validation deferred to apply time.
 func TestInlineScriptCreate_DryRun(t *testing.T) {
+	mockAPI(t, func(_ http.ResponseWriter, _ *http.Request) { t.Error("no API call expected during preview") })
 	resource := &InlineScript{}
 	withHash := validInlineScriptArgs()
 	withHash.IntegrityHash = "sha384-abc123"
@@ -90,8 +92,107 @@ func TestInlineScriptCreate_DryRun(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Create() dry-run failed: %v", err)
 			}
-			if resp.ID == "" || resp.Output.CreatedOn == "" || resp.Output.LastUpdated == "" {
-				t.Errorf("Create() dry-run should return ID and timestamps: %+v", resp)
+			if resp.ID != "" {
+				t.Errorf("Create() dry-run must return an empty ID, got %q", resp.ID)
+			}
+			if resp.Output.CreatedOn != "" || resp.Output.LastUpdated != "" ||
+				resp.Output.ScriptID != "" || resp.Output.HostedLocation != "" {
+				t.Errorf("Create() dry-run must not fabricate outputs: %+v", resp.Output)
+			}
+			if resp.Output.InlineScriptArgs != inputs {
+				t.Errorf("Create() dry-run should echo inputs: %+v", resp.Output)
+			}
+		})
+	}
+}
+
+// TestInlineScriptCheck verifies preview-time validation of known values only.
+func TestInlineScriptCheck(t *testing.T) {
+	resource := &InlineScript{}
+	valid := map[string]property.Value{
+		"siteId":        property.New(testSiteID),
+		"sourceCode":    property.New("console.log('hi');"),
+		"scriptVersion": property.New("1.0.0"),
+		"displayName":   property.New("CMS Slider"),
+	}
+	with := func(overrides map[string]property.Value) property.Map {
+		m := make(map[string]property.Value, len(valid))
+		for k, v := range valid {
+			m[k] = v
+		}
+		for k, v := range overrides {
+			m[k] = v
+		}
+		return property.NewMap(m)
+	}
+
+	t.Run("valid inputs pass (integrityHash omitted)", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{NewInputs: with(nil)})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Fatalf("Check() = %+v, %v; want no failures", resp.Failures, err)
+		}
+		if resp.Inputs.DisplayName != "CMS Slider" || resp.Inputs.SourceCode != "console.log('hi');" {
+			t.Errorf("inputs not decoded: %+v", resp.Inputs)
+		}
+	})
+
+	t.Run("unknown values are skipped", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{NewInputs: with(map[string]property.Value{
+			"siteId":        property.New(property.Computed),
+			"sourceCode":    property.New(property.Computed),
+			"scriptVersion": property.New(property.Computed),
+			"displayName":   property.New(property.Computed),
+			"integrityHash": property.New(property.Computed),
+		})})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Fatalf("Check() with computed values = %+v, %v; want no failures", resp.Failures, err)
+		}
+	})
+
+	t.Run("multi-byte source code is counted in characters", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{NewInputs: with(map[string]property.Value{
+			"sourceCode": property.New(strings.Repeat("é", 2000)),
+		})})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Fatalf("Check() = %+v, %v; 2000 two-byte characters must be accepted", resp.Failures, err)
+		}
+	})
+
+	tests := []struct {
+		name     string
+		override map[string]property.Value
+		property string
+		reason   string
+	}{
+		{"bad siteId", map[string]property.Value{"siteId": property.New("nope")}, "siteId", "invalid format"},
+		{"empty sourceCode", map[string]property.Value{"sourceCode": property.New("")}, "sourceCode", "required"},
+		{
+			"sourceCode too long",
+			map[string]property.Value{"sourceCode": property.New(strings.Repeat("é", 2001))},
+			"sourceCode", "too long",
+		},
+		{"bad scriptVersion", map[string]property.Value{"scriptVersion": property.New("1")}, "scriptVersion", "Semantic"},
+		{
+			"bad displayName",
+			map[string]property.Value{"displayName": property.New("a_b")},
+			"displayName", "invalid characters",
+		},
+		{"bad integrityHash", map[string]property.Value{"integrityHash": property.New("md5-x")}, "integrityHash", "sha"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := resource.Check(context.Background(), infer.CheckRequest{NewInputs: with(tt.override)})
+			if err != nil {
+				t.Fatalf("Check() error = %v", err)
+			}
+			found := false
+			for _, f := range resp.Failures {
+				if f.Property == tt.property && strings.Contains(f.Reason, tt.reason) {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("Check() failures = %+v, want one on %q containing %q", resp.Failures, tt.property, tt.reason)
 			}
 		})
 	}
@@ -214,8 +315,11 @@ func TestValidateSourceCode(t *testing.T) {
 	}{
 		{"valid short code", "console.log('hello');", false},
 		{"valid at max length", strings.Repeat("a", 2000), false},
+		{"valid at max length with multi-byte characters (counted as runes)", strings.Repeat("é", 2000), false},
+		{"valid at max length with 4-byte characters", strings.Repeat("😀", 2000), false},
 		{"empty", "", true},
 		{"too long", strings.Repeat("a", 2001), true},
+		{"too long with multi-byte characters", strings.Repeat("é", 2001), true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -245,6 +349,11 @@ func TestInlineScriptDiff_NoChange(t *testing.T) {
 		a.IntegrityHash = hash
 		return a
 	}
+	withSource := func(code string) InlineScriptArgs {
+		a := args
+		a.SourceCode = code
+		return a
+	}
 
 	tests := []struct {
 		name   string
@@ -252,7 +361,8 @@ func TestInlineScriptDiff_NoChange(t *testing.T) {
 		state  InlineScriptArgs
 	}{
 		{"identical", args, args},
-		{"empty state version (pre-scriptVersion state)", args, withVersion("")},
+		{"empty state version (pre-scriptVersion state or import)", args, withVersion("")},
+		{"empty state sourceCode (import: the API never returns it)", args, withSource("")},
 		{"omitted integrityHash ignores the registered hash", args, withHash("sha384-fromapi")},
 		{"configured integrityHash matches state", withHash("sha384-abc"), withHash("sha384-abc")},
 	}
@@ -304,8 +414,11 @@ func TestInlineScriptDiff_ChangesRequireReplacement(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Diff() error = %v", err)
 			}
-			if !diffResp.HasChanges || !diffResp.DeleteBeforeReplace {
+			if !diffResp.HasChanges {
 				t.Errorf("Diff() should detect a replacement for %s: %+v", tt.fieldName, diffResp)
+			}
+			if diffResp.DeleteBeforeReplace {
+				t.Errorf("Diff() must not delete first: Delete is a no-op and a failed registration would drop state")
 			}
 			if d, ok := diffResp.DetailedDiff[tt.fieldName]; !ok || d.Kind != p.UpdateReplace {
 				t.Errorf("Diff() DetailedDiff[%s] = %+v (present=%v), want UpdateReplace", tt.fieldName, d, ok)
@@ -462,6 +575,39 @@ func TestInlineScriptRead(t *testing.T) {
 		}
 	})
 
+	t.Run("import: omitted version and sourceCode stay empty and do not force a replace", func(t *testing.T) {
+		mockAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+			writeJSON(t, w, http.StatusOK, RegisteredScriptsResponse{
+				RegisteredScripts: []RegisteredScript{{
+					ID: "inline110", DisplayName: "Inline110", HostedLocation: "https://cdn.webflow.com/inline/inline110.js",
+				}},
+				Pagination: PaginationInfo{Limit: 100, Total: 1},
+			})
+		})
+		// Import: no inputs and no state.
+		resp, err := resource.Read(context.Background(),
+			infer.ReadRequest[InlineScriptArgs, InlineScriptState]{ID: resourceID})
+		if err != nil {
+			t.Fatalf("Read() error = %v", err)
+		}
+		if resp.State.Version != "" || resp.Inputs.Version != "" {
+			t.Errorf("Read() must not fabricate a version, got %q/%q", resp.State.Version, resp.Inputs.Version)
+		}
+		if resp.State.SourceCode != "" || resp.Inputs.SourceCode != "" {
+			t.Errorf("Read() must not fabricate sourceCode, got %q/%q", resp.State.SourceCode, resp.Inputs.SourceCode)
+		}
+		program := InlineScriptArgs{
+			SiteID: testSiteID, SourceCode: "console.log('imported');", Version: "4.0.0", DisplayName: "Inline110",
+		}
+		diffResp, err := resource.Diff(context.Background(), infer.DiffRequest[InlineScriptArgs, InlineScriptState]{
+			Inputs: program, State: resp.State,
+		})
+		if err != nil || diffResp.HasChanges {
+			t.Errorf("Diff() after import = %+v, %v; unknown sourceCode/version must not force a replace",
+				diffResp.DetailedDiff, err)
+		}
+	})
+
 	t.Run("script missing signals deletion", func(t *testing.T) {
 		var offsets []int
 		mockAPI(t, pagedScriptsHandler(t, scripts[:5], 100, &offsets))
@@ -491,30 +637,27 @@ func TestInlineScriptRead(t *testing.T) {
 	})
 }
 
+// TestInlineScriptDelete verifies Delete is a no-op: Webflow has no endpoint to
+// unregister a script, so no HTTP request may be made.
 func TestInlineScriptDelete(t *testing.T) {
-	for _, status := range []int{http.StatusNoContent, http.StatusNotFound} {
-		t.Run(http.StatusText(status), func(t *testing.T) {
-			mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
-				wantPath := "/v2/sites/" + testSiteID + "/registered_scripts/" + testInlineScriptID
-				if r.Method != http.MethodDelete || r.URL.Path != wantPath {
-					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
-				}
-				w.WriteHeader(status)
-			})
-			resource := &InlineScript{}
-			if _, err := resource.Delete(context.Background(), infer.DeleteRequest[InlineScriptState]{
-				ID: GenerateInlineScriptResourceID(testSiteID, testInlineScriptID),
-			}); err != nil {
-				t.Fatalf("Delete() error = %v", err)
-			}
-		})
-	}
-	t.Run("invalid site id", func(t *testing.T) {
-		mockAPI(t, func(_ http.ResponseWriter, _ *http.Request) { t.Error("no API call expected") })
-		resource := &InlineScript{}
-		_, err := resource.Delete(context.Background(), infer.DeleteRequest[InlineScriptState]{ID: "bad/inline_scripts/x"})
-		if err == nil {
-			t.Error("Delete() should reject an invalid site id before calling the API")
-		}
+	calls := 0
+	mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		t.Errorf("unexpected request %s %s: there is no unregister endpoint", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusNotFound)
 	})
+	resource := &InlineScript{}
+	if _, err := resource.Delete(context.Background(), infer.DeleteRequest[InlineScriptState]{
+		ID: GenerateInlineScriptResourceID(testSiteID, testInlineScriptID),
+	}); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if _, err := resource.Delete(context.Background(), infer.DeleteRequest[InlineScriptState]{
+		ID: "not-a-resource-id",
+	}); err == nil || !strings.Contains(err.Error(), "invalid resource ID") {
+		t.Errorf("Delete() should reject a malformed resource ID, got %v", err)
+	}
+	if calls != 0 {
+		t.Errorf("Delete() must not call the API, got %d calls", calls)
+	}
 }
