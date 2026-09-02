@@ -49,7 +49,7 @@ func Provider() p.Provider {
 			infer.Resource(&CollectionResource{}),
 			infer.Resource(&CollectionField{}),
 			infer.Resource(&CollectionItemResource{}),
-			infer.Resource(&PageData{}),
+			infer.Resource(&PageMetadata{}),
 			infer.Resource(&Webhook{}),
 			infer.Resource(&Asset{}),
 			infer.Resource(&AssetFolder{}),
@@ -63,6 +63,8 @@ func Provider() p.Provider {
 		WithFunctions(
 			infer.Function(&GetTokenInfo{}),
 			infer.Function(&GetAuthorizedUser{}),
+			infer.Function(&GetPage{}),
+			infer.Function(&GetPages{}),
 		).
 		WithModuleMap(map[tokens.ModuleName]tokens.ModuleName{
 			"provider": "index",
