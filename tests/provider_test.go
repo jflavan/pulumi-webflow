@@ -37,8 +37,9 @@ func TestSitePreviewCreate(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	// Preview cannot know the real Webflow ID; it only has to be non-empty so dependents can plan.
-	assert.NotEmpty(t, response.ID)
+	// Preview cannot know the real Webflow ID. An empty ID tells the engine the ID is unknown,
+	// so dependents see an unknown value instead of a fabricated placeholder.
+	assert.Empty(t, response.ID)
 	assert.Equal(t, "My Pulumi Site", response.Properties.Get("displayName").AsString())
 }
 
