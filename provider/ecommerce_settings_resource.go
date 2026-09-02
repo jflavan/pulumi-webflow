@@ -8,16 +8,13 @@ package provider
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
 )
 
-// EcommerceSettings is the resource controller for managing Webflow ecommerce settings.
-// It implements the infer.CustomResource interface.
+// EcommerceSettings is the resource controller for Webflow ecommerce settings.
 //
 // Note: This is a read-only resource. Ecommerce must be enabled through the Webflow dashboard.
 // This resource allows you to import and track existing ecommerce settings as infrastructure state.
@@ -26,17 +23,14 @@ type EcommerceSettings struct{}
 // EcommerceSettingsArgs defines the input properties for the EcommerceSettings resource.
 type EcommerceSettingsArgs struct {
 	// SiteID is the Webflow site ID (24-character lowercase hexadecimal string).
-	// Example: "5f0c8c9e1c9d440000e8d8c3"
 	SiteID string `pulumi:"siteId"`
 }
 
 // EcommerceSettingsState defines the output properties for the EcommerceSettings resource.
-// It embeds EcommerceSettingsArgs to include input properties in the output.
 type EcommerceSettingsState struct {
 	EcommerceSettingsArgs
 	// DefaultCurrency is the three-letter ISO 4217 currency code for the site (read-only).
-	// Examples: "USD", "EUR", "GBP"
-	DefaultCurrency string `pulumi:"defaultCurrency"`
+	DefaultCurrency string `pulumi:"defaultCurrency,optional"`
 	// CreatedOn is the timestamp when ecommerce was enabled on the site (read-only, ISO 8601 format).
 	CreatedOn string `pulumi:"createdOn,optional"`
 }
@@ -76,117 +70,81 @@ func (state *EcommerceSettingsState) Annotate(a infer.Annotator) {
 func (r *EcommerceSettings) Diff(
 	ctx context.Context, req infer.DiffRequest[EcommerceSettingsArgs, EcommerceSettingsState],
 ) (infer.DiffResponse, error) {
-	diff := infer.DiffResponse{}
-
-	// Check for siteId change (requires replacement)
 	if req.State.SiteID != req.Inputs.SiteID {
-		diff.DeleteBeforeReplace = true
-		diff.HasChanges = true
-		diff.DetailedDiff = map[string]p.PropertyDiff{
-			"siteId": {Kind: p.UpdateReplace},
-		}
-		return diff, nil
+		return infer.DiffResponse{
+			DeleteBeforeReplace: true,
+			HasChanges:          true,
+			DetailedDiff:        map[string]p.PropertyDiff{"siteId": {Kind: p.UpdateReplace}},
+		}, nil
 	}
-
-	// No other changes are possible since this is a read-only resource
-	return diff, nil
+	return infer.DiffResponse{}, nil
 }
 
 // Create "creates" an ecommerce settings resource by reading the existing settings from Webflow.
-// This is a read-only resource - ecommerce must be enabled through the Webflow dashboard first.
 func (r *EcommerceSettings) Create(
 	ctx context.Context, req infer.CreateRequest[EcommerceSettingsArgs],
 ) (infer.CreateResponse[EcommerceSettingsState], error) {
-	// Validate inputs BEFORE making API calls
+	state := EcommerceSettingsState{EcommerceSettingsArgs: req.Inputs}
+	resourceID := GenerateEcommerceSettingsResourceID(req.Inputs.SiteID)
+
+	// During preview the real values are unknown; return the inputs only.
+	if req.DryRun {
+		return infer.CreateResponse[EcommerceSettingsState]{ID: resourceID, Output: state}, nil
+	}
+
 	if err := ValidateSiteID(req.Inputs.SiteID); err != nil {
 		return infer.CreateResponse[EcommerceSettingsState]{},
 			fmt.Errorf("validation failed for EcommerceSettings resource: %w", err)
 	}
 
-	state := EcommerceSettingsState{
-		EcommerceSettingsArgs: req.Inputs,
-		DefaultCurrency:       "",
-		CreatedOn:             "",
-	}
-	resourceID := GenerateEcommerceSettingsResourceID(req.Inputs.SiteID)
-
-	// During preview, return expected state without making API calls
-	if req.DryRun {
-		// During preview, we can't know the actual values, so we set placeholders
-		state.DefaultCurrency = "USD" // Placeholder - actual value will be fetched on apply
-		return infer.CreateResponse[EcommerceSettingsState]{
-			ID:     resourceID,
-			Output: state,
-		}, nil
-	}
-
-	// Get HTTP client
 	client, err := GetHTTPClient(ctx, providerVersion)
 	if err != nil {
 		return infer.CreateResponse[EcommerceSettingsState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API to read existing ecommerce settings
 	response, err := GetEcommerceSettings(ctx, client, req.Inputs.SiteID)
 	if err != nil {
-		return infer.CreateResponse[EcommerceSettingsState]{},
-			fmt.Errorf("failed to read ecommerce settings: %w. "+
-				"Ensure ecommerce is enabled on this site through the Webflow dashboard", err)
+		return infer.CreateResponse[EcommerceSettingsState]{}, fmt.Errorf("failed to read ecommerce settings: %w", err)
 	}
 
-	// Update state with response
 	state.DefaultCurrency = response.DefaultCurrency
 	state.CreatedOn = response.CreatedOn
 
-	return infer.CreateResponse[EcommerceSettingsState]{
-		ID:     resourceID,
-		Output: state,
-	}, nil
+	return infer.CreateResponse[EcommerceSettingsState]{ID: resourceID, Output: state}, nil
 }
 
 // Read retrieves the current state of ecommerce settings from Webflow.
-// Used for drift detection and import operations.
+// Only a 404 clears the resource from state; "ecommerce not enabled" (409) is surfaced as an
+// actionable error so the user can decide what to do.
 func (r *EcommerceSettings) Read(
 	ctx context.Context, req infer.ReadRequest[EcommerceSettingsArgs, EcommerceSettingsState],
 ) (infer.ReadResponse[EcommerceSettingsArgs, EcommerceSettingsState], error) {
-	// Extract siteID from resource ID
 	siteID, err := ExtractSiteIDFromEcommerceSettingsResourceID(req.ID)
 	if err != nil {
 		return infer.ReadResponse[EcommerceSettingsArgs, EcommerceSettingsState]{},
 			fmt.Errorf("invalid resource ID: %w", err)
 	}
+	if err := ValidateSiteID(siteID); err != nil {
+		return infer.ReadResponse[EcommerceSettingsArgs, EcommerceSettingsState]{},
+			fmt.Errorf("invalid resource ID: %w", err)
+	}
 
-	// Get HTTP client
 	client, err := GetHTTPClient(ctx, providerVersion)
 	if err != nil {
 		return infer.ReadResponse[EcommerceSettingsArgs, EcommerceSettingsState]{},
 			fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API
 	response, err := GetEcommerceSettings(ctx, client, siteID)
 	if err != nil {
-		// Propagate context cancellation errors
-		if errors.Is(err, context.Canceled) {
-			return infer.ReadResponse[EcommerceSettingsArgs, EcommerceSettingsState]{}, err
+		if IsNotFound(err) {
+			return infer.ReadResponse[EcommerceSettingsArgs, EcommerceSettingsState]{ID: ""}, nil
 		}
-		// Treat "not found" or "ecommerce not enabled" as resource deletion
-		// This means ecommerce has been disabled on the site
-		if strings.Contains(strings.ToLower(err.Error()), "not found") ||
-			strings.Contains(strings.ToLower(err.Error()), "ecommerce not enabled") {
-			return infer.ReadResponse[EcommerceSettingsArgs, EcommerceSettingsState]{
-				ID: "",
-			}, nil
-		}
-		// For other errors (network issues, rate limiting, etc.), propagate the error
 		return infer.ReadResponse[EcommerceSettingsArgs, EcommerceSettingsState]{},
 			fmt.Errorf("failed to read ecommerce settings: %w", err)
 	}
 
-	// Build current state from API response
-	currentInputs := EcommerceSettingsArgs{
-		SiteID: siteID,
-	}
+	currentInputs := EcommerceSettingsArgs{SiteID: siteID}
 	currentState := EcommerceSettingsState{
 		EcommerceSettingsArgs: currentInputs,
 		DefaultCurrency:       response.DefaultCurrency,
@@ -200,33 +158,22 @@ func (r *EcommerceSettings) Read(
 	}, nil
 }
 
-// Update is a no-op for this read-only resource.
-// Ecommerce settings cannot be modified through the Webflow API - they must be changed
-// through the Webflow dashboard.
+// Update is a no-op for this read-only resource; it returns the current state.
 func (r *EcommerceSettings) Update(
 	ctx context.Context, req infer.UpdateRequest[EcommerceSettingsArgs, EcommerceSettingsState],
 ) (infer.UpdateResponse[EcommerceSettingsState], error) {
-	// This should never be called since Diff only reports changes for siteId (which triggers replace)
-	// But we implement it to return the current state
 	state := EcommerceSettingsState{
 		EcommerceSettingsArgs: req.Inputs,
 		DefaultCurrency:       req.State.DefaultCurrency,
 		CreatedOn:             req.State.CreatedOn,
 	}
-
-	return infer.UpdateResponse[EcommerceSettingsState]{
-		Output: state,
-	}, nil
+	return infer.UpdateResponse[EcommerceSettingsState]{Output: state}, nil
 }
 
 // Delete removes the ecommerce settings from Pulumi state.
-// Note: This does NOT disable ecommerce on the site - that must be done through
-// the Webflow dashboard. This only removes the resource from Pulumi management.
+// This does NOT disable ecommerce on the site; that must be done in the Webflow dashboard.
 func (r *EcommerceSettings) Delete(
 	ctx context.Context, req infer.DeleteRequest[EcommerceSettingsState],
 ) (infer.DeleteResponse, error) {
-	// This is a no-op - we can't delete ecommerce settings via API.
-	// The resource is simply removed from Pulumi state.
-	// Ecommerce must be disabled through the Webflow dashboard if needed.
 	return infer.DeleteResponse{}, nil
 }

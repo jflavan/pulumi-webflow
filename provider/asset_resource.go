@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
@@ -29,21 +28,15 @@ type AssetArgs struct {
 	SiteID string `pulumi:"siteId"`
 	// FileName is the name of the file to upload.
 	// Must include the file extension (e.g., "logo.png", "hero.jpg").
-	// Examples: "logo.png", "hero-image.jpg", "document.pdf"
 	FileName string `pulumi:"fileName"`
-	// FileHash is the MD5 hash of the file content (required).
-	// Webflow uses this to identify and deduplicate assets.
-	// Generate using: md5sum <filename> (Linux) or md5 <filename> (macOS)
-	FileHash string `pulumi:"fileHash"`
+	// FileSource is where the file bytes come from: a local path (resolved relative to the
+	// Pulumi program's working directory) or an http(s) URL.
+	FileSource string `pulumi:"fileSource"`
+	// FileHash is the MD5 hash of the file content. It is computed from fileSource; when
+	// provided explicitly it must match the actual content or Create fails.
+	FileHash string `pulumi:"fileHash,optional"`
 	// ParentFolder is the optional folder ID where the asset will be placed.
-	// If not specified, the asset will be placed at the root level.
-	// Example: "5f0c8c9e1c9d440000e8d8c4"
 	ParentFolder string `pulumi:"parentFolder,optional"`
-	// FileSource is the source of the file to upload.
-	// For MVP, this tracks that an asset exists but doesn't handle actual upload.
-	// Future versions may support URL or local file path.
-	// Example: "https://example.com/logo.png" or "/path/to/local/file.png"
-	FileSource string `pulumi:"fileSource,optional"`
 }
 
 // AssetState defines the output properties for the Asset resource.
@@ -52,24 +45,20 @@ type AssetState struct {
 	AssetArgs
 	// AssetID is the Webflow-assigned asset ID (read-only).
 	AssetID string `pulumi:"assetId,optional"`
-	// UploadURL is the presigned S3 URL for uploading the file content (read-only).
-	// Use this URL with UploadDetails to complete the asset upload via S3 POST.
-	// See: https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPOST.html
-	UploadURL string `pulumi:"uploadUrl,optional"`
-	// UploadDetails contains AWS S3 POST form fields required for upload (read-only).
-	// Keys include: acl, bucket, key, Content-Type, X-Amz-Algorithm, X-Amz-Credential,
-	// X-Amz-Date, Policy, X-Amz-Signature, success_action_status, Cache-Control.
-	UploadDetails map[string]string `pulumi:"uploadDetails,optional"`
+	// UploadURL is the presigned S3 URL the file was uploaded to (read-only, secret).
+	UploadURL string `pulumi:"uploadUrl,optional" provider:"secret"`
+	// UploadDetails contains the signed AWS S3 POST form fields (read-only, secret).
+	UploadDetails map[string]string `pulumi:"uploadDetails,optional" provider:"secret"`
 	// AssetURL is the direct S3 URL for the asset (read-only).
 	AssetURL string `pulumi:"assetUrl,optional"`
-	// HostedURL is the Webflow CDN URL where the asset will be hosted (read-only).
-	// This URL becomes accessible after completing the S3 upload.
+	// HostedURL is the Webflow CDN URL where the asset is hosted (read-only).
 	HostedURL string `pulumi:"hostedUrl,optional"`
 	// ContentType is the MIME type of the asset (read-only).
-	// Examples: "image/png", "image/jpeg", "application/pdf"
 	ContentType string `pulumi:"contentType,optional"`
 	// Size is the size of the asset in bytes (read-only).
 	Size int `pulumi:"size,optional"`
+	// FolderID is the folder the asset lives in, or empty at the site root (read-only).
+	FolderID string `pulumi:"folderId,optional"`
 	// CreatedOn is the timestamp when the asset was created (read-only).
 	CreatedOn string `pulumi:"createdOn,optional"`
 	// LastUpdated is the timestamp when the asset was last modified (read-only).
@@ -79,9 +68,10 @@ type AssetState struct {
 // Annotate adds descriptions and constraints to the Asset resource.
 func (r *Asset) Annotate(a infer.Annotator) {
 	a.SetToken("index", "Asset")
-	a.Describe(r, "Manages assets (images, files, documents) for a Webflow site. "+
-		"This resource allows you to upload and manage files that can be used in your Webflow site. "+
-		"Note: Assets are immutable - changing any property will delete and recreate the asset.")
+	a.Describe(r, "Uploads and manages an asset (image, file, document) in a Webflow site. "+
+		"Create registers the asset metadata with Webflow and then uploads the file bytes from "+
+		"fileSource to Webflow's storage. Assets are immutable: changing any input, or changing the "+
+		"content of a local fileSource, replaces the asset.")
 }
 
 // Annotate adds descriptions to the AssetArgs fields.
@@ -89,276 +79,240 @@ func (args *AssetArgs) Annotate(a infer.Annotator) {
 	a.Describe(&args.SiteID,
 		"The Webflow site ID (24-character lowercase hexadecimal string, "+
 			"e.g., '5f0c8c9e1c9d440000e8d8c3'). "+
-			"You can find your site ID in the Webflow dashboard under Site Settings. "+
-			"This field will be validated before making any API calls.")
+			"You can find your site ID in the Webflow dashboard under Site Settings.")
 
 	a.Describe(&args.FileName,
-		"The name of the file to upload, including the extension. "+
+		"The name of the file as it will appear in Webflow, including the extension. "+
 			"Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. "+
-			"The file name must not exceed 255 characters and should not contain "+
-			"invalid characters (<, >, :, \", |, ?, *).")
-
-	a.Describe(&args.FileHash,
-		"MD5 hash of the file content (required). "+
-			"Webflow uses this hash to identify and deduplicate assets. "+
-			"Generate using: md5sum <filename> (Linux) or md5 <filename> (macOS). "+
-			"Example: 'd41d8cd98f00b204e9800998ecf8427e'.")
-
-	a.Describe(&args.ParentFolder,
-		"Optional folder ID where the asset will be organized in the Webflow Assets panel. "+
-			"If not specified, the asset will be placed at the root level. "+
-			"Example: '5f0c8c9e1c9d440000e8d8c4'.")
+			"Must not exceed 255 characters or contain <, >, :, \", |, ?, *.")
 
 	a.Describe(&args.FileSource,
-		"The source of the file to upload. "+
-			"For the current implementation, this is a reference field. "+
-			"In future versions, this may support URLs or local file paths for automatic upload. "+
-			"Examples: 'https://example.com/logo.png', '/path/to/local/file.png'.")
+		"Where the file bytes come from: a local file path (resolved relative to the Pulumi program's "+
+			"working directory, e.g., './assets/logo.png') or an http(s) URL "+
+			"(e.g., 'https://example.com/logo.png'). The content is read at apply time, "+
+			"MD5-hashed and uploaded to Webflow.")
+
+	a.Describe(&args.FileHash,
+		"MD5 hash of the file content. Computed automatically from fileSource; "+
+			"if you set it explicitly it must match the actual content. "+
+			"For local files, a content change (different hash) replaces the asset.")
+
+	a.Describe(&args.ParentFolder,
+		"Optional asset folder ID where the asset will be organized in the Webflow Assets panel. "+
+			"If not specified, the asset is placed at the root level. "+
+			"Example: '5f0c8c9e1c9d440000e8d8c4'.")
 }
 
 // Annotate adds descriptions to the AssetState fields.
 func (state *AssetState) Annotate(a infer.Annotator) {
-	a.Describe(&state.AssetID,
-		"The Webflow-assigned asset ID (read-only). "+
-			"This unique identifier can be used to reference the asset in API calls.")
-
+	a.Describe(&state.AssetID, "The Webflow-assigned asset ID (read-only).")
 	a.Describe(&state.UploadURL,
-		"The presigned S3 URL for uploading the file content (read-only). "+
-			"Use this URL along with uploadDetails to complete the asset upload. "+
-			"See AWS S3 POST documentation: https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPOST.html")
-
+		"The presigned S3 URL the file was uploaded to (read-only, secret). "+
+			"The provider performs the upload; this is recorded for reference only.")
 	a.Describe(&state.UploadDetails,
-		"AWS S3 POST form fields required to complete the upload (read-only). "+
-			"Include these as form fields when POSTing the file to uploadUrl. "+
-			"Keys: acl, bucket, key, Content-Type, X-Amz-Algorithm, X-Amz-Credential, "+
-			"X-Amz-Date, Policy, X-Amz-Signature, success_action_status, Cache-Control.")
-
-	a.Describe(&state.AssetURL,
-		"The direct S3 URL for the asset (read-only). "+
-			"This is the raw S3 location where the file is stored.")
-
+		"The signed AWS S3 POST form fields used for the upload (read-only, secret).")
+	a.Describe(&state.AssetURL, "The direct S3 URL for the asset (read-only).")
 	a.Describe(&state.HostedURL,
-		"The Webflow CDN URL where the asset will be hosted (read-only). "+
-			"This URL becomes accessible after completing the S3 upload. "+
-			"Example: 'https://assets.website-files.com/.../logo.png'.")
-
+		"The Webflow CDN URL where the asset is hosted (read-only). "+
+			"Example: 'https://cdn.prod.website-files.com/.../logo.png'.")
 	a.Describe(&state.ContentType,
-		"The MIME type of the asset (read-only). "+
-			"Examples: 'image/png', 'image/jpeg', 'application/pdf'. "+
-			"Determined by the fileName extension.")
-
-	a.Describe(&state.Size,
-		"The size of the asset in bytes (read-only). "+
-			"This is the actual size of the uploaded file.")
-
+		"The MIME type of the asset (read-only), e.g., 'image/png', 'application/pdf'.")
+	a.Describe(&state.Size, "The size of the uploaded file in bytes (read-only).")
+	a.Describe(&state.FolderID,
+		"The ID of the asset folder the asset belongs to, or empty when it is at the site root (read-only).")
 	a.Describe(&state.CreatedOn,
-		"The timestamp when the asset metadata was created (RFC3339 format, read-only). "+
-			"This is set when the asset is registered with Webflow.")
-
+		"The timestamp when the asset metadata was created (RFC3339 format, read-only).")
 	a.Describe(&state.LastUpdated,
-		"The timestamp when the asset was last modified (RFC3339 format, read-only). "+
-			"For most assets, this will be the same as createdOn since assets are immutable.")
+		"The timestamp when the asset was last modified (RFC3339 format, read-only).")
 }
 
 // Diff determines what changes need to be made to the asset resource.
 // Assets are immutable - any change requires replacement (delete + recreate).
+// A local fileSource whose content hash differs from the recorded fileHash is also a replacement.
 func (r *Asset) Diff(
 	ctx context.Context, req infer.DiffRequest[AssetArgs, AssetState],
 ) (infer.DiffResponse, error) {
-	diff := infer.DiffResponse{}
-
-	// SiteID change requires replacement
-	if req.State.SiteID != req.Inputs.SiteID {
-		diff.DeleteBeforeReplace = true
-		diff.HasChanges = true
-		diff.DetailedDiff = map[string]p.PropertyDiff{
-			"siteId": {Kind: p.UpdateReplace},
+	replace := func(field string) infer.DiffResponse {
+		return infer.DiffResponse{
+			DeleteBeforeReplace: true,
+			HasChanges:          true,
+			DetailedDiff:        map[string]p.PropertyDiff{field: {Kind: p.UpdateReplace}},
 		}
-		return diff, nil
 	}
 
-	// FileName change requires replacement (assets are immutable)
-	if req.State.FileName != req.Inputs.FileName {
-		diff.DeleteBeforeReplace = true
-		diff.HasChanges = true
-		diff.DetailedDiff = map[string]p.PropertyDiff{
-			"fileName": {Kind: p.UpdateReplace},
-		}
-		return diff, nil
+	switch {
+	case req.State.SiteID != req.Inputs.SiteID:
+		return replace("siteId"), nil
+	case req.State.FileName != req.Inputs.FileName:
+		return replace("fileName"), nil
+	case req.State.ParentFolder != req.Inputs.ParentFolder:
+		return replace("parentFolder"), nil
+	case req.State.FileSource != req.Inputs.FileSource:
+		return replace("fileSource"), nil
 	}
 
-	// FileHash change requires replacement
-	if req.State.FileHash != req.Inputs.FileHash {
-		diff.DeleteBeforeReplace = true
-		diff.HasChanges = true
-		diff.DetailedDiff = map[string]p.PropertyDiff{
-			"fileHash": {Kind: p.UpdateReplace},
+	// Determine the hash the new inputs imply. An explicit fileHash wins; otherwise a local
+	// file is hashed now so content changes are detected. Remote URLs are not fetched during
+	// Diff (that would be a network call on every preview); set fileHash to track them.
+	expectedHash := strings.ToLower(req.Inputs.FileHash)
+	if expectedHash == "" && req.Inputs.FileSource != "" && !IsRemoteAssetSource(req.Inputs.FileSource) {
+		data, err := ReadAssetSource(ctx, req.Inputs.FileSource)
+		if err != nil {
+			return infer.DiffResponse{}, fmt.Errorf("cannot determine whether asset content changed: %w", err)
 		}
-		return diff, nil
+		expectedHash = ComputeFileHash(data)
+	}
+	if expectedHash != "" && req.State.FileHash != "" && expectedHash != strings.ToLower(req.State.FileHash) {
+		return replace("fileHash"), nil
 	}
 
-	// ParentFolder change requires replacement
-	if req.State.ParentFolder != req.Inputs.ParentFolder {
-		diff.DeleteBeforeReplace = true
-		diff.HasChanges = true
-		diff.DetailedDiff = map[string]p.PropertyDiff{
-			"parentFolder": {Kind: p.UpdateReplace},
-		}
-		return diff, nil
-	}
-
-	// FileSource change requires replacement
-	if req.State.FileSource != req.Inputs.FileSource {
-		diff.DeleteBeforeReplace = true
-		diff.HasChanges = true
-		diff.DetailedDiff = map[string]p.PropertyDiff{
-			"fileSource": {Kind: p.UpdateReplace},
-		}
-		return diff, nil
-	}
-
-	return diff, nil
+	return infer.DiffResponse{}, nil
 }
 
-// Create creates a new asset by requesting an upload URL from Webflow.
-// The Webflow API returns an asset ID and presigned S3 upload URL.
-// Note: The actual file upload to S3 must be done separately using the uploadUrl and uploadDetails.
+// Create registers the asset with Webflow and uploads the file content.
 func (r *Asset) Create(
 	ctx context.Context, req infer.CreateRequest[AssetArgs],
 ) (infer.CreateResponse[AssetState], error) {
-	// Log the start of asset creation
+	state := AssetState{AssetArgs: req.Inputs}
+
+	// During preview, return the inputs without touching the file or the API. Inputs may be
+	// unknown (zero values) at this point, so validation is deferred to apply time. The
+	// resource ID depends on the Webflow-assigned asset ID and is therefore unknown too.
+	if req.DryRun {
+		return infer.CreateResponse[AssetState]{Output: state}, nil
+	}
+
 	log := NewLogContext(ctx).
 		WithField("siteId", req.Inputs.SiteID).
 		WithField("fileName", req.Inputs.FileName)
-	log.Info("Creating Webflow asset")
 
-	// Validate inputs BEFORE making API calls
 	if err := ValidateSiteID(req.Inputs.SiteID); err != nil {
-		log.Errorf("Validation failed: %v", err)
 		return infer.CreateResponse[AssetState]{}, fmt.Errorf("validation failed for Asset resource: %w", err)
 	}
 	if err := ValidateFileName(req.Inputs.FileName); err != nil {
-		log.Errorf("Validation failed: %v", err)
 		return infer.CreateResponse[AssetState]{}, fmt.Errorf("validation failed for Asset resource: %w", err)
 	}
-	if err := ValidateFileHash(req.Inputs.FileHash); err != nil {
-		log.Errorf("Validation failed: %v", err)
+	if req.Inputs.ParentFolder != "" {
+		if err := ValidateAssetFolderID(req.Inputs.ParentFolder); err != nil {
+			return infer.CreateResponse[AssetState]{},
+				fmt.Errorf("validation failed for Asset resource (parentFolder): %w", err)
+		}
+	}
+	if req.Inputs.FileHash != "" {
+		if err := ValidateFileHash(req.Inputs.FileHash); err != nil {
+			return infer.CreateResponse[AssetState]{}, fmt.Errorf("validation failed for Asset resource: %w", err)
+		}
+	}
+
+	data, err := ReadAssetSource(ctx, req.Inputs.FileSource)
+	if err != nil {
 		return infer.CreateResponse[AssetState]{}, fmt.Errorf("validation failed for Asset resource: %w", err)
 	}
-
-	state := AssetState{
-		AssetArgs: req.Inputs,
+	hash := ComputeFileHash(data)
+	if req.Inputs.FileHash != "" && !strings.EqualFold(req.Inputs.FileHash, hash) {
+		return infer.CreateResponse[AssetState]{}, fmt.Errorf(
+			"validation failed for Asset resource: fileHash '%s' does not match the MD5 of fileSource '%s' (%s). "+
+				"Remove fileHash to have it computed, or update it to match the file content",
+			req.Inputs.FileHash, req.Inputs.FileSource, hash)
 	}
+	state.FileHash = hash
 
-	// During preview, return expected state without making API calls
-	if req.DryRun {
-		log.Debug("Dry run mode - skipping API call")
-		// Set preview values
-		state.AssetID = fmt.Sprintf("preview-%d", time.Now().Unix())
-		state.HostedURL = "https://assets.website-files.com/preview/" + state.FileName
-		state.CreatedOn = time.Now().Format(time.RFC3339)
-		previewID := GenerateAssetResourceID(req.Inputs.SiteID, state.AssetID)
-		return infer.CreateResponse[AssetState]{
-			ID:     previewID,
-			Output: state,
-		}, nil
-	}
-
-	// Get HTTP client
 	client, err := GetHTTPClient(ctx, providerVersion)
 	if err != nil {
-		log.Errorf("Failed to create HTTP client: %v", err)
 		return infer.CreateResponse[AssetState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API to create asset metadata and get upload URL
-	log.Debug("Calling Webflow API to create asset metadata")
-	uploadResp, err := PostAssetUploadURL(
-		ctx, client, req.Inputs.SiteID,
-		req.Inputs.FileName, req.Inputs.FileHash, req.Inputs.ParentFolder,
-	)
+	log.Debug("Registering asset metadata with Webflow")
+	uploadResp, err := PostAssetUploadURL(ctx, client, req.Inputs.SiteID, req.Inputs.FileName, hash, req.Inputs.ParentFolder)
 	if err != nil {
-		log.Errorf("Failed to create asset via API: %v", err)
 		return infer.CreateResponse[AssetState]{}, fmt.Errorf("failed to create asset: %w", err)
 	}
-
-	// Defensive check: Ensure Webflow API returned a valid asset ID
 	if uploadResp.ID == "" {
-		log.Error("API returned empty asset ID")
 		return infer.CreateResponse[AssetState]{}, errors.New(
-			"webflow API returned empty asset ID - " +
-				"this is unexpected and may indicate an API issue")
+			"webflow API returned empty asset ID - this is unexpected and may indicate an API issue")
 	}
 
-	log.WithField("assetId", uploadResp.ID).Info("Asset created successfully")
+	log = log.WithField("assetId", uploadResp.ID)
+	log.Debug("Uploading asset file to storage")
+	if err := UploadAssetFile(ctx, uploadResp.UploadURL, uploadResp.UploadDetails, req.Inputs.FileName, data); err != nil {
+		// Best effort: do not leave an orphaned metadata record behind.
+		if delErr := DeleteAsset(ctx, client, uploadResp.ID); delErr != nil {
+			log.Warnf("Failed to clean up asset metadata after upload failure: %v", delErr)
+		}
+		return infer.CreateResponse[AssetState]{}, fmt.Errorf("failed to upload asset file: %w", err)
+	}
+	log.Info("Asset uploaded successfully")
 
-	// Populate state from API response
 	state.AssetID = uploadResp.ID
 	state.UploadURL = uploadResp.UploadURL
 	state.UploadDetails = uploadResp.UploadDetails
 	state.AssetURL = uploadResp.AssetURL
 	state.HostedURL = uploadResp.HostedURL
 	state.ContentType = uploadResp.ContentType
+	state.Size = len(data)
+	state.FolderID = uploadResp.ParentFolder
 	state.CreatedOn = uploadResp.CreatedOn
 	state.LastUpdated = uploadResp.LastUpdated
 
-	// Note: The actual file must be uploaded to S3 using uploadUrl and uploadDetails.
-	// See: https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPOST.html
-
-	resourceID := GenerateAssetResourceID(req.Inputs.SiteID, uploadResp.ID)
-
 	return infer.CreateResponse[AssetState]{
-		ID:     resourceID,
+		ID:     GenerateAssetResourceID(req.Inputs.SiteID, uploadResp.ID),
 		Output: state,
 	}, nil
 }
 
-// Read retrieves the current state of an asset from Webflow.
+// Read retrieves the current state of an asset from Webflow (GET /v2/assets/{asset_id}).
 // Used for drift detection and import operations.
 func (r *Asset) Read(
 	ctx context.Context, req infer.ReadRequest[AssetArgs, AssetState],
 ) (infer.ReadResponse[AssetArgs, AssetState], error) {
-	// Extract siteID and assetID from resource ID
 	siteID, assetID, err := ExtractIDsFromAssetResourceID(req.ID)
 	if err != nil {
 		return infer.ReadResponse[AssetArgs, AssetState]{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
+	if err := ValidateSiteID(siteID); err != nil {
+		return infer.ReadResponse[AssetArgs, AssetState]{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
+	if err := ValidateAssetID(assetID); err != nil {
+		return infer.ReadResponse[AssetArgs, AssetState]{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
 
-	// Get HTTP client
 	client, err := GetHTTPClient(ctx, providerVersion)
 	if err != nil {
 		return infer.ReadResponse[AssetArgs, AssetState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API to get asset details
 	asset, err := GetAsset(ctx, client, assetID)
 	if err != nil {
-		// Resource not found - return empty ID to signal deletion
-		if strings.Contains(err.Error(), "not found") {
-			return infer.ReadResponse[AssetArgs, AssetState]{
-				ID: "",
-			}, nil
+		if IsNotFound(err) {
+			return infer.ReadResponse[AssetArgs, AssetState]{ID: ""}, nil
 		}
 		return infer.ReadResponse[AssetArgs, AssetState]{}, fmt.Errorf("failed to read asset: %w", err)
 	}
 
-	// Build current state from API response
+	// The GET endpoint does not return the hash, source, or upload details; carry them from state.
 	currentInputs := AssetArgs{
-		SiteID:   siteID,
-		FileName: asset.OriginalFileName,
-		// FileHash and ParentFolder are not returned by GET API
+		SiteID:       siteID,
+		FileName:     asset.OriginalFileName,
+		FileSource:   req.State.FileSource,
 		FileHash:     req.State.FileHash,
 		ParentFolder: req.State.ParentFolder,
-		FileSource:   req.State.FileSource,
+	}
+	folderID := asset.FolderID
+	if folderID == "" {
+		folderID = req.State.FolderID
 	}
 	currentState := AssetState{
-		AssetArgs:   currentInputs,
-		AssetID:     asset.ID,
-		HostedURL:   asset.HostedURL,
-		ContentType: asset.ContentType,
-		Size:        asset.Size,
-		CreatedOn:   asset.CreatedOn,
-		LastUpdated: asset.LastUpdated,
+		AssetArgs:     currentInputs,
+		AssetID:       asset.ID,
+		UploadURL:     req.State.UploadURL,
+		UploadDetails: req.State.UploadDetails,
+		AssetURL:      req.State.AssetURL,
+		HostedURL:     asset.HostedURL,
+		ContentType:   asset.ContentType,
+		Size:          asset.Size,
+		FolderID:      folderID,
+		CreatedOn:     asset.CreatedOn,
+		LastUpdated:   asset.LastUpdated,
 	}
 
 	return infer.ReadResponse[AssetArgs, AssetState]{
@@ -373,8 +327,6 @@ func (r *Asset) Read(
 func (r *Asset) Update(
 	ctx context.Context, req infer.UpdateRequest[AssetArgs, AssetState],
 ) (infer.UpdateResponse[AssetState], error) {
-	// This should never be called because Diff always returns UpdateReplace
-	// But implement it defensively
 	return infer.UpdateResponse[AssetState]{}, errors.New(
 		"assets are immutable and cannot be updated in place. " +
 			"Any changes will trigger a replacement (delete and recreate)")
@@ -382,22 +334,21 @@ func (r *Asset) Update(
 
 // Delete removes an asset from the Webflow site.
 func (r *Asset) Delete(ctx context.Context, req infer.DeleteRequest[AssetState]) (infer.DeleteResponse, error) {
-	// Extract siteID and assetID from resource ID
 	_, assetID, err := ExtractIDsFromAssetResourceID(req.ID)
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
+	if err := ValidateAssetID(assetID); err != nil {
+		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
 
-	// Get HTTP client
 	client, err := GetHTTPClient(ctx, providerVersion)
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API (handles 404 gracefully for idempotency)
 	if err := DeleteAsset(ctx, client, assetID); err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("failed to delete asset: %w", err)
 	}
-
 	return infer.DeleteResponse{}, nil
 }

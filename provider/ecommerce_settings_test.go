@@ -9,397 +9,223 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
+
+	p "github.com/pulumi/pulumi-go-provider"
+	"github.com/pulumi/pulumi-go-provider/infer"
 )
 
-// TestValidateCurrencyCode_Valid tests valid currency codes
-func TestValidateCurrencyCode_Valid(t *testing.T) {
-	tests := []struct {
-		name string
-		code string
-	}{
-		{"USD", "USD"},
-		{"EUR", "EUR"},
-		{"GBP", "GBP"},
-		{"JPY", "JPY"},
-		{"CAD", "CAD"},
-		{"AUD", "AUD"},
-		{"CHF", "CHF"},
-	}
+const testEcomSiteID = "5f0c8c9e1c9d440000e8d8c3"
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateCurrencyCode(tt.code)
-			if err != nil {
-				t.Errorf("ValidateCurrencyCode(%q) = %v, want nil", tt.code, err)
-			}
-		})
+func TestValidateCurrencyCode(t *testing.T) {
+	for _, code := range []string{"USD", "EUR", "GBP", "JPY"} {
+		if err := ValidateCurrencyCode(code); err != nil {
+			t.Errorf("ValidateCurrencyCode(%q) = %v", code, err)
+		}
+	}
+	if err := ValidateCurrencyCode(""); err == nil || !strings.Contains(err.Error(), "required") || !strings.Contains(err.Error(), "ISO 4217") {
+		t.Errorf("empty: %v", err)
+	}
+	for _, code := range []string{"usd", "US", "USDD", "US1", "US$", "Usd"} {
+		if err := ValidateCurrencyCode(code); err == nil || !strings.Contains(err.Error(), "invalid format") {
+			t.Errorf("ValidateCurrencyCode(%q) = %v", code, err)
+		}
 	}
 }
 
-// TestValidateCurrencyCode_Empty tests empty currency code
-func TestValidateCurrencyCode_Empty(t *testing.T) {
-	err := ValidateCurrencyCode("")
-	if err == nil {
-		t.Error("ValidateCurrencyCode(\"\") = nil, want error")
+func TestEcommerceSettingsResourceIDRoundTrip(t *testing.T) {
+	id := GenerateEcommerceSettingsResourceID(testEcomSiteID)
+	if id != testEcomSiteID+"/ecommerce/settings" {
+		t.Fatalf("id = %q", id)
 	}
-	if !strings.Contains(err.Error(), "required") {
-		t.Errorf("Expected error to mention 'required', got: %v", err)
+	siteID, err := ExtractSiteIDFromEcommerceSettingsResourceID(id)
+	if err != nil || siteID != testEcomSiteID {
+		t.Fatalf("extract: %q %v", siteID, err)
 	}
-}
-
-// TestValidateCurrencyCode_Invalid tests invalid currency codes
-func TestValidateCurrencyCode_Invalid(t *testing.T) {
-	tests := []struct {
-		name string
-		code string
-	}{
-		{"lowercase", "usd"},
-		{"too short", "US"},
-		{"too long", "USDD"},
-		{"with numbers", "US1"},
-		{"with special char", "US$"},
-		{"mixed case", "Usd"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateCurrencyCode(tt.code)
-			if err == nil {
-				t.Errorf("ValidateCurrencyCode(%q) = nil, want error", tt.code)
-			}
-			if !strings.Contains(err.Error(), "invalid format") {
-				t.Errorf("Expected error to mention 'invalid format', got: %v", err)
-			}
-		})
+	for _, bad := range []string{"", testEcomSiteID, testEcomSiteID + "/ecommerce", testEcomSiteID + "/settings", testEcomSiteID + "/redirects/123", "/ecommerce/settings"} {
+		if _, err := ExtractSiteIDFromEcommerceSettingsResourceID(bad); err == nil {
+			t.Errorf("expected error for %q", bad)
+		}
 	}
 }
 
-// TestGenerateEcommerceSettingsResourceID tests resource ID generation
-func TestGenerateEcommerceSettingsResourceID(t *testing.T) {
-	siteID := "5f0c8c9e1c9d440000e8d8c3"
-
-	resourceID := GenerateEcommerceSettingsResourceID(siteID)
-	expected := "5f0c8c9e1c9d440000e8d8c3/ecommerce/settings"
-
-	if resourceID != expected {
-		t.Errorf("GenerateEcommerceSettingsResourceID() = %q, want %q", resourceID, expected)
-	}
+// ecomServer answers GET /v2/sites/{id}/ecommerce/settings with the given status.
+func ecomServer(t *testing.T, status *int) *httptest.Server {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v2/sites/"+testEcomSiteID+"/ecommerce/settings" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		w.WriteHeader(*status)
+		switch *status {
+		case http.StatusOK:
+			_ = json.NewEncoder(w).Encode(EcommerceSettingsResponse{SiteID: testEcomSiteID, CreatedOn: "2024-01-15T10:30:00Z", DefaultCurrency: "EUR"})
+		case http.StatusConflict:
+			_, _ = w.Write([]byte(`{"code":"ecommerce_not_enabled","message":"Site does not have ecommerce enabled"}`))
+		default:
+			_, _ = w.Write([]byte(`{"message":"not found"}`))
+		}
+	}))
+	t.Cleanup(server.Close)
+	return server
 }
 
-// TestExtractSiteIDFromEcommerceSettingsResourceID_Valid tests extracting site ID from valid resource ID
-func TestExtractSiteIDFromEcommerceSettingsResourceID_Valid(t *testing.T) {
-	resourceID := "5f0c8c9e1c9d440000e8d8c3/ecommerce/settings"
+func TestGetEcommerceSettings(t *testing.T) {
+	status := http.StatusOK
+	client := useMockAPI(t, ecomServer(t, &status))
 
-	siteID, err := ExtractSiteIDFromEcommerceSettingsResourceID(resourceID)
+	resp, err := GetEcommerceSettings(context.Background(), client, testEcomSiteID)
 	if err != nil {
-		t.Errorf("ExtractSiteIDFromEcommerceSettingsResourceID() error = %v, want nil", err)
+		t.Fatalf("GetEcommerceSettings: %v", err)
 	}
-	if siteID != "5f0c8c9e1c9d440000e8d8c3" {
-		t.Errorf("ExtractSiteIDFromEcommerceSettingsResourceID() siteID = %q, want %q", siteID, "5f0c8c9e1c9d440000e8d8c3")
-	}
-}
-
-// TestExtractSiteIDFromEcommerceSettingsResourceID_Empty tests empty resource ID
-func TestExtractSiteIDFromEcommerceSettingsResourceID_Empty(t *testing.T) {
-	_, err := ExtractSiteIDFromEcommerceSettingsResourceID("")
-	if err == nil {
-		t.Error("ExtractSiteIDFromEcommerceSettingsResourceID(\"\") error = nil, want error")
-	}
-}
-
-// TestExtractSiteIDFromEcommerceSettingsResourceID_InvalidFormat tests invalid format
-func TestExtractSiteIDFromEcommerceSettingsResourceID_InvalidFormat(t *testing.T) {
-	tests := []struct {
-		name       string
-		resourceID string
-	}{
-		{"missing suffix", "5f0c8c9e1c9d440000e8d8c3"},
-		{"wrong suffix", "5f0c8c9e1c9d440000e8d8c3/ecommerce"},
-		{"partial suffix", "5f0c8c9e1c9d440000e8d8c3/settings"},
-		{"different resource type", "5f0c8c9e1c9d440000e8d8c3/redirects/123"},
-		{"too short", "/ecommerce/settings"},
+	if resp.DefaultCurrency != "EUR" || resp.CreatedOn != "2024-01-15T10:30:00Z" {
+		t.Errorf("unexpected response %+v", resp)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := ExtractSiteIDFromEcommerceSettingsResourceID(tt.resourceID)
-			if err == nil {
-				t.Errorf("ExtractSiteIDFromEcommerceSettingsResourceID(%q) error = nil, want error", tt.resourceID)
-			}
-		})
+	status = http.StatusNotFound
+	if _, err := GetEcommerceSettings(context.Background(), client, testEcomSiteID); !IsNotFound(err) {
+		t.Errorf("expected IsNotFound, got %v", err)
 	}
-}
 
-// TestGetEcommerceSettings_Valid tests retrieving ecommerce settings successfully
-func TestGetEcommerceSettings_Valid(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Errorf("Expected GET, got %s", r.Method)
+	status = http.StatusConflict
+	_, err = GetEcommerceSettings(context.Background(), client, testEcomSiteID)
+	if !IsEcommerceNotEnabled(err) || IsNotFound(err) {
+		t.Errorf("expected EcommerceNotEnabledError, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "ecommerce not enabled") || !strings.Contains(err.Error(), "Webflow dashboard") ||
+		!strings.Contains(err.Error(), "ecommerce_not_enabled") {
+		t.Errorf("error should be actionable and include details: %v", err)
+	}
+
+	for _, s := range []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusInternalServerError} {
+		status = s
+		_, err := GetEcommerceSettings(context.Background(), client, testEcomSiteID)
+		var apiErr *APIError
+		if !errors.As(err, &apiErr) || apiErr.StatusCode != s || IsEcommerceNotEnabled(err) {
+			t.Errorf("status %d: expected APIError, got %v", s, err)
 		}
-		if !strings.Contains(r.URL.Path, "/ecommerce/settings") {
-			t.Errorf("Expected /ecommerce/settings in path, got %s", r.URL.Path)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		response := EcommerceSettingsResponse{
-			SiteID:          "5f0c8c9e1c9d440000e8d8c3",
-			CreatedOn:       "2024-01-15T10:30:00Z",
-			DefaultCurrency: "USD",
-		}
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
-
-	// Override the API base URL for this test
-	oldURL := getEcommerceSettingsBaseURL
-	getEcommerceSettingsBaseURL = server.URL
-	defer func() { getEcommerceSettingsBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	result, err := GetEcommerceSettings(ctx, client, "5f0c8c9e1c9d440000e8d8c3")
-	if err != nil {
-		t.Fatalf("GetEcommerceSettings failed: %v", err)
-	}
-
-	if result.SiteID != "5f0c8c9e1c9d440000e8d8c3" {
-		t.Errorf("Expected siteId '5f0c8c9e1c9d440000e8d8c3', got %s", result.SiteID)
-	}
-	if result.DefaultCurrency != "USD" {
-		t.Errorf("Expected defaultCurrency 'USD', got %s", result.DefaultCurrency)
-	}
-	if result.CreatedOn != "2024-01-15T10:30:00Z" {
-		t.Errorf("Expected createdOn '2024-01-15T10:30:00Z', got %s", result.CreatedOn)
 	}
 }
 
-// TestGetEcommerceSettings_NotFound tests 404 handling
-func TestGetEcommerceSettings_NotFound(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte("site not found"))
-	}))
-	defer server.Close()
-
-	oldURL := getEcommerceSettingsBaseURL
-	getEcommerceSettingsBaseURL = server.URL
-	defer func() { getEcommerceSettingsBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	_, err := GetEcommerceSettings(ctx, client, "nonexistent")
-	if err == nil {
-		t.Error("Expected error for 404, got nil")
-	}
-	if !strings.Contains(err.Error(), "not found") {
-		t.Errorf("Expected 'not found' in error, got: %v", err)
+func TestHandleEcommerceNotEnabledError_TruncatesBody(t *testing.T) {
+	err := handleEcommerceNotEnabledError([]byte(strings.Repeat("x", 5000)))
+	if !IsEcommerceNotEnabled(err) || len(err.Error()) > 1200 {
+		t.Errorf("expected truncated typed error, got len=%d", len(err.Error()))
 	}
 }
 
-// TestGetEcommerceSettings_EcommerceNotEnabled tests 409 handling when ecommerce is not enabled
-func TestGetEcommerceSettings_EcommerceNotEnabled(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusConflict)
-		_, _ = w.Write([]byte(`{"code": "ecommerce_not_enabled", "message": "Site does not have ecommerce enabled"}`))
-	}))
-	defer server.Close()
-
-	oldURL := getEcommerceSettingsBaseURL
-	getEcommerceSettingsBaseURL = server.URL
-	defer func() { getEcommerceSettingsBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	_, err := GetEcommerceSettings(ctx, client, "5f0c8c9e1c9d440000e8d8c3")
-	if err == nil {
-		t.Error("Expected error for 409, got nil")
-	}
-	if !strings.Contains(err.Error(), "ecommerce not enabled") {
-		t.Errorf("Expected 'ecommerce not enabled' in error, got: %v", err)
-	}
-}
-
-// TestGetEcommerceSettings_Unauthorized tests 401 handling
-func TestGetEcommerceSettings_Unauthorized(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = w.Write([]byte("unauthorized"))
-	}))
-	defer server.Close()
-
-	oldURL := getEcommerceSettingsBaseURL
-	getEcommerceSettingsBaseURL = server.URL
-	defer func() { getEcommerceSettingsBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	_, err := GetEcommerceSettings(ctx, client, "5f0c8c9e1c9d440000e8d8c3")
-	if err == nil {
-		t.Error("Expected error for 401, got nil")
-	}
-	if !strings.Contains(err.Error(), "unauthorized") {
-		t.Errorf("Expected 'unauthorized' in error, got: %v", err)
-	}
-}
-
-// TestGetEcommerceSettings_Forbidden tests 403 handling
-func TestGetEcommerceSettings_Forbidden(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte("forbidden"))
-	}))
-	defer server.Close()
-
-	oldURL := getEcommerceSettingsBaseURL
-	getEcommerceSettingsBaseURL = server.URL
-	defer func() { getEcommerceSettingsBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	_, err := GetEcommerceSettings(ctx, client, "5f0c8c9e1c9d440000e8d8c3")
-	if err == nil {
-		t.Error("Expected error for 403, got nil")
-	}
-	if !strings.Contains(err.Error(), "forbidden") {
-		t.Errorf("Expected 'forbidden' in error, got: %v", err)
-	}
-}
-
-// TestGetEcommerceSettings_ServerError tests 500 handling
-func TestGetEcommerceSettings_ServerError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte("server error"))
-	}))
-	defer server.Close()
-
-	oldURL := getEcommerceSettingsBaseURL
-	getEcommerceSettingsBaseURL = server.URL
-	defer func() { getEcommerceSettingsBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	_, err := GetEcommerceSettings(ctx, client, "5f0c8c9e1c9d440000e8d8c3")
-	if err == nil {
-		t.Error("Expected error for 500, got nil")
-	}
-	if !strings.Contains(err.Error(), "server error") {
-		t.Errorf("Expected 'server error' in error, got: %v", err)
-	}
-}
-
-// TestGetEcommerceSettings_BadRequest tests 400 handling
-func TestGetEcommerceSettings_BadRequest(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = w.Write([]byte("bad request"))
-	}))
-	defer server.Close()
-
-	oldURL := getEcommerceSettingsBaseURL
-	getEcommerceSettingsBaseURL = server.URL
-	defer func() { getEcommerceSettingsBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	_, err := GetEcommerceSettings(ctx, client, "invalid-site-id")
-	if err == nil {
-		t.Error("Expected error for 400, got nil")
-	}
-	if !strings.Contains(err.Error(), "bad request") {
-		t.Errorf("Expected 'bad request' in error, got: %v", err)
-	}
-}
-
-// TestEcommerceSettingsErrorMessagesAreActionable verifies error messages contain guidance
-func TestEcommerceSettingsErrorMessagesAreActionable(t *testing.T) {
-	tests := []struct {
-		name     string
-		testFunc func() error
-		contains []string
-	}{
-		{
-			"ValidateCurrencyCode empty",
-			func() error { return ValidateCurrencyCode("") },
-			[]string{"required", "ISO 4217"},
-		},
-		{
-			"ValidateCurrencyCode invalid",
-			func() error { return ValidateCurrencyCode("usd") },
-			[]string{"invalid format", "uppercase"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.testFunc()
-			if err == nil {
-				t.Errorf("%s: expected error, got nil", tt.name)
-				return
-			}
-
-			errMsg := err.Error()
-			for _, expectedStr := range tt.contains {
-				if !strings.Contains(errMsg, expectedStr) {
-					t.Errorf("%s: error message missing %q. Got: %s", tt.name, expectedStr, errMsg)
-				}
-			}
-		})
-	}
-}
-
-// TestHandleEcommerceNotEnabledError tests the 409 error handler
-func TestHandleEcommerceNotEnabledError(t *testing.T) {
-	body := []byte(`{"code": "ecommerce_not_enabled", "message": "Site lacks ecommerce"}`)
-	err := handleEcommerceNotEnabledError(body)
-
-	if err == nil {
-		t.Error("Expected error, got nil")
-	}
-
-	errMsg := err.Error()
-	if !strings.Contains(errMsg, "ecommerce not enabled") {
-		t.Errorf("Expected 'ecommerce not enabled' in error, got: %s", errMsg)
-	}
-	if !strings.Contains(errMsg, "Webflow dashboard") {
-		t.Errorf("Expected actionable guidance mentioning 'Webflow dashboard', got: %s", errMsg)
-	}
-}
-
-// TestGetEcommerceSettings_ContextCancellation tests context cancellation handling
 func TestGetEcommerceSettings_ContextCancellation(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(100 * time.Millisecond)
-		w.WriteHeader(http.StatusOK)
+	status := http.StatusOK
+	client := useMockAPI(t, ecomServer(t, &status))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := GetEcommerceSettings(ctx, client, testEcomSiteID); err == nil || !strings.Contains(err.Error(), "context cancelled") {
+		t.Errorf("expected context cancelled, got %v", err)
+	}
+}
+
+func TestEcommerceSettingsCreate(t *testing.T) {
+	t.Setenv("WEBFLOW_API_TOKEN", "test-token-12345678901234567890")
+	status := http.StatusOK
+	useMockAPI(t, ecomServer(t, &status))
+	args := EcommerceSettingsArgs{SiteID: testEcomSiteID}
+
+	dry, err := (&EcommerceSettings{}).Create(context.Background(), infer.CreateRequest[EcommerceSettingsArgs]{Inputs: EcommerceSettingsArgs{SiteID: "bad"}, DryRun: true})
+	if err != nil {
+		t.Fatalf("dry run must not validate or call the API: %v", err)
+	}
+	if dry.Output.DefaultCurrency != "" || dry.Output.CreatedOn != "" {
+		t.Errorf("dry run must not fabricate a currency: %+v", dry.Output)
+	}
+
+	resp, err := (&EcommerceSettings{}).Create(context.Background(), infer.CreateRequest[EcommerceSettingsArgs]{Inputs: args})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if resp.ID != GenerateEcommerceSettingsResourceID(testEcomSiteID) || resp.Output.DefaultCurrency != "EUR" || resp.Output.CreatedOn == "" {
+		t.Errorf("unexpected response %+v", resp)
+	}
+
+	if _, err := (&EcommerceSettings{}).Create(context.Background(), infer.CreateRequest[EcommerceSettingsArgs]{Inputs: EcommerceSettingsArgs{SiteID: "bad"}}); err == nil ||
+		!strings.Contains(err.Error(), "siteId has invalid format") {
+		t.Errorf("expected validation error, got %v", err)
+	}
+
+	status = http.StatusConflict
+	_, err = (&EcommerceSettings{}).Create(context.Background(), infer.CreateRequest[EcommerceSettingsArgs]{Inputs: args})
+	if err == nil || !IsEcommerceNotEnabled(err) {
+		t.Errorf("expected ecommerce not enabled error, got %v", err)
+	}
+}
+
+func TestEcommerceSettingsRead(t *testing.T) {
+	t.Setenv("WEBFLOW_API_TOKEN", "test-token-12345678901234567890")
+	status := http.StatusOK
+	useMockAPI(t, ecomServer(t, &status))
+	id := GenerateEcommerceSettingsResourceID(testEcomSiteID)
+
+	resp, err := (&EcommerceSettings{}).Read(context.Background(), infer.ReadRequest[EcommerceSettingsArgs, EcommerceSettingsState]{ID: id})
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if resp.ID != id || resp.Inputs.SiteID != testEcomSiteID || resp.State.DefaultCurrency != "EUR" {
+		t.Errorf("unexpected response %+v", resp)
+	}
+
+	status = http.StatusNotFound
+	resp, err = (&EcommerceSettings{}).Read(context.Background(), infer.ReadRequest[EcommerceSettingsArgs, EcommerceSettingsState]{ID: id})
+	if err != nil || resp.ID != "" {
+		t.Errorf("404 should clear the resource: id=%q err=%v", resp.ID, err)
+	}
+
+	status = http.StatusConflict
+	if _, err := (&EcommerceSettings{}).Read(context.Background(), infer.ReadRequest[EcommerceSettingsArgs, EcommerceSettingsState]{ID: id}); err == nil || !IsEcommerceNotEnabled(err) {
+		t.Errorf("409 must surface the ecommerce-not-enabled error, got %v", err)
+	}
+
+	status = http.StatusInternalServerError
+	if _, err := (&EcommerceSettings{}).Read(context.Background(), infer.ReadRequest[EcommerceSettingsArgs, EcommerceSettingsState]{ID: id}); err == nil {
+		t.Error("500 must propagate")
+	}
+
+	for _, bad := range []string{"", "x/ecommerce/settings", testEcomSiteID} {
+		if _, err := (&EcommerceSettings{}).Read(context.Background(), infer.ReadRequest[EcommerceSettingsArgs, EcommerceSettingsState]{ID: bad}); err == nil {
+			t.Errorf("expected invalid ID error for %q", bad)
+		}
+	}
+}
+
+func TestEcommerceSettingsDiffUpdateDelete(t *testing.T) {
+	args := EcommerceSettingsArgs{SiteID: testEcomSiteID}
+	state := EcommerceSettingsState{EcommerceSettingsArgs: args, DefaultCurrency: "EUR", CreatedOn: "2024-01-15T10:30:00Z"}
+
+	resp, err := (&EcommerceSettings{}).Diff(context.Background(), infer.DiffRequest[EcommerceSettingsArgs, EcommerceSettingsState]{Inputs: args, State: state})
+	if err != nil || resp.HasChanges {
+		t.Fatalf("expected no changes: %+v %v", resp, err)
+	}
+	resp, err = (&EcommerceSettings{}).Diff(context.Background(), infer.DiffRequest[EcommerceSettingsArgs, EcommerceSettingsState]{
+		Inputs: EcommerceSettingsArgs{SiteID: "6f1d9d0f2d0e551111f9e9d4"}, State: state,
+	})
+	if err != nil || !resp.HasChanges || resp.DetailedDiff["siteId"].Kind != p.UpdateReplace {
+		t.Errorf("expected siteId replace, got %+v %v", resp, err)
+	}
+
+	up, err := (&EcommerceSettings{}).Update(context.Background(), infer.UpdateRequest[EcommerceSettingsArgs, EcommerceSettingsState]{Inputs: args, State: state})
+	if err != nil || up.Output.DefaultCurrency != "EUR" {
+		t.Errorf("Update: %+v %v", up, err)
+	}
+
+	t.Setenv("WEBFLOW_API_TOKEN", "test-token-12345678901234567890")
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Errorf("delete must not call the API, got %s %s", r.Method, r.URL.Path)
 	}))
 	defer server.Close()
-
-	oldURL := getEcommerceSettingsBaseURL
-	getEcommerceSettingsBaseURL = server.URL
-	defer func() { getEcommerceSettingsBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // Cancel immediately
-
-	_, err := GetEcommerceSettings(ctx, client, "5f0c8c9e1c9d440000e8d8c3")
-	if err == nil {
-		t.Error("Expected error for cancelled context, got nil")
-	}
-	if !strings.Contains(err.Error(), "context cancelled") {
-		t.Errorf("Expected 'context cancelled' in error, got: %v", err)
+	useMockAPI(t, server)
+	if _, err := (&EcommerceSettings{}).Delete(context.Background(), infer.DeleteRequest[EcommerceSettingsState]{ID: GenerateEcommerceSettingsResourceID(testEcomSiteID), State: state}); err != nil {
+		t.Errorf("Delete: %v", err)
 	}
 }

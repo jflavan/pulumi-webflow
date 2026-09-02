@@ -10,8 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
-	"time"
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
@@ -26,15 +24,10 @@ type AssetFolder struct{}
 // AssetFolderArgs defines the input properties for the AssetFolder resource.
 type AssetFolderArgs struct {
 	// SiteID is the Webflow site ID (24-character lowercase hexadecimal string).
-	// Example: "5f0c8c9e1c9d440000e8d8c3"
 	SiteID string `pulumi:"siteId"`
 	// DisplayName is the human-readable name for the asset folder.
-	// This name appears in the Webflow Assets panel.
-	// Examples: "Images", "Documents", "Icons"
 	DisplayName string `pulumi:"displayName"`
 	// ParentFolder is the optional ID of the parent folder.
-	// If not specified, the folder will be created at the root level.
-	// Example: "5f0c8c9e1c9d440000e8d8c4"
 	ParentFolder string `pulumi:"parentFolder,optional"`
 }
 
@@ -52,6 +45,12 @@ type AssetFolderState struct {
 	LastUpdated string `pulumi:"lastUpdated,optional"`
 }
 
+// assetFolderLeftBehindWarning is logged whenever a folder is replaced or removed from state,
+// because Webflow has no API to delete asset folders.
+const assetFolderLeftBehindWarning = "The Webflow API cannot delete asset folders: this folder will be " +
+	"removed from Pulumi state but remains in Webflow. Delete it manually in the Webflow Assets panel " +
+	"if it is no longer needed"
+
 // Annotate adds descriptions and constraints to the AssetFolder resource.
 func (r *AssetFolder) Annotate(a infer.Annotator) {
 	a.SetToken("index", "AssetFolder")
@@ -59,8 +58,8 @@ func (r *AssetFolder) Annotate(a infer.Annotator) {
 		"This resource allows you to create folders to organize your assets (images, documents, etc.) "+
 		"in the Webflow Assets panel. "+
 		"NOTE: The Webflow API does not support deleting or updating asset folders. "+
-		"Deleting this resource will only remove it from Pulumi state, not from Webflow. "+
-		"Any changes to folder properties will require creating a new folder.")
+		"Deleting this resource only removes it from Pulumi state; the folder remains in Webflow. "+
+		"Changing displayName, parentFolder or siteId creates a new folder and leaves the old one behind.")
 }
 
 // Annotate adds descriptions to the AssetFolderArgs fields.
@@ -104,57 +103,54 @@ func (state *AssetFolderState) Annotate(a infer.Annotator) {
 }
 
 // Diff determines what changes need to be made to the asset folder resource.
-// Since Webflow doesn't support updates, all changes require replacement.
+// Since Webflow doesn't support updates, all changes require replacement. The old folder is
+// created-before-deleted (the delete is a no-op anyway) and a warning tells the user it stays behind.
 func (r *AssetFolder) Diff(
 	ctx context.Context, req infer.DiffRequest[AssetFolderArgs, AssetFolderState],
 ) (infer.DiffResponse, error) {
-	diff := infer.DiffResponse{}
-
-	// SiteID change requires replacement
-	if req.State.SiteID != req.Inputs.SiteID {
-		diff.DeleteBeforeReplace = true
-		diff.HasChanges = true
-		diff.DetailedDiff = map[string]p.PropertyDiff{
-			"siteId": {Kind: p.UpdateReplace},
-		}
-		return diff, nil
+	var changed string
+	switch {
+	case req.State.SiteID != req.Inputs.SiteID:
+		changed = "siteId"
+	case req.State.DisplayName != req.Inputs.DisplayName:
+		changed = "displayName"
+	case req.State.ParentFolder != req.Inputs.ParentFolder:
+		changed = "parentFolder"
+	default:
+		return infer.DiffResponse{}, nil
 	}
 
-	// DisplayName change requires replacement (no update API available)
-	if req.State.DisplayName != req.Inputs.DisplayName {
-		diff.DeleteBeforeReplace = true
-		diff.HasChanges = true
-		diff.DetailedDiff = map[string]p.PropertyDiff{
-			"displayName": {Kind: p.UpdateReplace},
-		}
-		return diff, nil
-	}
+	NewLogContext(ctx).
+		WithField("siteId", req.State.SiteID).
+		WithField("folderId", req.State.FolderID).
+		WithField("folderName", req.State.DisplayName).
+		WithField("changedProperty", changed).
+		Warn("Replacing asset folder. " + assetFolderLeftBehindWarning)
 
-	// ParentFolder change requires replacement (no update API available)
-	if req.State.ParentFolder != req.Inputs.ParentFolder {
-		diff.DeleteBeforeReplace = true
-		diff.HasChanges = true
-		diff.DetailedDiff = map[string]p.PropertyDiff{
-			"parentFolder": {Kind: p.UpdateReplace},
-		}
-		return diff, nil
-	}
-
-	return diff, nil
+	return infer.DiffResponse{
+		HasChanges:   true,
+		DetailedDiff: map[string]p.PropertyDiff{changed: {Kind: p.UpdateReplace}},
+	}, nil
 }
 
 // Create creates a new asset folder in the Webflow site.
 func (r *AssetFolder) Create(
 	ctx context.Context, req infer.CreateRequest[AssetFolderArgs],
 ) (infer.CreateResponse[AssetFolderState], error) {
-	// Validate inputs BEFORE generating resource ID
+	state := AssetFolderState{AssetFolderArgs: req.Inputs}
+
+	// During preview, return the inputs without calling the API. Inputs may be unknown at this
+	// point, so validation happens at apply time. The Webflow-assigned folder ID is unknown.
+	if req.DryRun {
+		return infer.CreateResponse[AssetFolderState]{Output: state}, nil
+	}
+
 	if err := ValidateSiteID(req.Inputs.SiteID); err != nil {
 		return infer.CreateResponse[AssetFolderState]{}, fmt.Errorf("validation failed for AssetFolder resource: %w", err)
 	}
 	if err := ValidateDisplayName(req.Inputs.DisplayName); err != nil {
 		return infer.CreateResponse[AssetFolderState]{}, fmt.Errorf("validation failed for AssetFolder resource: %w", err)
 	}
-	// Validate parent folder ID if provided
 	if req.Inputs.ParentFolder != "" {
 		if err := ValidateAssetFolderID(req.Inputs.ParentFolder); err != nil {
 			return infer.CreateResponse[AssetFolderState]{},
@@ -162,56 +158,27 @@ func (r *AssetFolder) Create(
 		}
 	}
 
-	state := AssetFolderState{
-		AssetFolderArgs: req.Inputs,
-	}
-
-	// During preview, return expected state without making API calls
-	if req.DryRun {
-		// Set preview values
-		state.FolderID = fmt.Sprintf("preview-%d", time.Now().Unix())
-		state.Assets = []string{}
-		state.CreatedOn = time.Now().Format(time.RFC3339)
-		state.LastUpdated = state.CreatedOn
-		previewID := GenerateAssetFolderResourceID(req.Inputs.SiteID, state.FolderID)
-		return infer.CreateResponse[AssetFolderState]{
-			ID:     previewID,
-			Output: state,
-		}, nil
-	}
-
-	// Get HTTP client
 	client, err := GetHTTPClient(ctx, providerVersion)
 	if err != nil {
 		return infer.CreateResponse[AssetFolderState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API to create the folder
-	folder, err := PostAssetFolder(
-		ctx, client, req.Inputs.SiteID,
-		req.Inputs.DisplayName, req.Inputs.ParentFolder,
-	)
+	folder, err := PostAssetFolder(ctx, client, req.Inputs.SiteID, req.Inputs.DisplayName, req.Inputs.ParentFolder)
 	if err != nil {
 		return infer.CreateResponse[AssetFolderState]{}, fmt.Errorf("failed to create asset folder: %w", err)
 	}
-
-	// Defensive check: Ensure Webflow API returned a valid folder ID
 	if folder.ID == "" {
 		return infer.CreateResponse[AssetFolderState]{}, errors.New(
-			"webflow API returned empty folder ID - " +
-				"this is unexpected and may indicate an API issue")
+			"webflow API returned empty folder ID - this is unexpected and may indicate an API issue")
 	}
 
-	// Populate state from API response
 	state.FolderID = folder.ID
 	state.Assets = folder.Assets
 	state.CreatedOn = folder.CreatedOn
 	state.LastUpdated = folder.LastUpdated
 
-	resourceID := GenerateAssetFolderResourceID(req.Inputs.SiteID, folder.ID)
-
 	return infer.CreateResponse[AssetFolderState]{
-		ID:     resourceID,
+		ID:     GenerateAssetFolderResourceID(req.Inputs.SiteID, folder.ID),
 		Output: state,
 	}, nil
 }
@@ -221,31 +188,30 @@ func (r *AssetFolder) Create(
 func (r *AssetFolder) Read(
 	ctx context.Context, req infer.ReadRequest[AssetFolderArgs, AssetFolderState],
 ) (infer.ReadResponse[AssetFolderArgs, AssetFolderState], error) {
-	// Extract siteID and folderID from resource ID
 	siteID, folderID, err := ExtractIDsFromAssetFolderResourceID(req.ID)
 	if err != nil {
 		return infer.ReadResponse[AssetFolderArgs, AssetFolderState]{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
+	if err := ValidateSiteID(siteID); err != nil {
+		return infer.ReadResponse[AssetFolderArgs, AssetFolderState]{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
+	if err := ValidateAssetFolderID(folderID); err != nil {
+		return infer.ReadResponse[AssetFolderArgs, AssetFolderState]{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
 
-	// Get HTTP client
 	client, err := GetHTTPClient(ctx, providerVersion)
 	if err != nil {
 		return infer.ReadResponse[AssetFolderArgs, AssetFolderState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API to get folder details
 	folder, err := GetAssetFolder(ctx, client, folderID)
 	if err != nil {
-		// Resource not found - return empty ID to signal deletion
-		if strings.Contains(err.Error(), "not found") {
-			return infer.ReadResponse[AssetFolderArgs, AssetFolderState]{
-				ID: "",
-			}, nil
+		if IsNotFound(err) {
+			return infer.ReadResponse[AssetFolderArgs, AssetFolderState]{ID: ""}, nil
 		}
 		return infer.ReadResponse[AssetFolderArgs, AssetFolderState]{}, fmt.Errorf("failed to read asset folder: %w", err)
 	}
 
-	// Build current state from API response
 	currentInputs := AssetFolderArgs{
 		SiteID:       siteID,
 		DisplayName:  folder.DisplayName,
@@ -267,12 +233,10 @@ func (r *AssetFolder) Read(
 }
 
 // Update is not supported for asset folders - the Webflow API doesn't have an update endpoint.
-// Any changes will trigger a replacement (delete + create).
+// Any changes will trigger a replacement (create new folder, then drop the old one from state).
 func (r *AssetFolder) Update(
 	ctx context.Context, req infer.UpdateRequest[AssetFolderArgs, AssetFolderState],
 ) (infer.UpdateResponse[AssetFolderState], error) {
-	// This should never be called because Diff always returns UpdateReplace
-	// But implement it defensively
 	return infer.UpdateResponse[AssetFolderState]{}, errors.New(
 		"asset folders cannot be updated in place - the Webflow API does not support folder updates. " +
 			"Any changes will trigger a replacement (create new folder, then remove old from state). " +
@@ -285,14 +249,11 @@ func (r *AssetFolder) Update(
 func (r *AssetFolder) Delete(
 	ctx context.Context, req infer.DeleteRequest[AssetFolderState],
 ) (infer.DeleteResponse, error) {
-	// The Webflow API does not support deleting asset folders.
-	// We can only remove the resource from Pulumi state.
-	// Log a warning to inform the user about the limitation.
 	NewLogContext(ctx).
 		WithField("siteId", req.State.SiteID).
+		WithField("folderId", req.State.FolderID).
 		WithField("folderName", req.State.DisplayName).
-		Warn("Asset folder cannot be deleted via API - removing from Pulumi state only. " +
-			"The folder will remain in Webflow and must be manually deleted from the dashboard if needed")
+		Warn(assetFolderLeftBehindWarning)
 
 	return infer.DeleteResponse{}, nil
 }
