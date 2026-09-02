@@ -6,7 +6,13 @@
 
 package provider
 
-import "reflect"
+import (
+	"fmt"
+	"reflect"
+
+	p "github.com/pulumi/pulumi-go-provider"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
+)
 
 // CustomCodeScript is a registered script applied to a site or a page.
 // It is the wire format shared by the site and page custom code endpoints
@@ -33,9 +39,63 @@ type CustomCodeResponse struct {
 }
 
 // CustomCodeRequest is the PUT request body shared by the site and page custom code endpoints.
-// Scripts is always sent (as [] when empty) because the API requires the field.
+// The API reference marks scripts as optional, but the provider always sends the full list
+// (as [] when empty) because the PUT replaces the applied scripts: omitting the field would
+// leave the provider unable to express "no scripts applied".
 type CustomCodeRequest struct {
 	Scripts []CustomCodeScript `json:"scripts"`
+}
+
+// appliedCodeScopesNote documents the extra scopes needed to remove applied custom code.
+const appliedCodeScopesNote = "Removing applied code (Delete, or dropping scripts from the list) additionally " +
+	"requires the `sites:write` (site custom code) or `pages:write` (page custom code) scope."
+
+// checkCustomCodeScripts validates the known entries of the scripts input at preview time.
+// Entries or fields that are still unknown (computed, e.g. an id taken from a RegisteredScript
+// output) are skipped; they are validated again at apply time.
+func checkCustomCodeScripts(inputs property.Map) []p.CheckFailure {
+	v, ok := inputs.GetOk("scripts")
+	if !ok || v.IsNull() || v.IsComputed() || !v.IsArray() {
+		return nil
+	}
+	var failures []p.CheckFailure
+	for i, elem := range v.AsArray().AsSlice() {
+		if elem.IsNull() || elem.IsComputed() || !elem.IsMap() {
+			continue
+		}
+		script := elem.AsMap()
+		fields := []struct {
+			key      string
+			validate func(string) error
+		}{
+			{"id", ValidateScriptID},
+			{"scriptVersion", ValidateScriptVersion},
+			{"location", ValidateScriptLocation},
+		}
+		for _, f := range fields {
+			value, known := knownString(script, f.key)
+			if !known {
+				continue
+			}
+			if err := f.validate(value); err != nil {
+				failures = append(failures, p.CheckFailure{
+					Property: "scripts",
+					Reason:   fmt.Sprintf("scripts[%d].%s: %v", i, f.key, err),
+				})
+			}
+		}
+	}
+	return failures
+}
+
+// knownScriptCount returns the number of entries in the scripts input when the list itself
+// is known (individual entries may still be computed). ok is false when the list is unknown.
+func knownScriptCount(inputs property.Map) (n int, ok bool) {
+	v, present := inputs.GetOk("scripts")
+	if !present || v.IsNull() || v.IsComputed() || !v.IsArray() {
+		return 0, false
+	}
+	return v.AsArray().Len(), true
 }
 
 // customCodeScriptInput is the set of Pulumi input types that describe one custom code script.

@@ -15,6 +15,7 @@ import (
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
 )
 
 func TestGenerateSiteCustomCodeResourceID(t *testing.T) {
@@ -175,8 +176,10 @@ func TestDeleteSiteCustomCode_ServerError(t *testing.T) {
 }
 
 // TestSiteCustomCodeCreate_DryRun_WithUnknownScriptIDs verifies that preview succeeds
-// when script IDs are unknown (empty strings from the infer framework).
+// when script IDs are unknown (empty strings from the infer framework), makes no API
+// call, returns an empty ID and fabricates no timestamps.
 func TestSiteCustomCodeCreate_DryRun_WithUnknownScriptIDs(t *testing.T) {
+	mockAPI(t, func(_ http.ResponseWriter, _ *http.Request) { t.Error("no API call expected during preview") })
 	resource := &SiteCustomCode{}
 	req := infer.CreateRequest[SiteCustomCodeArgs]{
 		Inputs: SiteCustomCodeArgs{
@@ -190,21 +193,32 @@ func TestSiteCustomCodeCreate_DryRun_WithUnknownScriptIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create() DryRun with unknown inputs should succeed, got error: %v", err)
 	}
-	if resp.ID == "" || resp.Output.LastUpdated == "" || resp.Output.CreatedOn == "" {
-		t.Errorf("Create() DryRun should return ID and timestamps, got %+v", resp)
+	if resp.ID != "" {
+		t.Errorf("Create() DryRun must return an empty ID, got %q", resp.ID)
+	}
+	if resp.Output.LastUpdated != "" || resp.Output.CreatedOn != "" {
+		t.Errorf("Create() DryRun must not fabricate timestamps, got %+v", resp.Output)
+	}
+	if len(resp.Output.Scripts) != 1 {
+		t.Errorf("Create() DryRun should echo inputs, got %+v", resp.Output)
 	}
 }
 
 // TestSiteCustomCodeUpdate_DryRun_WithUnknownScriptIDs verifies that preview succeeds
-// for updates when script IDs are unknown.
+// for updates when script IDs are unknown and that recorded timestamps are carried over
+// rather than fabricated.
 func TestSiteCustomCodeUpdate_DryRun_WithUnknownScriptIDs(t *testing.T) {
+	mockAPI(t, func(_ http.ResponseWriter, _ *http.Request) { t.Error("no API call expected during preview") })
 	resource := &SiteCustomCode{}
 	req := infer.UpdateRequest[SiteCustomCodeArgs, SiteCustomCodeState]{
 		ID:     testSiteID + "/custom_code",
 		Inputs: SiteCustomCodeArgs{SiteID: testSiteID, Scripts: []CustomScriptArgs{{}}},
-		State: SiteCustomCodeState{SiteCustomCodeArgs: SiteCustomCodeArgs{
-			SiteID: testSiteID, Scripts: []CustomScriptArgs{{ID: "old_script", Version: "1.0.0", Location: "header"}},
-		}},
+		State: SiteCustomCodeState{
+			SiteCustomCodeArgs: SiteCustomCodeArgs{
+				SiteID: testSiteID, Scripts: []CustomScriptArgs{{ID: "old_script", Version: "1.0.0", Location: "header"}},
+			},
+			LastUpdated: "2025-02-01T00:00:00Z", CreatedOn: "2025-01-01T00:00:00Z",
+		},
 		DryRun: true,
 	}
 
@@ -212,9 +226,94 @@ func TestSiteCustomCodeUpdate_DryRun_WithUnknownScriptIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Update() DryRun with unknown inputs should succeed, got error: %v", err)
 	}
-	if resp.Output.LastUpdated == "" {
-		t.Error("Update() DryRun should set LastUpdated timestamp")
+	if resp.Output.LastUpdated != "2025-02-01T00:00:00Z" || resp.Output.CreatedOn != "2025-01-01T00:00:00Z" {
+		t.Errorf("Update() DryRun must carry over recorded timestamps, got %+v", resp.Output)
 	}
+}
+
+// TestSiteCustomCodeCheck verifies preview-time validation of known values, skipping
+// computed script entries and fields.
+func TestSiteCustomCodeCheck(t *testing.T) {
+	resource := &SiteCustomCode{}
+	script := func(id, version, location property.Value) property.Value {
+		return property.New(property.NewMap(map[string]property.Value{
+			"id": id, "scriptVersion": version, "location": location,
+		}))
+	}
+	known := script(property.New("cms_slider"), property.New("1.0.0"), property.New("header"))
+	computed := property.New(property.Computed)
+	check := func(t *testing.T, inputs map[string]property.Value) infer.CheckResponse[SiteCustomCodeArgs] {
+		t.Helper()
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{NewInputs: property.NewMap(inputs)})
+		if err != nil {
+			t.Fatalf("Check() error = %v", err)
+		}
+		return resp
+	}
+
+	t.Run("valid inputs pass", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{
+			"siteId":  property.New(testSiteID),
+			"scripts": property.New([]property.Value{known}),
+		})
+		if len(resp.Failures) != 0 {
+			t.Fatalf("Check() = %+v; want no failures", resp.Failures)
+		}
+		if resp.Inputs.SiteID != testSiteID || len(resp.Inputs.Scripts) != 1 || resp.Inputs.Scripts[0].ID != "cms_slider" {
+			t.Errorf("inputs not decoded: %+v", resp.Inputs)
+		}
+	})
+
+	t.Run("computed values are skipped", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{
+			"siteId": computed,
+			"scripts": property.New([]property.Value{
+				computed, // whole entry unknown
+				script(computed, property.New("1.0.0"), property.New("footer")), // id from a RegisteredScript output
+				known,
+			}),
+		})
+		if len(resp.Failures) != 0 {
+			t.Fatalf("Check() with computed values = %+v; want no failures", resp.Failures)
+		}
+	})
+
+	t.Run("computed scripts list is skipped", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{"siteId": property.New(testSiteID), "scripts": computed})
+		if len(resp.Failures) != 0 {
+			t.Fatalf("Check() with a computed list = %+v; want no failures", resp.Failures)
+		}
+	})
+
+	t.Run("known bad values fail", func(t *testing.T) {
+		resp := check(t, map[string]property.Value{
+			"siteId": property.New("bad"),
+			"scripts": property.New([]property.Value{
+				script(computed, property.New("1.0.0"), property.New("body")),
+				script(property.New(""), property.New(""), property.New("footer")),
+			}),
+		})
+		want := []struct{ property, reason string }{
+			{"siteId", "invalid format"},
+			{"scripts", "scripts[0].location"},
+			{"scripts", "scripts[1].id"},
+			{"scripts", "scripts[1].scriptVersion"},
+		}
+		for _, w := range want {
+			found := false
+			for _, f := range resp.Failures {
+				if f.Property == w.property && strings.Contains(f.Reason, w.reason) {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("Check() failures = %+v, want one on %q containing %q", resp.Failures, w.property, w.reason)
+			}
+		}
+		if len(resp.Failures) != len(want) {
+			t.Errorf("Check() returned %d failures, want %d: %+v", len(resp.Failures), len(want), resp.Failures)
+		}
+	})
 }
 
 func TestSiteCustomCodeCreate_ValidationErrors(t *testing.T) {
