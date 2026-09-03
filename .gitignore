@@ -19,6 +19,13 @@ sdk/java/build/
 sdk/java/build.gradle
 sdk/python/venv
 
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Built output of the local auth helper (tools/webflow-auth, `npm run build`)
+tools/webflow-auth/dist/
+
 # Local development/testing
 /dev/
 coverage.txt

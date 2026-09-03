@@ -12,14 +12,19 @@ import (
 	"fmt"
 	"os"
 
-	xyz "github.com/JDetmar/pulumi-webflow/provider"
+	// Embed the IANA time zone database: the release binary is built without cgo and runs on
+	// hosts (Windows, slim containers) that ship no zoneinfo, and the Analyze functions
+	// validate bucketTimeZone with time.LoadLocation.
+	_ "time/tzdata"
+
+	"github.com/JDetmar/pulumi-webflow/provider"
 )
 
 // Serve the provider against Pulumi's Provider protocol.
 func main() {
-	err := xyz.Provider().Run(context.Background(), xyz.Name, xyz.Version)
+	err := provider.Provider().Run(context.Background(), provider.Name, provider.Version)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %s", err.Error())
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
 		os.Exit(1)
 	}
 }

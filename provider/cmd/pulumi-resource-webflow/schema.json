@@ -1,10 +1,12 @@
 {
   "name": "webflow",
   "displayName": "Webflow (Unofficial)",
-  "description": "Unofficial community-maintained Pulumi provider for managing Webflow sites, redirects, and robots.txt. Not affiliated with Pulumi Corporation or Webflow, Inc.",
+  "description": "Unofficial community-maintained Pulumi provider for managing Webflow sites, pages, CMS collections, assets, redirects, robots.txt, custom code, webhooks, Google Tags, schema markup, and ecommerce settings. Not affiliated with Pulumi Corporation or Webflow, Inc.",
   "homepage": "https://github.com/JDetmar/pulumi-webflow",
+  "license": "MIT",
   "repository": "https://github.com/JDetmar/pulumi-webflow",
   "pluginDownloadURL": "github://api.github.com/JDetmar/pulumi-webflow",
+  "publisher": "Justin Detmar",
   "namespace": "webflow",
   "language": {
     "csharp": {
@@ -32,12 +34,319 @@
     "variables": {
       "apiToken": {
         "type": "string",
-        "description": "Webflow API v2 bearer token for authentication. Can also be set via WEBFLOW_API_TOKEN environment variable.",
+        "description": "Webflow API v2 bearer token for authentication. Explicit configuration takes precedence over the WEBFLOW_API_TOKEN environment variable, which is used as a fallback when no token is configured.",
+        "defaultInfo": {
+          "environment": [
+            "WEBFLOW_API_TOKEN"
+          ]
+        },
         "secret": true
       }
     }
   },
   "types": {
+    "webflow:index:AnalyticsAverageSecondsPoint": {
+      "properties": {
+        "averageSeconds": {
+          "type": "number",
+          "description": "Average time spent on the page in seconds."
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Start of the bucket as a UTC instant in ISO 8601 / RFC 3339 format."
+        }
+      },
+      "type": "object",
+      "required": [
+        "timestamp",
+        "averageSeconds"
+      ]
+    },
+    "webflow:index:AnalyticsBucketing": {
+      "properties": {
+        "bucketTimeZone": {
+          "type": "string",
+          "description": "The IANA time zone used to align bucket boundaries (e.g., 'UTC', 'America/New_York')."
+        },
+        "granularityPeriod": {
+          "type": "string",
+          "description": "The size of each time bucket: 'day' or 'week'."
+        }
+      },
+      "type": "object",
+      "required": [
+        "granularityPeriod",
+        "bucketTimeZone"
+      ]
+    },
+    "webflow:index:AnalyticsCmsContext": {
+      "properties": {
+        "collectionId": {
+          "type": "string",
+          "description": "The CMS collection ID."
+        },
+        "itemId": {
+          "type": "string",
+          "description": "The CMS item ID."
+        }
+      },
+      "type": "object",
+      "required": [
+        "collectionId",
+        "itemId"
+      ]
+    },
+    "webflow:index:AnalyticsComponentContext": {
+      "properties": {
+        "componentId": {
+          "type": "string",
+          "description": "The Webflow component ID the event is attached to."
+        },
+        "instanceId": {
+          "type": "string",
+          "description": "The ID of the component instance the event fired from."
+        }
+      },
+      "type": "object",
+      "required": [
+        "componentId",
+        "instanceId"
+      ]
+    },
+    "webflow:index:AnalyticsCountPoint": {
+      "properties": {
+        "count": {
+          "type": "integer",
+          "description": "Number of sessions, users, pageviews or events in the bucket, per the report's metric scope."
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Start of the time bucket as a UTC instant in ISO 8601 / RFC 3339 format."
+        }
+      },
+      "type": "object",
+      "required": [
+        "timestamp",
+        "count"
+      ]
+    },
+    "webflow:index:AnalyticsDimensionFilter": {
+      "properties": {
+        "eq": {
+          "type": "string",
+          "description": "Keep only rows whose dimension value equals this value."
+        },
+        "in": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Keep only rows whose dimension value is one of these values."
+        },
+        "ne": {
+          "type": "string",
+          "description": "Exclude rows whose dimension value equals this value."
+        },
+        "nin": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Exclude rows whose dimension value is one of these values."
+        }
+      },
+      "type": "object"
+    },
+    "webflow:index:AnalyticsDimensionRow": {
+      "properties": {
+        "attributeKey": {
+          "type": "string",
+          "description": "The raw value of the dimension (e.g., 'US-CA' for a region, 'SO' for a traffic source)."
+        },
+        "count": {
+          "type": "integer",
+          "description": "Number of sessions or users with this value, per the requested metric scope."
+        },
+        "name": {
+          "type": "string",
+          "description": "A human-readable label for the value (e.g., 'California, United States')."
+        }
+      },
+      "type": "object",
+      "required": [
+        "attributeKey",
+        "name",
+        "count"
+      ]
+    },
+    "webflow:index:AnalyticsPageviewPoint": {
+      "properties": {
+        "pageviewCount": {
+          "type": "integer",
+          "description": "Number of pageviews in the bucket."
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Start of the daily bucket as a UTC instant in ISO 8601 / RFC 3339 format."
+        }
+      },
+      "type": "object",
+      "required": [
+        "timestamp",
+        "pageviewCount"
+      ]
+    },
+    "webflow:index:AnalyticsTimeOnPageTimeseriesArgs": {
+      "properties": {
+        "bucketTimeZone": {
+          "type": "string",
+          "description": "IANA time zone used to align bucket boundaries (e.g., 'UTC', 'America/New_York')."
+        },
+        "granularityPeriod": {
+          "type": "string",
+          "description": "Size of each bucket: 'day' or 'week'."
+        }
+      },
+      "type": "object",
+      "required": [
+        "granularityPeriod",
+        "bucketTimeZone"
+      ]
+    },
+    "webflow:index:AnalyticsTimeseriesArgs": {
+      "properties": {
+        "bucketTimeZone": {
+          "type": "string",
+          "description": "IANA time zone used to align daily bucket boundaries (e.g., 'UTC', 'America/New_York'). Bucket timestamps are returned as UTC instants of local midnight in this zone."
+        }
+      },
+      "type": "object",
+      "required": [
+        "bucketTimeZone"
+      ]
+    },
+    "webflow:index:AnalyticsTopEventRow": {
+      "properties": {
+        "cmsContext": {
+          "type": "array",
+          "items": {
+            "$ref": "#/types/webflow:index:AnalyticsCmsContext"
+          },
+          "description": "CMS items the event fired from, when applicable."
+        },
+        "collectionId": {
+          "type": "string",
+          "description": "The CMS collection ID, for events on collection template pages."
+        },
+        "componentContext": {
+          "type": "array",
+          "items": {
+            "$ref": "#/types/webflow:index:AnalyticsComponentContext"
+          },
+          "description": "Component instances the event fired from, when applicable."
+        },
+        "count": {
+          "type": "integer",
+          "description": "Number of times the event fired in the window."
+        },
+        "eventId": {
+          "type": "string",
+          "description": "The event identifier."
+        },
+        "itemSlug": {
+          "type": "string",
+          "description": "The CMS item slug, for events on collection template pages."
+        },
+        "name": {
+          "type": "string",
+          "description": "The event name, when available."
+        },
+        "pageId": {
+          "type": "string",
+          "description": "The ID of the page the event is attached to, when available."
+        },
+        "pageName": {
+          "type": "string",
+          "description": "The name of the page the event is attached to, when available."
+        },
+        "timeseries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/types/webflow:index:AnalyticsCountPoint"
+          },
+          "description": "Daily event counts; present only when 'timeseries' was requested."
+        }
+      },
+      "type": "object",
+      "required": [
+        "eventId",
+        "count"
+      ]
+    },
+    "webflow:index:AnalyticsTopPageRow": {
+      "properties": {
+        "collectionId": {
+          "type": "string",
+          "description": "The CMS collection ID, for collection template pages."
+        },
+        "itemSlug": {
+          "type": "string",
+          "description": "The CMS item slug, for collection template pages."
+        },
+        "pageId": {
+          "type": "string",
+          "description": "The Webflow page ID."
+        },
+        "pageviewCount": {
+          "type": "integer",
+          "description": "Number of pageviews of this page."
+        },
+        "sessionCount": {
+          "type": "integer",
+          "description": "Number of sessions that included a view of this page."
+        },
+        "timeseries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/types/webflow:index:AnalyticsPageviewPoint"
+          },
+          "description": "Daily pageview counts for this page; present only when 'timeseries' was requested."
+        },
+        "title": {
+          "type": "string",
+          "description": "The page title."
+        },
+        "userCount": {
+          "type": "integer",
+          "description": "Number of unique users who viewed this page."
+        }
+      },
+      "type": "object",
+      "required": [
+        "pageId",
+        "title",
+        "sessionCount",
+        "userCount",
+        "pageviewCount"
+      ]
+    },
+    "webflow:index:AnalyticsWindow": {
+      "properties": {
+        "endTime": {
+          "type": "string",
+          "description": "Exclusive end of the reporting window, in ISO 8601 / RFC 3339 format."
+        },
+        "startTime": {
+          "type": "string",
+          "description": "Inclusive start of the reporting window, in ISO 8601 / RFC 3339 format."
+        }
+      },
+      "type": "object",
+      "required": [
+        "startTime",
+        "endTime"
+      ]
+    },
     "webflow:index:CustomScriptArgs": {
       "properties": {
         "attributes": {
@@ -171,11 +480,11 @@
       "properties": {
         "nodeId": {
           "type": "string",
-          "description": "The unique identifier for the DOM node to update. This ID comes from the page's DOM structure and must exist on the page. Retrieve node IDs using GET /pages/{page_id}/dom endpoint."
+          "description": "The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom."
         },
         "text": {
           "type": "string",
-          "description": "The new text content for the node. This will replace the existing text content in the specified node. Only applicable to text nodes or elements containing text."
+          "description": "The new HTML content for the node (required, non-empty). The HTML tags must match the node's current content as returned by GET /v2/pages/{page_id}/dom (e.g., '<h1>Hello</h1>' for a heading). An empty string does not clear the node; Webflow rejects it."
         }
       },
       "type": "object",
@@ -213,37 +522,123 @@
         "location"
       ]
     },
-    "webflow:index:PageInfo": {
+    "webflow:index:PageOpenGraphArgs": {
       "properties": {
-        "archived": {
-          "type": "boolean"
+        "description": {
+          "type": "string",
+          "description": "The Open Graph description of the page."
         },
-        "collectionId": {
-          "type": "string"
-        },
-        "createdOn": {
-          "type": "string"
-        },
-        "draft": {
-          "type": "boolean"
-        },
-        "lastUpdated": {
-          "type": "string"
-        },
-        "pageId": {
-          "type": "string"
-        },
-        "parentId": {
-          "type": "string"
-        },
-        "siteId": {
-          "type": "string"
-        },
-        "slug": {
-          "type": "string"
+        "descriptionCopied": {
+          "type": "boolean",
+          "description": "Whether the Open Graph description is copied from the SEO description."
         },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "The Open Graph title of the page."
+        },
+        "titleCopied": {
+          "type": "boolean",
+          "description": "Whether the Open Graph title is copied from the SEO title."
+        }
+      },
+      "type": "object"
+    },
+    "webflow:index:PageOpenGraphRecord": {
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "The Open Graph description of the page."
+        },
+        "descriptionCopied": {
+          "type": "boolean",
+          "description": "Whether the Open Graph description is copied from the SEO description."
+        },
+        "title": {
+          "type": "string",
+          "description": "The Open Graph title of the page."
+        },
+        "titleCopied": {
+          "type": "boolean",
+          "description": "Whether the Open Graph title is copied from the SEO title."
+        }
+      },
+      "type": "object",
+      "required": [
+        "title",
+        "titleCopied",
+        "description",
+        "descriptionCopied"
+      ]
+    },
+    "webflow:index:PageRecord": {
+      "properties": {
+        "archived": {
+          "type": "boolean",
+          "description": "Whether the page is archived."
+        },
+        "branchId": {
+          "type": "string",
+          "description": "The ID of the parent branch, or empty."
+        },
+        "canBranch": {
+          "type": "boolean",
+          "description": "Whether the page can be branched."
+        },
+        "collectionId": {
+          "type": "string",
+          "description": "The CMS collection ID for collection template pages, or empty."
+        },
+        "createdOn": {
+          "type": "string",
+          "description": "The timestamp when the page was created (RFC3339 format)."
+        },
+        "draft": {
+          "type": "boolean",
+          "description": "Whether the page is a draft."
+        },
+        "isBranch": {
+          "type": "boolean",
+          "description": "Whether the page is a branch of another page."
+        },
+        "lastUpdated": {
+          "type": "string",
+          "description": "The timestamp when the page was last updated (RFC3339 format)."
+        },
+        "localeId": {
+          "type": "string",
+          "description": "The locale ID of the returned page data, or empty for the primary locale."
+        },
+        "openGraph": {
+          "$ref": "#/types/webflow:index:PageOpenGraphRecord",
+          "description": "The Open Graph settings of the page."
+        },
+        "pageId": {
+          "type": "string",
+          "description": "The Webflow page ID."
+        },
+        "parentId": {
+          "type": "string",
+          "description": "The ID of the parent folder, or empty when the page is at the root."
+        },
+        "publishedPath": {
+          "type": "string",
+          "description": "The relative URL path of the published page."
+        },
+        "seo": {
+          "$ref": "#/types/webflow:index:PageSEORecord",
+          "description": "The SEO title and description of the page."
+        },
+        "siteId": {
+          "type": "string",
+          "description": "The Webflow site ID this page belongs to."
+        },
+        "slug": {
+          "type": "string",
+          "description": "The URL slug of the page (e.g., 'about' for '/about')."
+        },
+        "title": {
+          "type": "string",
+          "description": "The page title shown in browser tabs and search results."
         }
       },
       "type": "object",
@@ -252,10 +647,49 @@
         "siteId",
         "title",
         "slug",
+        "parentId",
+        "collectionId",
         "createdOn",
         "lastUpdated",
         "archived",
-        "draft"
+        "draft",
+        "canBranch",
+        "isBranch",
+        "branchId",
+        "localeId",
+        "publishedPath",
+        "seo",
+        "openGraph"
+      ]
+    },
+    "webflow:index:PageSEOArgs": {
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "The SEO meta description of the page."
+        },
+        "title": {
+          "type": "string",
+          "description": "The SEO title of the page."
+        }
+      },
+      "type": "object"
+    },
+    "webflow:index:PageSEORecord": {
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "The SEO meta description of the page."
+        },
+        "title": {
+          "type": "string",
+          "description": "The SEO title of the page."
+        }
+      },
+      "type": "object",
+      "required": [
+        "title",
+        "description"
       ]
     }
   },
@@ -263,117 +697,133 @@
     "properties": {
       "apiToken": {
         "type": "string",
-        "description": "Webflow API v2 bearer token for authentication. Can also be set via WEBFLOW_API_TOKEN environment variable.",
+        "description": "Webflow API v2 bearer token for authentication. Explicit configuration takes precedence over the WEBFLOW_API_TOKEN environment variable, which is used as a fallback when no token is configured.",
+        "defaultInfo": {
+          "environment": [
+            "WEBFLOW_API_TOKEN"
+          ]
+        },
         "secret": true
       }
     },
     "inputProperties": {
       "apiToken": {
         "type": "string",
-        "description": "Webflow API v2 bearer token for authentication. Can also be set via WEBFLOW_API_TOKEN environment variable.",
+        "description": "Webflow API v2 bearer token for authentication. Explicit configuration takes precedence over the WEBFLOW_API_TOKEN environment variable, which is used as a fallback when no token is configured.",
+        "defaultInfo": {
+          "environment": [
+            "WEBFLOW_API_TOKEN"
+          ]
+        },
         "secret": true
       }
     }
   },
   "resources": {
     "webflow:index:Asset": {
-      "description": "Manages assets (images, files, documents) for a Webflow site. This resource allows you to upload and manage files that can be used in your Webflow site. Note: Assets are immutable - changing any property will delete and recreate the asset.",
+      "description": "Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow's storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset. After 'pulumi import' the fileSource and fileHash are unknown; set them in your program and the first refresh adopts them without replacing the asset.",
       "properties": {
         "assetId": {
           "type": "string",
-          "description": "The Webflow-assigned asset ID (read-only). This unique identifier can be used to reference the asset in API calls."
+          "description": "The Webflow-assigned asset ID (read-only)."
         },
         "assetUrl": {
           "type": "string",
-          "description": "The direct S3 URL for the asset (read-only). This is the raw S3 location where the file is stored."
+          "description": "The direct S3 URL for the asset (read-only)."
         },
         "contentType": {
           "type": "string",
-          "description": "The MIME type of the asset (read-only). Examples: 'image/png', 'image/jpeg', 'application/pdf'. Determined by the fileName extension."
+          "description": "The MIME type of the asset (read-only), e.g., 'image/png', 'application/pdf'."
         },
         "createdOn": {
           "type": "string",
-          "description": "The timestamp when the asset metadata was created (RFC3339 format, read-only). This is set when the asset is registered with Webflow."
+          "description": "The timestamp when the asset metadata was created (RFC3339 format, read-only)."
         },
         "fileHash": {
           "type": "string",
-          "description": "MD5 hash of the file content (required). Webflow uses this hash to identify and deduplicate assets. Generate using: md5sum <filename> (Linux) or md5 <filename> (macOS). Example: 'd41d8cd98f00b204e9800998ecf8427e'."
+          "description": "MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset."
         },
         "fileName": {
           "type": "string",
-          "description": "The name of the file to upload, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. The file name must not exceed 255 characters and should not contain invalid characters (<, >, :, \", |, ?, *)."
+          "description": "The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, \", |, ?, *."
         },
         "fileSource": {
           "type": "string",
-          "description": "The source of the file to upload. For the current implementation, this is a reference field. In future versions, this may support URLs or local file paths for automatic upload. Examples: 'https://example.com/logo.png', '/path/to/local/file.png'."
+          "description": "Where the file bytes come from: a local file path (resolved relative to the Pulumi program's working directory, e.g., './assets/logo.png') or an http(s) URL (e.g., 'https://example.com/logo.png'). The content is read at apply time, MD5-hashed and uploaded to Webflow."
+        },
+        "folderId": {
+          "type": "string",
+          "description": "The ID of the asset folder the asset belongs to, or empty when it is at the site root (read-only)."
         },
         "hostedUrl": {
           "type": "string",
-          "description": "The Webflow CDN URL where the asset will be hosted (read-only). This URL becomes accessible after completing the S3 upload. Example: 'https://assets.website-files.com/.../logo.png'."
+          "description": "The Webflow CDN URL where the asset is hosted (read-only). Example: 'https://cdn.prod.website-files.com/.../logo.png'."
         },
         "lastUpdated": {
           "type": "string",
-          "description": "The timestamp when the asset was last modified (RFC3339 format, read-only). For most assets, this will be the same as createdOn since assets are immutable."
+          "description": "The timestamp when the asset was last modified (RFC3339 format, read-only)."
         },
         "parentFolder": {
           "type": "string",
-          "description": "Optional folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset will be placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'."
+          "description": "Optional asset folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset is placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'."
         },
         "siteId": {
           "type": "string",
-          "description": "The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls."
+          "description": "The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings."
         },
         "size": {
           "type": "integer",
-          "description": "The size of the asset in bytes (read-only). This is the actual size of the uploaded file."
+          "description": "The size of the uploaded file in bytes (read-only)."
         },
         "uploadDetails": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
           },
-          "description": "AWS S3 POST form fields required to complete the upload (read-only). Include these as form fields when POSTing the file to uploadUrl. Keys: acl, bucket, key, Content-Type, X-Amz-Algorithm, X-Amz-Credential, X-Amz-Date, Policy, X-Amz-Signature, success_action_status, Cache-Control."
+          "description": "The signed AWS S3 POST form fields used for the upload (read-only, secret).",
+          "secret": true
         },
         "uploadUrl": {
           "type": "string",
-          "description": "The presigned S3 URL for uploading the file content (read-only). Use this URL along with uploadDetails to complete the asset upload. See AWS S3 POST documentation: https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPOST.html"
+          "description": "The presigned S3 URL the file was uploaded to (read-only, secret). The provider performs the upload; this is recorded for reference only.",
+          "secret": true
         }
       },
       "required": [
         "siteId",
         "fileName",
-        "fileHash"
+        "fileSource"
       ],
       "inputProperties": {
         "fileHash": {
           "type": "string",
-          "description": "MD5 hash of the file content (required). Webflow uses this hash to identify and deduplicate assets. Generate using: md5sum <filename> (Linux) or md5 <filename> (macOS). Example: 'd41d8cd98f00b204e9800998ecf8427e'."
+          "description": "MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset."
         },
         "fileName": {
           "type": "string",
-          "description": "The name of the file to upload, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. The file name must not exceed 255 characters and should not contain invalid characters (<, >, :, \", |, ?, *)."
+          "description": "The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, \", |, ?, *."
         },
         "fileSource": {
           "type": "string",
-          "description": "The source of the file to upload. For the current implementation, this is a reference field. In future versions, this may support URLs or local file paths for automatic upload. Examples: 'https://example.com/logo.png', '/path/to/local/file.png'."
+          "description": "Where the file bytes come from: a local file path (resolved relative to the Pulumi program's working directory, e.g., './assets/logo.png') or an http(s) URL (e.g., 'https://example.com/logo.png'). The content is read at apply time, MD5-hashed and uploaded to Webflow."
         },
         "parentFolder": {
           "type": "string",
-          "description": "Optional folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset will be placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'."
+          "description": "Optional asset folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset is placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'."
         },
         "siteId": {
           "type": "string",
-          "description": "The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls."
+          "description": "The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings."
         }
       },
       "requiredInputs": [
         "siteId",
         "fileName",
-        "fileHash"
+        "fileSource"
       ]
     },
     "webflow:index:AssetFolder": {
-      "description": "Manages asset folders for organizing files in a Webflow site. This resource allows you to create folders to organize your assets (images, documents, etc.) in the Webflow Assets panel. NOTE: The Webflow API does not support deleting or updating asset folders. Deleting this resource will only remove it from Pulumi state, not from Webflow. Any changes to folder properties will require creating a new folder.",
+      "description": "Manages asset folders for organizing files in a Webflow site. This resource allows you to create folders to organize your assets (images, documents, etc.) in the Webflow Assets panel. NOTE: The Webflow API does not support deleting or updating asset folders. Deleting this resource only removes it from Pulumi state; the folder remains in Webflow. Changing displayName, parentFolder or siteId creates a new folder and leaves the old one behind.",
       "properties": {
         "assets": {
           "type": "array",
@@ -431,7 +881,7 @@
       ]
     },
     "webflow:index:Collection": {
-      "description": "Manages CMS collections for a Webflow site. Collections are containers for structured content items (blog posts, products, etc.). Note: Webflow collections do not support updates - any changes require replacement (delete + recreate).",
+      "description": "Manages CMS collections for a Webflow site. Collections are containers for structured content items (blog posts, products, etc.). displayName, singularName and slug are updated in place (PATCH /v2/collections/{collection_id}); changing siteId requires replacement (delete + recreate).",
       "properties": {
         "collectionId": {
           "type": "string",
@@ -459,7 +909,7 @@
         },
         "slug": {
           "type": "string",
-          "description": "The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName. The slug determines the URL path for collection items."
+          "description": "The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items; changing an explicit slug updates the collection in place, which changes the URLs of its items."
         }
       },
       "required": [
@@ -482,7 +932,7 @@
         },
         "slug": {
           "type": "string",
-          "description": "The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName. The slug determines the URL path for collection items."
+          "description": "The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items; changing an explicit slug updates the collection in place, which changes the URLs of its items."
         }
       },
       "requiredInputs": [
@@ -492,7 +942,7 @@
       ]
     },
     "webflow:index:CollectionField": {
-      "description": "Manages fields for a Webflow CMS collection. Collection fields define the structure of content items in a collection. Note: The field type cannot be changed after creation - changing it requires replacement (delete + recreate).",
+      "description": "Manages fields for a Webflow CMS collection. Collection fields define the structure of content items in a collection. Only displayName, helpText and isRequired can be updated in place; type and metadata cannot be changed after creation and changing them requires replacement (delete + recreate). The Webflow API does not accept a slug or validations when creating a field: the slug is generated from displayName and both are reported as outputs only.",
       "properties": {
         "collectionId": {
           "type": "string",
@@ -518,20 +968,29 @@
           "type": "boolean",
           "description": "Whether the field is required (optional, defaults to false). When true, content items must provide a value for this field."
         },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "pulumi.json#/Any"
+          },
+          "description": "Type-specific configuration (create-only). Required for Option fields: {\"options\": [{\"name\": \"Draft\"}, {\"name\": \"Published\"}]}. Required for Reference and MultiReference fields: {\"collectionId\": \"<referenced collection ID>\"}. Not accepted for other field types. Changing metadata requires replacement."
+        },
         "slug": {
           "type": "string",
-          "description": "The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName. The slug is used in API requests and exports."
+          "description": "Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.",
+          "deprecationMessage": "The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs."
         },
         "type": {
           "type": "string",
-          "description": "The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: PlainText, RichText, Image, MultiImage, Video, Link, Email, Phone, Number, DateTime, Switch, Color, Option, File, Reference, MultiReference. IMPORTANT: Cannot be changed after creation - changing this requires replacement."
+          "description": "The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: Color, DateTime, Email, File, Image, Link, MultiImage, Number, Phone, PlainText, RichText, Switch, VideoLink, Option, MultiReference, Reference. IMPORTANT: Cannot be changed after creation - changing this requires replacement."
         },
         "validations": {
           "type": "object",
           "additionalProperties": {
             "$ref": "pulumi.json#/Any"
           },
-          "description": "Type-specific validation rules (optional). Different field types support different validations. Example for Number type: {\"min\": 0, \"max\": 100}. Example for PlainText type: {\"maxLength\": 500}. Refer to Webflow API documentation for validation options for each field type."
+          "description": "Deprecated: the Webflow API does not accept validations when creating a field (\"field validation is currently not available through the API\"). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.",
+          "deprecationMessage": "The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs."
         }
       },
       "required": [
@@ -556,20 +1015,29 @@
           "type": "boolean",
           "description": "Whether the field is required (optional, defaults to false). When true, content items must provide a value for this field."
         },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "pulumi.json#/Any"
+          },
+          "description": "Type-specific configuration (create-only). Required for Option fields: {\"options\": [{\"name\": \"Draft\"}, {\"name\": \"Published\"}]}. Required for Reference and MultiReference fields: {\"collectionId\": \"<referenced collection ID>\"}. Not accepted for other field types. Changing metadata requires replacement."
+        },
         "slug": {
           "type": "string",
-          "description": "The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName. The slug is used in API requests and exports."
+          "description": "Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.",
+          "deprecationMessage": "The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs."
         },
         "type": {
           "type": "string",
-          "description": "The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: PlainText, RichText, Image, MultiImage, Video, Link, Email, Phone, Number, DateTime, Switch, Color, Option, File, Reference, MultiReference. IMPORTANT: Cannot be changed after creation - changing this requires replacement."
+          "description": "The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: Color, DateTime, Email, File, Image, Link, MultiImage, Number, Phone, PlainText, RichText, Switch, VideoLink, Option, MultiReference, Reference. IMPORTANT: Cannot be changed after creation - changing this requires replacement."
         },
         "validations": {
           "type": "object",
           "additionalProperties": {
             "$ref": "pulumi.json#/Any"
           },
-          "description": "Type-specific validation rules (optional). Different field types support different validations. Example for Number type: {\"min\": 0, \"max\": 100}. Example for PlainText type: {\"maxLength\": 500}. Refer to Webflow API documentation for validation options for each field type."
+          "description": "Deprecated: the Webflow API does not accept validations when creating a field (\"field validation is currently not available through the API\"). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.",
+          "deprecationMessage": "The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs."
         }
       },
       "requiredInputs": [
@@ -579,11 +1047,11 @@
       ]
     },
     "webflow:index:CollectionItem": {
-      "description": "Manages CMS collection items for a Webflow collection. Collection items represent individual content entries (blog posts, products, etc.) within a CMS collection. Each item has dynamic field data based on the collection schema.",
+      "description": "Manages CMS collection items for a Webflow collection. Collection items represent individual content entries (blog posts, products, etc.) within a CMS collection. Each item has dynamic field data based on the collection schema. Items are created and updated in staging; set live=true to publish them to the live site as part of every create and update.",
       "properties": {
         "cmsLocaleId": {
           "type": "string",
-          "description": "The locale ID for localized sites (optional, e.g., 'en-US'). Only required if your site uses Webflow's localization features. Leave empty for non-localized sites."
+          "description": "The CMS locale ID for localized sites (optional). Only required if your site uses Webflow's localization features; it is sent with every request for this item, including reads. Leave empty for non-localized sites."
         },
         "collectionId": {
           "type": "string",
@@ -598,15 +1066,15 @@
           "additionalProperties": {
             "$ref": "pulumi.json#/Any"
           },
-          "description": "A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Example: {\"name\": \"My Blog Post\", \"slug\": \"my-blog-post\", \"content\": \"Post content...\"}"
+          "description": "A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Only the fields listed here are managed; other fields of the item are left untouched. Example: {\"name\": \"My Blog Post\", \"slug\": \"my-blog-post\", \"content\": \"Post content...\"}"
         },
         "isArchived": {
           "type": "boolean",
-          "description": "Whether the item is archived (optional, defaults to false). Archived items are not visible on the published site but remain in the CMS."
+          "description": "Whether the item is archived (optional). Archived items are not visible on the published site but remain in the CMS. When omitted, the archived state is not managed and never causes a diff."
         },
         "isDraft": {
           "type": "boolean",
-          "description": "Whether the item is a draft (optional, defaults to true). Draft items are not published to the live site. Set to false to publish the item immediately upon creation."
+          "description": "Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff."
         },
         "itemId": {
           "type": "string",
@@ -619,6 +1087,10 @@
         "lastUpdated": {
           "type": "string",
           "description": "The timestamp when the item was last updated (RFC3339 format, read-only). This is automatically updated by Webflow whenever the item is modified."
+        },
+        "live": {
+          "type": "boolean",
+          "description": "Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item."
         }
       },
       "required": [
@@ -628,7 +1100,7 @@
       "inputProperties": {
         "cmsLocaleId": {
           "type": "string",
-          "description": "The locale ID for localized sites (optional, e.g., 'en-US'). Only required if your site uses Webflow's localization features. Leave empty for non-localized sites."
+          "description": "The CMS locale ID for localized sites (optional). Only required if your site uses Webflow's localization features; it is sent with every request for this item, including reads. Leave empty for non-localized sites."
         },
         "collectionId": {
           "type": "string",
@@ -639,15 +1111,19 @@
           "additionalProperties": {
             "$ref": "pulumi.json#/Any"
           },
-          "description": "A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Example: {\"name\": \"My Blog Post\", \"slug\": \"my-blog-post\", \"content\": \"Post content...\"}"
+          "description": "A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include 'name' (required), 'slug' (required, URL-friendly), and any custom fields you've added to the collection. Only the fields listed here are managed; other fields of the item are left untouched. Example: {\"name\": \"My Blog Post\", \"slug\": \"my-blog-post\", \"content\": \"Post content...\"}"
         },
         "isArchived": {
           "type": "boolean",
-          "description": "Whether the item is archived (optional, defaults to false). Archived items are not visible on the published site but remain in the CMS."
+          "description": "Whether the item is archived (optional). Archived items are not visible on the published site but remain in the CMS. When omitted, the archived state is not managed and never causes a diff."
         },
         "isDraft": {
           "type": "boolean",
-          "description": "Whether the item is a draft (optional, defaults to true). Draft items are not published to the live site. Set to false to publish the item immediately upon creation."
+          "description": "Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff."
+        },
+        "live": {
+          "type": "boolean",
+          "description": "Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item."
         }
       },
       "requiredInputs": [
@@ -672,8 +1148,7 @@
         }
       },
       "required": [
-        "siteId",
-        "defaultCurrency"
+        "siteId"
       ],
       "inputProperties": {
         "siteId": {
@@ -685,8 +1160,61 @@
         "siteId"
       ]
     },
+    "webflow:index:GoogleTag": {
+      "description": "Manages a single Google Tag ID (Google Analytics 4, Google Tag, Google Ads or Campaign Manager) configured on a Webflow site via the Google Tag Manager integration API. Each resource manages one entry in the site's tag list, so multiple GoogleTag resources may target the same site. Tags on the site that are not managed by Pulumi are left untouched. Requires the 'sites:read' and 'sites:write' scopes. Webflow allows up to 25 tags per site and rejects legacy Universal Analytics 'UA-' IDs.",
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "description": "A human-readable label for the tag shown in the Webflow dashboard (e.g., 'Primary Google Analytics')."
+        },
+        "effectiveOrder": {
+          "type": "integer",
+          "description": "The display position Webflow reports for this tag. This reflects any automatic assignment or renormalization performed by Webflow and may differ from 'order'. Read-only."
+        },
+        "order": {
+          "type": "integer",
+          "description": "Optional display position of the tag within the site's tag list. When omitted, Webflow assigns the position automatically (see 'effectiveOrder'). Webflow renormalizes positions after a tag is deleted, so only set this when you need to control ordering explicitly."
+        },
+        "siteId": {
+          "type": "string",
+          "description": "The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). Changing this value replaces the resource."
+        },
+        "tagId": {
+          "type": "string",
+          "description": "The Google Tag ID to configure, e.g., 'G-1A2B3C4D5E' (GA4 measurement ID), 'GT-ABC123' (Google Tag), 'AW-123456789' (Google Ads) or 'DC-1234567' (Campaign Manager). Webflow rejects Universal Analytics 'UA-' IDs. Changing this value replaces the resource."
+        }
+      },
+      "required": [
+        "siteId",
+        "tagId",
+        "displayName"
+      ],
+      "inputProperties": {
+        "displayName": {
+          "type": "string",
+          "description": "A human-readable label for the tag shown in the Webflow dashboard (e.g., 'Primary Google Analytics')."
+        },
+        "order": {
+          "type": "integer",
+          "description": "Optional display position of the tag within the site's tag list. When omitted, Webflow assigns the position automatically (see 'effectiveOrder'). Webflow renormalizes positions after a tag is deleted, so only set this when you need to control ordering explicitly."
+        },
+        "siteId": {
+          "type": "string",
+          "description": "The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). Changing this value replaces the resource."
+        },
+        "tagId": {
+          "type": "string",
+          "description": "The Google Tag ID to configure, e.g., 'G-1A2B3C4D5E' (GA4 measurement ID), 'GT-ABC123' (Google Tag), 'AW-123456789' (Google Ads) or 'DC-1234567' (Campaign Manager). Webflow rejects Universal Analytics 'UA-' IDs. Changing this value replaces the resource."
+        }
+      },
+      "requiredInputs": [
+        "siteId",
+        "tagId",
+        "displayName"
+      ]
+    },
     "webflow:index:InlineScript": {
-      "description": "Manages inline custom code scripts in the Webflow script registry. This resource allows you to register and manage inline JavaScript code that can be deployed across your Webflow site with version control.",
+      "description": "Registers inline JavaScript in a Webflow site's script registry (POST /v2/sites/{site_id}/registered_scripts/inline). Registered scripts are applied to a site or page with the SiteCustomCode and PageCustomCode resources.\n\n**Authentication:** this resource calls Webflow custom code endpoints, which require an OAuth Data Client app token with the `custom_code:read` and `custom_code:write` scopes. Webflow documents that these scopes are available only to Data Client apps: site API tokens cannot access custom code endpoints. \n\n**IMPORTANT LIMITATION:** Webflow has no endpoint to update or unregister a registered script. Registrations are versioned and permanent (a site can hold up to 800). Changing sourceCode, displayName, scriptVersion, canCopy or integrityHash therefore registers a new script (a new version when only scriptVersion changes) and the previous registration remains in the registry. Destroying the resource is a logged no-op: the script stays registered and Pulumi simply stops managing it. Applied code is removed by SiteCustomCode and PageCustomCode. The list endpoint does not return sourceCode, so after an import the source is unknown until it is set in the program; Diff does not report a change for it in that case.",
       "properties": {
         "canCopy": {
           "type": "boolean",
@@ -698,7 +1226,7 @@
         },
         "displayName": {
           "type": "string",
-          "description": "The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'."
+          "description": "The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'."
         },
         "hostedLocation": {
           "type": "string",
@@ -718,7 +1246,7 @@
         },
         "scriptVersion": {
           "type": "string",
-          "description": "The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning."
+          "description": "The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning."
         },
         "siteId": {
           "type": "string",
@@ -726,7 +1254,7 @@
         },
         "sourceCode": {
           "type": "string",
-          "description": "The inline JavaScript code to register, limited to 2000 characters. This code will be directly embedded in your Webflow site. If your script exceeds 2000 characters, consider hosting it externally and using the RegisteredScript resource with a hostedLocation instead."
+          "description": "The inline JavaScript code to register, limited to 2000 characters. This code will be directly embedded in your Webflow site. If your script exceeds 2000 characters, consider hosting it externally and using the RegisteredScript resource with a hostedLocation instead. Webflow does not return the source code when listing scripts, so it cannot be read back after import."
         }
       },
       "required": [
@@ -743,7 +1271,7 @@
         },
         "displayName": {
           "type": "string",
-          "description": "The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'."
+          "description": "The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'."
         },
         "integrityHash": {
           "type": "string",
@@ -751,7 +1279,7 @@
         },
         "scriptVersion": {
           "type": "string",
-          "description": "The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning."
+          "description": "The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning."
         },
         "siteId": {
           "type": "string",
@@ -759,7 +1287,7 @@
         },
         "sourceCode": {
           "type": "string",
-          "description": "The inline JavaScript code to register, limited to 2000 characters. This code will be directly embedded in your Webflow site. If your script exceeds 2000 characters, consider hosting it externally and using the RegisteredScript resource with a hostedLocation instead."
+          "description": "The inline JavaScript code to register, limited to 2000 characters. This code will be directly embedded in your Webflow site. If your script exceeds 2000 characters, consider hosting it externally and using the RegisteredScript resource with a hostedLocation instead. Webflow does not return the source code when listing scripts, so it cannot be read back after import."
         }
       },
       "requiredInputs": [
@@ -770,48 +1298,54 @@
       ]
     },
     "webflow:index:PageContent": {
-      "description": "Manages static content (text) for a Webflow page. This resource allows you to update text content within existing DOM nodes on a page. It does NOT manage page structure or layout - only content within existing nodes. To find node IDs, you must first retrieve the page DOM structure using the Webflow API. \n\n**IMPORTANT LIMITATION:** This resource does NOT support drift detection for content changes. If content is modified outside of Pulumi (via Webflow UI or API), those changes will NOT be detected during 'pulumi refresh' or 'pulumi up'. The resource only verifies that the page still exists. This is due to the complexity of extracting and comparing specific node text from the full DOM structure.",
+      "description": "Manages the static text content of a Webflow page in a secondary locale (POST /v2/pages/{page_id}/dom?localeId=...). Webflow's Update Page Content endpoint only edits secondary locales: localeId is required and must be a valid secondary locale of the site, and the primary locale's content cannot be changed via the API. This resource updates the HTML of existing text nodes; it does NOT manage page structure or layout. Find node IDs by fetching the page DOM (GET /v2/pages/{page_id}/dom?localeId=...). Each node's text is required, and its HTML tags must match the node's current content; an empty text does not clear a node and is rejected. At most 1000 nodes may be updated per resource. Webflow reports per-node failures in the response; the update fails if any node was rejected. Refresh reads the current text of the managed nodes from the page DOM, so content changed outside of Pulumi shows up as drift. Import with the ID {pageId}/content/{localeId} to adopt every text node of the page. Destroying the resource leaves the content in place.",
       "properties": {
-        "lastUpdated": {
+        "localeId": {
           "type": "string",
-          "description": "The timestamp when the page content was last updated (RFC3339 format). This is automatically set when content is updated and is read-only."
+          "description": "The ID of the secondary locale to update (24-character lowercase hexadecimal string). Required: the Update Page Content endpoint only edits secondary locales, and Webflow rejects the request when the locale is the primary locale or not a locale of the site. Locale IDs are listed under Site Settings > Localization or via the Get Site endpoint. Changing it replaces the resource."
         },
         "nodes": {
           "type": "array",
           "items": {
             "$ref": "#/types/webflow:index:NodeContentUpdate"
           },
-          "description": "List of node content updates to apply. Each update specifies the nodeId (from the page's DOM structure) and the new text content. Node IDs can be retrieved by fetching the page DOM using GET /pages/{page_id}/dom. Only text content in existing nodes can be updated via this resource."
+          "description": "List of node content updates to apply (1 to 1000 entries). Each entry names a nodeId from the page's DOM and the node's new HTML text. Node IDs must be unique within the list."
         },
         "pageId": {
           "type": "string",
-          "description": "The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). You can find page IDs using the Pages API list endpoint or in the Webflow designer. This field will be validated before making any API calls."
+          "description": "The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs. Changing it replaces the resource."
         }
       },
       "required": [
         "pageId",
+        "localeId",
         "nodes"
       ],
       "inputProperties": {
+        "localeId": {
+          "type": "string",
+          "description": "The ID of the secondary locale to update (24-character lowercase hexadecimal string). Required: the Update Page Content endpoint only edits secondary locales, and Webflow rejects the request when the locale is the primary locale or not a locale of the site. Locale IDs are listed under Site Settings > Localization or via the Get Site endpoint. Changing it replaces the resource."
+        },
         "nodes": {
           "type": "array",
           "items": {
             "$ref": "#/types/webflow:index:NodeContentUpdate"
           },
-          "description": "List of node content updates to apply. Each update specifies the nodeId (from the page's DOM structure) and the new text content. Node IDs can be retrieved by fetching the page DOM using GET /pages/{page_id}/dom. Only text content in existing nodes can be updated via this resource."
+          "description": "List of node content updates to apply (1 to 1000 entries). Each entry names a nodeId from the page's DOM and the node's new HTML text. Node IDs must be unique within the list."
         },
         "pageId": {
           "type": "string",
-          "description": "The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). You can find page IDs using the Pages API list endpoint or in the Webflow designer. This field will be validated before making any API calls."
+          "description": "The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs. Changing it replaces the resource."
         }
       },
       "requiredInputs": [
         "pageId",
+        "localeId",
         "nodes"
       ]
     },
     "webflow:index:PageCustomCode": {
-      "description": "Manages custom code (JavaScript) scripts applied to a Webflow page. This resource allows you to apply registered custom code scripts to specific pages. Scripts must first be registered using the RegisteredScript resource before they can be applied. All scripts in the configuration will be applied to the page; scripts not listed will be removed.",
+      "description": "Manages custom code (JavaScript) scripts applied to a Webflow page (PUT /v2/pages/{page_id}/custom_code). This resource allows you to apply registered custom code scripts to specific pages. Scripts must first be registered using the RegisteredScript or InlineScript resource before they can be applied. All scripts in the configuration will be applied to the page; scripts not listed will be removed. Destroying the resource removes all applied code (DELETE /v2/pages/{page_id}/custom_code) but leaves the scripts registered.\n\n**Authentication:** this resource calls Webflow custom code endpoints, which require an OAuth Data Client app token with the `custom_code:read` and `custom_code:write` scopes. Webflow documents that these scopes are available only to Data Client apps: site API tokens cannot access custom code endpoints. Removing applied code (Delete, or dropping scripts from the list) additionally requires the `sites:write` (site custom code) or `pages:write` (page custom code) scope.",
       "properties": {
         "createdOn": {
           "type": "string",
@@ -855,88 +1389,173 @@
         "scripts"
       ]
     },
-    "webflow:index:PageData": {
-      "description": "Reads page information from a Webflow site. Pages cannot be created via the API - they must be created in the Webflow designer. Use this data source to retrieve page metadata for use in your infrastructure code. Specify pageId to get a single page, or omit it to list all pages in the site.",
+    "webflow:index:PageMetadata": {
+      "description": "Manages the settings of an existing Webflow page: title, slug, SEO title/description and Open Graph settings. Pages are created in the Webflow Designer; use the getPages function to find page IDs. Only the fields you set are sent to Webflow (PUT /v2/pages/{page_id}). Webflow silently ignores slug for the home page, collection template pages, utility pages (404, password, search) and for secondary locales without an Advanced/Enterprise localization plan; the provider warns when the returned slug differs from the requested one. Destroying this resource only removes it from Pulumi state; the page keeps its current settings.",
       "properties": {
         "archived": {
           "type": "boolean",
-          "description": "Indicates if the page is archived (read-only). Only populated when pageId input is specified."
+          "description": "Whether the page is archived (read-only)."
         },
         "collectionId": {
           "type": "string",
-          "description": "The ID of the CMS collection (read-only, optional). Only present for collection pages. Only populated when pageId input is specified."
+          "description": "The CMS collection ID for collection template pages (read-only)."
         },
         "createdOn": {
           "type": "string",
-          "description": "The timestamp when the page was created (read-only, RFC3339 format). Only populated when pageId input is specified."
+          "description": "When the page was created (RFC3339 format, read-only)."
+        },
+        "currentSlug": {
+          "type": "string",
+          "description": "The slug Webflow reports for the page (read-only). Differs from slug when Webflow ignored the requested value."
         },
         "draft": {
           "type": "boolean",
-          "description": "Indicates if the page is in draft mode (read-only). Only populated when pageId input is specified."
+          "description": "Whether the page is a draft (read-only)."
         },
         "lastUpdated": {
           "type": "string",
-          "description": "The timestamp when the page was last updated (read-only, RFC3339 format). Only populated when pageId input is specified."
+          "description": "When the page was last updated (RFC3339 format, read-only)."
+        },
+        "localeId": {
+          "type": "string",
+          "description": "Optional locale ID to update a secondary locale's settings. When omitted the primary locale is updated. Changing it replaces the resource."
+        },
+        "openGraph": {
+          "$ref": "#/types/webflow:index:PageOpenGraphArgs",
+          "description": "Open Graph title, description and copied flags. Only the fields you set are updated."
         },
         "pageId": {
           "type": "string",
-          "description": "The specific page ID to retrieve (optional, 24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). If specified, only this page's data will be returned. If omitted, all pages for the site will be returned in the 'pages' output."
-        },
-        "pages": {
-          "type": "array",
-          "items": {
-            "$ref": "#/types/webflow:index:PageInfo"
-          },
-          "description": "List of all pages in the site (read-only). Only populated when pageId input is NOT specified. Each page includes all metadata fields: id, siteId, title, slug, createdOn, lastUpdated, archived, draft, and optional parentId/collectionId."
+          "description": "The Webflow page ID (24-character lowercase hexadecimal string). Changing it replaces the resource."
         },
         "parentId": {
           "type": "string",
-          "description": "The ID of the parent page (read-only, optional). Only present for nested pages. Only populated when pageId input is specified."
+          "description": "The parent folder ID (read-only)."
+        },
+        "publishedPath": {
+          "type": "string",
+          "description": "The relative URL path of the published page (read-only)."
+        },
+        "seo": {
+          "$ref": "#/types/webflow:index:PageSEOArgs",
+          "description": "SEO title and description. Only the fields you set are updated."
         },
         "siteId": {
           "type": "string",
-          "description": "The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls."
+          "description": "The site the page belongs to (read-only)."
         },
         "slug": {
           "type": "string",
-          "description": "The URL slug for the page (read-only, e.g., 'about' for '/about'). Only populated when pageId input is specified."
+          "description": "The URL slug. Leave unset to keep the value managed in the Designer. Ignored by Webflow for home, collection template and utility pages."
         },
         "title": {
           "type": "string",
-          "description": "The page title (read-only). This is the title shown in browser tabs and search results. Only populated when pageId input is specified."
-        },
-        "webflowPageId": {
-          "type": "string",
-          "description": "The Webflow page ID (read-only). Only populated when pageId input is specified."
+          "description": "The page title. Leave unset to keep the value managed in the Designer."
         }
       },
       "required": [
-        "siteId"
+        "pageId"
       ],
       "inputProperties": {
+        "localeId": {
+          "type": "string",
+          "description": "Optional locale ID to update a secondary locale's settings. When omitted the primary locale is updated. Changing it replaces the resource."
+        },
+        "openGraph": {
+          "$ref": "#/types/webflow:index:PageOpenGraphArgs",
+          "description": "Open Graph title, description and copied flags. Only the fields you set are updated."
+        },
         "pageId": {
           "type": "string",
-          "description": "The specific page ID to retrieve (optional, 24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). If specified, only this page's data will be returned. If omitted, all pages for the site will be returned in the 'pages' output."
+          "description": "The Webflow page ID (24-character lowercase hexadecimal string). Changing it replaces the resource."
         },
-        "siteId": {
+        "seo": {
+          "$ref": "#/types/webflow:index:PageSEOArgs",
+          "description": "SEO title and description. Only the fields you set are updated."
+        },
+        "slug": {
           "type": "string",
-          "description": "The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls."
+          "description": "The URL slug. Leave unset to keep the value managed in the Designer. Ignored by Webflow for home, collection template and utility pages."
+        },
+        "title": {
+          "type": "string",
+          "description": "The page title. Leave unset to keep the value managed in the Designer."
         }
       },
       "requiredInputs": [
-        "siteId"
+        "pageId"
+      ]
+    },
+    "webflow:index:PageSchemaMarkup": {
+      "description": "Manages the JSON-LD schema markup (structured data) of a Webflow page, optionally for a specific secondary locale, using the Pages schema markup API (beta). Creating or updating the resource PUTs the markup; deleting it clears the markup by writing null, since Webflow has no delete endpoint for schema markup. The markup is supplied as a JSON string and compared semantically, so key order and whitespace differences never cause a diff. Requires the 'pages:read' and 'pages:write' scopes. Webflow limits each entry to 60KB, 32 levels of nesting and 5,000 nodes, and silently strips the keys '__proto__', 'constructor' and 'prototype'.",
+      "properties": {
+        "effectiveLocaleId": {
+          "type": "string",
+          "description": "The locale whose markup Webflow reports for this page. Differs from 'localeId' when a secondary locale falls back to the primary locale. Read-only."
+        },
+        "isInherited": {
+          "type": "boolean",
+          "description": "True when the targeted secondary locale has no schema markup of its own and Webflow serves the primary locale's markup instead. Always false for the primary locale. Read-only."
+        },
+        "lastUpdated": {
+          "type": "string",
+          "description": "The timestamp of the most recent update to the markup (RFC3339). Read-only."
+        },
+        "localeId": {
+          "type": "string",
+          "description": "Optional secondary locale ID (24-character lowercase hexadecimal string) to manage the markup of a localized version of the page. Omit to manage the primary locale. Changing this value replaces the resource."
+        },
+        "pageId": {
+          "type": "string",
+          "description": "The Webflow page ID (24-character lowercase hexadecimal string, e.g., '6596da6045e56dee495bcbba'). Changing this value replaces the resource."
+        },
+        "publishedPath": {
+          "type": "string",
+          "description": "The relative published URL path of the page (e.g., '/about'). Read-only."
+        },
+        "schemaMarkup": {
+          "type": "string",
+          "description": "The JSON-LD document as a JSON string, e.g. '{\"@context\":\"https://schema.org\",\"@type\":\"FAQPage\",\"mainEntity\":[...]}'. Must be a single JSON object (use '@graph' to publish several entities). Use JSON.stringify / json.dumps / JsonSerializer to serialize an object from your program. Compared semantically, so formatting and key order do not cause diffs."
+        },
+        "siteId": {
+          "type": "string",
+          "description": "The ID of the Webflow site containing the page. Read-only."
+        }
+      },
+      "required": [
+        "pageId",
+        "schemaMarkup",
+        "isInherited"
+      ],
+      "inputProperties": {
+        "localeId": {
+          "type": "string",
+          "description": "Optional secondary locale ID (24-character lowercase hexadecimal string) to manage the markup of a localized version of the page. Omit to manage the primary locale. Changing this value replaces the resource."
+        },
+        "pageId": {
+          "type": "string",
+          "description": "The Webflow page ID (24-character lowercase hexadecimal string, e.g., '6596da6045e56dee495bcbba'). Changing this value replaces the resource."
+        },
+        "schemaMarkup": {
+          "type": "string",
+          "description": "The JSON-LD document as a JSON string, e.g. '{\"@context\":\"https://schema.org\",\"@type\":\"FAQPage\",\"mainEntity\":[...]}'. Must be a single JSON object (use '@graph' to publish several entities). Use JSON.stringify / json.dumps / JsonSerializer to serialize an object from your program. Compared semantically, so formatting and key order do not cause diffs."
+        }
+      },
+      "requiredInputs": [
+        "pageId",
+        "schemaMarkup"
       ]
     },
     "webflow:index:Redirect": {
-      "description": "Manages HTTP redirects for a Webflow site. This resource allows you to define redirect rules for old URLs to new locations, supporting both permanent (301) and temporary (302) redirects.",
+      "description": "Manages HTTP redirects for a Webflow site (POST/PATCH/DELETE /v2/sites/{site_id}/redirects, scope sites:write; GET requires sites:read). Webflow redirects are always permanent (301) redirects from one site path to another; the API does not support other status codes. Changing `sourcePath` replaces the redirect; changing `destinationPath` updates it in place.",
       "properties": {
         "createdOn": {
           "type": "string",
-          "description": "The timestamp when the redirect was created (RFC3339 format). This is automatically set when the redirect is created and is read-only."
+          "description": "The timestamp when the redirect was created (RFC3339 format), if the Webflow API reports it. The redirects API does not document this field, so it is normally empty. Read-only."
         },
         "destinationPath": {
           "type": "string",
-          "description": "The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path."
+          "description": "The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place."
         },
         "siteId": {
           "type": "string",
@@ -944,23 +1563,23 @@
         },
         "sourcePath": {
           "type": "string",
-          "description": "The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path."
+          "description": "The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect."
         },
         "statusCode": {
           "type": "integer",
-          "description": "The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves)."
+          "description": "Deprecated and ignored. Webflow redirects are always 301 (permanent) redirects: the redirect API object is {id, fromUrl, toUrl} and has no status code, so this value is never sent to Webflow, never validated and never produces a diff. Remove it from your program; it only remains for backwards compatibility.",
+          "deprecationMessage": "Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version."
         }
       },
       "required": [
         "siteId",
         "sourcePath",
-        "destinationPath",
-        "statusCode"
+        "destinationPath"
       ],
       "inputProperties": {
         "destinationPath": {
           "type": "string",
-          "description": "The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path."
+          "description": "The URL path to redirect to (e.g., '/new-page', '/home'). Must start with '/' and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place."
         },
         "siteId": {
           "type": "string",
@@ -968,22 +1587,22 @@
         },
         "sourcePath": {
           "type": "string",
-          "description": "The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path."
+          "description": "The URL path to redirect from (e.g., '/old-page', '/blog/2023'). Must start with '/' and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect."
         },
         "statusCode": {
           "type": "integer",
-          "description": "The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves)."
+          "description": "Deprecated and ignored. Webflow redirects are always 301 (permanent) redirects: the redirect API object is {id, fromUrl, toUrl} and has no status code, so this value is never sent to Webflow, never validated and never produces a diff. Remove it from your program; it only remains for backwards compatibility.",
+          "deprecationMessage": "Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version."
         }
       },
       "requiredInputs": [
         "siteId",
         "sourcePath",
-        "destinationPath",
-        "statusCode"
+        "destinationPath"
       ]
     },
     "webflow:index:RegisteredScript": {
-      "description": "Manages custom code scripts in the Webflow script registry. This resource allows you to register and manage externally hosted scripts that can be deployed across your Webflow site with version control and integrity verification.",
+      "description": "Registers an externally hosted script in a Webflow site's script registry (POST /v2/sites/{site_id}/registered_scripts/hosted). Registered scripts are applied to a site or page with the SiteCustomCode and PageCustomCode resources. scriptVersion is required: the register endpoint rejects requests without one.\n\n**Authentication:** this resource calls Webflow custom code endpoints, which require an OAuth Data Client app token with the `custom_code:read` and `custom_code:write` scopes. Webflow documents that these scopes are available only to Data Client apps: site API tokens cannot access custom code endpoints. \n\n**IMPORTANT LIMITATION:** Webflow has no endpoint to update or unregister a registered script. Registrations are versioned and permanent (a site can hold up to 800). Changing displayName, hostedLocation, integrityHash, scriptVersion or canCopy therefore registers a new script (a new version when only scriptVersion changes) and the previous registration remains in the registry. Destroying the resource is a logged no-op: the script stays registered and Pulumi simply stops managing it. Applied code is removed by SiteCustomCode and PageCustomCode.",
       "properties": {
         "canCopy": {
           "type": "boolean",
@@ -995,7 +1614,7 @@
         },
         "displayName": {
           "type": "string",
-          "description": "The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'."
+          "description": "The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'."
         },
         "hostedLocation": {
           "type": "string",
@@ -1015,7 +1634,7 @@
         },
         "scriptVersion": {
           "type": "string",
-          "description": "The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning."
+          "description": "The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning."
         },
         "siteId": {
           "type": "string",
@@ -1027,6 +1646,7 @@
         "displayName",
         "hostedLocation",
         "integrityHash",
+        "scriptVersion",
         "scriptId"
       ],
       "inputProperties": {
@@ -1036,7 +1656,7 @@
         },
         "displayName": {
           "type": "string",
-          "description": "The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'."
+          "description": "The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'."
         },
         "hostedLocation": {
           "type": "string",
@@ -1048,7 +1668,7 @@
         },
         "scriptVersion": {
           "type": "string",
-          "description": "The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning."
+          "description": "The Semantic Version (SemVer) string for the script (e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning."
         },
         "siteId": {
           "type": "string",
@@ -1059,7 +1679,8 @@
         "siteId",
         "displayName",
         "hostedLocation",
-        "integrityHash"
+        "integrityHash",
+        "scriptVersion"
       ]
     },
     "webflow:index:RobotsTxt": {
@@ -1067,11 +1688,11 @@
       "properties": {
         "content": {
           "type": "string",
-          "description": "The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives."
+          "description": "The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives. Comments and other directives are not stored by Webflow and are dropped with a warning. Formatting differences (blank lines, spacing, directive casing) do not cause a diff."
         },
         "lastModified": {
           "type": "string",
-          "description": "RFC3339 timestamp of the last modification."
+          "description": "RFC3339 timestamp of the last modification made through this provider. The Webflow API does not report one, so the provider records the time of its last successful write."
         },
         "siteId": {
           "type": "string",
@@ -1086,7 +1707,7 @@
       "inputProperties": {
         "content": {
           "type": "string",
-          "description": "The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives."
+          "description": "The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives. Comments and other directives are not stored by Webflow and are dropped with a warning. Formatting differences (blank lines, spacing, directive casing) do not cause a diff."
         },
         "siteId": {
           "type": "string",
@@ -1099,7 +1720,7 @@
       ]
     },
     "webflow:index:Site": {
-      "description": "Manages Webflow sites programmatically. This resource allows you to create, configure, and manage Webflow sites through infrastructure code. Create, Read, Update, and Delete operations are fully supported for complete site lifecycle management.",
+      "description": "Manages Webflow sites programmatically. This resource allows you to create, configure, and manage Webflow sites through infrastructure code. Create, Read, Update, and Delete operations are fully supported for complete site lifecycle management. \n\n**Required scopes:** creating a site (POST /v2/workspaces/{workspace_id}/sites) requires the `workspace:write` scope and an Enterprise workspace; reading a site requires `sites:read`; updating, publishing and deleting a site require `sites:write`. \n\n**Import:** `pulumi import webflow:index:Site my-site <siteId>`. The Webflow API does not report the template a site was created from, so `templateName` is empty after import and only affects creation; it is compared only when both the program and the state hold a value.",
       "properties": {
         "customDomains": {
           "type": "array",
@@ -1130,7 +1751,7 @@
         },
         "parentFolderId": {
           "type": "string",
-          "description": "The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. This is useful for organizing multiple sites into logical groups within your workspace."
+          "description": "The folder ID where the site will be organized in the Webflow dashboard (24-character lowercase hexadecimal string). Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace."
         },
         "previewUrl": {
           "type": "string",
@@ -1138,7 +1759,26 @@
         },
         "publish": {
           "type": "boolean",
-          "description": "Automatically publish the site after creation or updates. When set to true, the provider will publish the site to production after successfully creating or updating it. Default: false (manual publishing required). Note: Site must have at least one published version before automatic publishing will work. If publishing fails, the entire operation will fail with an error (site may exist but Pulumi will report failure). Recommendation: Set to false for initial site creation, then enable after first manual publish."
+          "description": "Automatically publish the site after creation or updates. When set to true, the provider calls the Webflow publish endpoint after successfully creating or updating the site, using `publishToWebflowSubdomain`, `publishCustomDomains` and `publishPageId` to build the publish request. If neither `publishToWebflowSubdomain` nor `publishCustomDomains` is set, the site is published to its webflow.io subdomain. Default: false (manual publishing required). If publishing fails, the operation fails with an error (the site may exist but Pulumi will report failure)."
+        },
+        "publishCustomDomains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "When `publish` is true, the list of custom domain IDs (not host names) to publish to. Maps to the `customDomains` field of the Webflow publish endpoint. Custom domain IDs can be read from the Webflow site settings or the sites API."
+        },
+        "publishPageId": {
+          "type": "string",
+          "description": "When `publish` is true, publish only the page with this ID (24-character lowercase hexadecimal string) instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint."
+        },
+        "publishScope": {
+          "type": "string",
+          "description": "Scope of the last publish triggered by this provider (read-only): 'site' when the whole site was published, 'page' when only `publishPageId` was published. Empty when the provider has not published the site."
+        },
+        "publishToWebflowSubdomain": {
+          "type": "boolean",
+          "description": "When `publish` is true, publish to the site's default webflow.io subdomain. Maps to the `publishToWebflowSubdomain` field of the Webflow publish endpoint. Default: false."
         },
         "shortName": {
           "type": "string",
@@ -1146,7 +1786,7 @@
         },
         "templateName": {
           "type": "string",
-          "description": "The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **WARNING: This field is IMMUTABLE.** Once set, it cannot be changed. Changing this value will trigger a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement."
+          "description": "The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **This value only affects creation.** The Webflow API does not report which template a site was created from, so it cannot be read back: after `pulumi import` the state holds no templateName, and adding one to the program later does not change or replace the site. **WARNING:** changing from one non-empty template to a different non-empty template triggers a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement."
         },
         "timeZone": {
           "type": "string",
@@ -1154,7 +1794,7 @@
         },
         "workspaceId": {
           "type": "string",
-          "description": "The Webflow workspace ID where the site will be created. Required for site creation (Enterprise workspace required by Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings > Workspace."
+          "description": "The Webflow workspace ID where the site will be created (24-character lowercase hexadecimal string). Required for site creation (Enterprise workspace and the `workspace:write` scope are required by the Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings > Workspace. Changing this value replaces the site."
         }
       },
       "required": [
@@ -1168,19 +1808,34 @@
         },
         "parentFolderId": {
           "type": "string",
-          "description": "The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. This is useful for organizing multiple sites into logical groups within your workspace."
+          "description": "The folder ID where the site will be organized in the Webflow dashboard (24-character lowercase hexadecimal string). Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace."
         },
         "publish": {
           "type": "boolean",
-          "description": "Automatically publish the site after creation or updates. When set to true, the provider will publish the site to production after successfully creating or updating it. Default: false (manual publishing required). Note: Site must have at least one published version before automatic publishing will work. If publishing fails, the entire operation will fail with an error (site may exist but Pulumi will report failure). Recommendation: Set to false for initial site creation, then enable after first manual publish."
+          "description": "Automatically publish the site after creation or updates. When set to true, the provider calls the Webflow publish endpoint after successfully creating or updating the site, using `publishToWebflowSubdomain`, `publishCustomDomains` and `publishPageId` to build the publish request. If neither `publishToWebflowSubdomain` nor `publishCustomDomains` is set, the site is published to its webflow.io subdomain. Default: false (manual publishing required). If publishing fails, the operation fails with an error (the site may exist but Pulumi will report failure)."
+        },
+        "publishCustomDomains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "When `publish` is true, the list of custom domain IDs (not host names) to publish to. Maps to the `customDomains` field of the Webflow publish endpoint. Custom domain IDs can be read from the Webflow site settings or the sites API."
+        },
+        "publishPageId": {
+          "type": "string",
+          "description": "When `publish` is true, publish only the page with this ID (24-character lowercase hexadecimal string) instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint."
+        },
+        "publishToWebflowSubdomain": {
+          "type": "boolean",
+          "description": "When `publish` is true, publish to the site's default webflow.io subdomain. Maps to the `publishToWebflowSubdomain` field of the Webflow publish endpoint. Default: false."
         },
         "templateName": {
           "type": "string",
-          "description": "The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **WARNING: This field is IMMUTABLE.** Once set, it cannot be changed. Changing this value will trigger a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement."
+          "description": "The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **This value only affects creation.** The Webflow API does not report which template a site was created from, so it cannot be read back: after `pulumi import` the state holds no templateName, and adding one to the program later does not change or replace the site. **WARNING:** changing from one non-empty template to a different non-empty template triggers a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., 'mast-framework', 'blank'). Consider using resource protection (`protect: true`) to prevent accidental replacement."
         },
         "workspaceId": {
           "type": "string",
-          "description": "The Webflow workspace ID where the site will be created. Required for site creation (Enterprise workspace required by Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings > Workspace."
+          "description": "The Webflow workspace ID where the site will be created (24-character lowercase hexadecimal string). Required for site creation (Enterprise workspace and the `workspace:write` scope are required by the Webflow API). Example: '5f0c8c9e1c9d440000e8d8c3'. You can find your workspace ID in the Webflow dashboard under Account Settings > Workspace. Changing this value replaces the site."
         }
       },
       "requiredInputs": [
@@ -1189,7 +1844,7 @@
       ]
     },
     "webflow:index:SiteCustomCode": {
-      "description": "Manages custom JavaScript code applied to a Webflow site. This resource allows you to apply registered custom scripts to a site and control where they are placed (header or footer). Custom scripts must be registered to the site first via the RegisterScript resource.",
+      "description": "Manages custom JavaScript code applied to a Webflow site (PUT /v2/sites/{site_id}/custom_code). This resource allows you to apply registered custom scripts to a site and control where they are placed (header or footer). Custom scripts must be registered to the site first via the RegisteredScript or InlineScript resource. The full list is sent on every update, so scripts omitted from the list are removed from the site; destroying the resource removes all applied code (DELETE /v2/sites/{site_id}/custom_code) but leaves the scripts registered.\n\n**Authentication:** this resource calls Webflow custom code endpoints, which require an OAuth Data Client app token with the `custom_code:read` and `custom_code:write` scopes. Webflow documents that these scopes are available only to Data Client apps: site API tokens cannot access custom code endpoints. Removing applied code (Delete, or dropping scripts from the list) additionally requires the `sites:write` (site custom code) or `pages:write` (page custom code) scope.",
       "properties": {
         "createdOn": {
           "type": "string",
@@ -1234,7 +1889,7 @@
       ]
     },
     "webflow:index:Webhook": {
-      "description": "Manages webhooks for a Webflow site. Webhooks allow you to receive real-time notifications when events occur in your Webflow site, such as form submissions, page updates, e-commerce orders, and more. Note: Webhooks cannot be updated in-place; any change to triggerType, url, or filter requires replacement.",
+      "description": "Manages webhooks for a Webflow site. Webhooks allow you to receive real-time notifications when events occur in your Webflow site, such as form submissions, page updates, e-commerce orders, and more. \n\n**Authentication:** the webhook endpoints require a Data Client (OAuth) token with the `sites:write` scope plus the read scope of the event family being subscribed to (`forms:read`, `cms:read`, `pages:read`, `ecommerce:read` or `comments:read`); reading a webhook requires `sites:read`. \n\nWebhooks cannot be updated in place: any change to `triggerType`, `url` or `filter` replaces the webhook (the replacement is created before the old one is deleted, so there is no window without a webhook; Webflow allows several webhooks per trigger).",
       "properties": {
         "createdOn": {
           "type": "string",
@@ -1245,7 +1900,7 @@
           "additionalProperties": {
             "$ref": "pulumi.json#/Any"
           },
-          "description": "Optional filter for webhook events. The structure depends on the triggerType and allows you to receive only specific events. For example, for collection_item_created, you can filter by collection ID. Refer to Webflow API documentation for filter options for each trigger type."
+          "description": "Optional filter for webhook events. Only supported for the `form_submission` trigger type: it selects the form whose submissions should be sent, with the shape `{ name: string }` where `name` is the form name (e.g., `{ name: 'Contact Form' }`). Setting a filter for any other trigger type, or any key other than `name`, is rejected. When omitted the provider does not track the filter Webflow reports, so a filter set outside Pulumi does not cause a diff. Changing this value replaces the webhook."
         },
         "lastTriggered": {
           "type": "string",
@@ -1257,11 +1912,11 @@
         },
         "triggerType": {
           "type": "string",
-          "description": "The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, memberships_user_account_added, memberships_user_account_updated, memberships_user_account_deleted, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_unpublished. Example: 'form_submission' to receive notifications when forms are submitted."
+          "description": "The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_published, collection_item_unpublished, comment_created. Webhooks require a Data Client (OAuth) token with `sites:write` plus the read scope of the event family: `forms:read` (form_submission), `cms:read` (collection_item_*), `pages:read` (page_*), `ecommerce:read` (ecomm_*), `comments:read` (comment_created); site_publish needs `sites:read`. Example: 'form_submission' to receive notifications when forms are submitted. Changing this value replaces the webhook."
         },
         "url": {
           "type": "string",
-          "description": "The HTTPS endpoint where Webflow will send webhook events (e.g., 'https://example.com/webhooks/webflow', 'https://api.example.com/events'). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data."
+          "description": "The HTTPS endpoint where Webflow will send webhook events (e.g., 'https://example.com/webhooks/webflow', 'https://api.example.com/events'). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data. Changing this value replaces the webhook."
         }
       },
       "required": [
@@ -1275,7 +1930,7 @@
           "additionalProperties": {
             "$ref": "pulumi.json#/Any"
           },
-          "description": "Optional filter for webhook events. The structure depends on the triggerType and allows you to receive only specific events. For example, for collection_item_created, you can filter by collection ID. Refer to Webflow API documentation for filter options for each trigger type."
+          "description": "Optional filter for webhook events. Only supported for the `form_submission` trigger type: it selects the form whose submissions should be sent, with the shape `{ name: string }` where `name` is the form name (e.g., `{ name: 'Contact Form' }`). Setting a filter for any other trigger type, or any key other than `name`, is rejected. When omitted the provider does not track the filter Webflow reports, so a filter set outside Pulumi does not cause a diff. Changing this value replaces the webhook."
         },
         "siteId": {
           "type": "string",
@@ -1283,11 +1938,11 @@
         },
         "triggerType": {
           "type": "string",
-          "description": "The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, memberships_user_account_added, memberships_user_account_updated, memberships_user_account_deleted, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_unpublished. Example: 'form_submission' to receive notifications when forms are submitted."
+          "description": "The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_published, collection_item_unpublished, comment_created. Webhooks require a Data Client (OAuth) token with `sites:write` plus the read scope of the event family: `forms:read` (form_submission), `cms:read` (collection_item_*), `pages:read` (page_*), `ecommerce:read` (ecomm_*), `comments:read` (comment_created); site_publish needs `sites:read`. Example: 'form_submission' to receive notifications when forms are submitted. Changing this value replaces the webhook."
         },
         "url": {
           "type": "string",
-          "description": "The HTTPS endpoint where Webflow will send webhook events (e.g., 'https://example.com/webhooks/webflow', 'https://api.example.com/events'). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data."
+          "description": "The HTTPS endpoint where Webflow will send webhook events (e.g., 'https://example.com/webhooks/webflow', 'https://api.example.com/events'). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data. Changing this value replaces the webhook."
         }
       },
       "requiredInputs": [
@@ -1298,6 +1953,615 @@
     }
   },
   "functions": {
+    "webflow:index:getAnalyticsTimeOnPage": {
+      "description": "Returns the average time visitors spend on a page of a Webflow site, as a single value or bucketed by day or week (Analyze API, beta). Use the 'pagePath' filter to target one page. Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.",
+      "inputs": {
+        "properties": {
+          "browser": {
+            "type": "string",
+            "description": "Restrict the report to a single browser name (e.g., 'Chrome')."
+          },
+          "country": {
+            "type": "string",
+            "description": "Restrict the report to a single country, as an ISO 3166-1 alpha-2 code (e.g., 'US'). Normalized to uppercase."
+          },
+          "deviceType": {
+            "type": "string",
+            "description": "Restrict the report to a single device type: 'desktop', 'mobile' or 'tablet'."
+          },
+          "endTime": {
+            "type": "string",
+            "description": "Exclusive end of the reporting window. UTC timestamp in ISO 8601 / RFC 3339 format ending in 'Z' (e.g., '2026-04-01T00:00:00Z'). Numeric offsets are not accepted. Must be after startTime and within 100 days of it."
+          },
+          "filters": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/types/webflow:index:AnalyticsDimensionFilter"
+            },
+            "description": "Advanced filters keyed by dimension (e.g., 'country', 'deviceType', 'pagePath', 'referrer', 'trafficSource', 'utmCampaign', 'os', 'language', 'locale', 'region', 'audienceIds', 'collectionId', 'itemSlug', 'pageId', 'dayOfWeek', 'timeOfDay', 'visitStatus', ...). Each entry supports 'eq', 'in', 'ne' and 'nin'. Filter a given dimension either here or with the matching single-value input, not both."
+          },
+          "metricScope": {
+            "type": "string",
+            "description": "How the average is computed: per 'session', per 'user' or per 'pageview'."
+          },
+          "pagePath": {
+            "type": "string",
+            "description": "Restrict the report to a single page path (e.g., '/pricing')."
+          },
+          "referrer": {
+            "type": "string",
+            "description": "Restrict the report to a single referrer domain (e.g., 'google.com')."
+          },
+          "siteId": {
+            "type": "string",
+            "description": "The Webflow site ID (24-character lowercase hexadecimal string)."
+          },
+          "startTime": {
+            "type": "string",
+            "description": "Inclusive start of the reporting window. UTC timestamp in ISO 8601 / RFC 3339 format ending in 'Z' (e.g., '2026-04-01T00:00:00Z'). Numeric offsets are not accepted. Must be on or after 2025-04-09T00:00:00Z."
+          },
+          "timeseries": {
+            "$ref": "#/types/webflow:index:AnalyticsTimeOnPageTimeseriesArgs",
+            "description": "Include bucketed averages using the given granularity ('day' or 'week') and IANA time zone. Omit to return a single aggregate value for the window."
+          },
+          "trafficSource": {
+            "type": "string",
+            "description": "Restrict the report to a single traffic source code (e.g., 'SO' for Organic Search)."
+          },
+          "utmCampaign": {
+            "type": "string",
+            "description": "Restrict the report to a single utm_campaign value."
+          },
+          "utmMedium": {
+            "type": "string",
+            "description": "Restrict the report to a single utm_medium value."
+          },
+          "utmSource": {
+            "type": "string",
+            "description": "Restrict the report to a single utm_source value."
+          }
+        },
+        "type": "object",
+        "required": [
+          "siteId",
+          "startTime",
+          "endTime",
+          "metricScope"
+        ]
+      },
+      "outputs": {
+        "properties": {
+          "bucketing": {
+            "$ref": "#/types/webflow:index:AnalyticsBucketing",
+            "description": "The bucketing applied; present only when 'timeseries' was requested."
+          },
+          "data": {
+            "description": "A single aggregate data point, or one point per bucket when 'timeseries' was requested.",
+            "items": {
+              "$ref": "#/types/webflow:index:AnalyticsAverageSecondsPoint"
+            },
+            "type": "array"
+          },
+          "filters": {
+            "additionalProperties": {
+              "$ref": "#/types/webflow:index:AnalyticsDimensionFilter"
+            },
+            "description": "The filters that were applied, keyed by dimension.",
+            "type": "object"
+          },
+          "metricScope": {
+            "description": "How the average was computed: 'session', 'user' or 'pageview'.",
+            "type": "string"
+          },
+          "report": {
+            "description": "The report name, always 'time_on_page'.",
+            "type": "string"
+          },
+          "window": {
+            "$ref": "#/types/webflow:index:AnalyticsWindow",
+            "description": "The reporting window that was applied."
+          }
+        },
+        "required": [
+          "report",
+          "window",
+          "metricScope",
+          "data"
+        ],
+        "type": "object"
+      }
+    },
+    "webflow:index:getAnalyticsTopDimensions": {
+      "description": "Returns the top values of a chosen dimension (country, region, device type, OS, browser, language, locale, referrer, traffic source, UTM parameters or audience) for a Webflow site, ranked by sessions or users (Analyze API, beta). Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.",
+      "inputs": {
+        "properties": {
+          "browser": {
+            "type": "string",
+            "description": "Restrict the report to a single browser name (e.g., 'Chrome')."
+          },
+          "country": {
+            "type": "string",
+            "description": "Restrict the report to a single country, as an ISO 3166-1 alpha-2 code (e.g., 'US'). Normalized to uppercase."
+          },
+          "deviceType": {
+            "type": "string",
+            "description": "Restrict the report to a single device type: 'desktop', 'mobile' or 'tablet'."
+          },
+          "dimension": {
+            "type": "string",
+            "description": "The dimension to rank. One of: 'country', 'region', 'deviceType', 'os', 'browser', 'language', 'locale', 'referrer', 'trafficSource', 'utmCampaign', 'utmContent', 'utmMedium', 'utmSource', 'utmTerm', 'audienceIds'."
+          },
+          "endTime": {
+            "type": "string",
+            "description": "Exclusive end of the reporting window. UTC timestamp in ISO 8601 / RFC 3339 format ending in 'Z' (e.g., '2026-04-01T00:00:00Z'). Numeric offsets are not accepted. Must be after startTime and within 100 days of it."
+          },
+          "filters": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/types/webflow:index:AnalyticsDimensionFilter"
+            },
+            "description": "Advanced filters keyed by dimension (e.g., 'country', 'deviceType', 'pagePath', 'referrer', 'trafficSource', 'utmCampaign', 'os', 'language', 'locale', 'region', 'audienceIds', 'collectionId', 'itemSlug', 'pageId', 'dayOfWeek', 'timeOfDay', 'visitStatus', ...). Each entry supports 'eq', 'in', 'ne' and 'nin'. Filter a given dimension either here or with the matching single-value input, not both."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of rows to return. Defaults to 25, up to a maximum of 100."
+          },
+          "metricScope": {
+            "type": "string",
+            "description": "Unit of each row's count: 'session' or 'user'."
+          },
+          "pagePath": {
+            "type": "string",
+            "description": "Restrict the report to a single page path (e.g., '/pricing')."
+          },
+          "referrer": {
+            "type": "string",
+            "description": "Restrict the report to a single referrer domain (e.g., 'google.com')."
+          },
+          "siteId": {
+            "type": "string",
+            "description": "The Webflow site ID (24-character lowercase hexadecimal string)."
+          },
+          "startTime": {
+            "type": "string",
+            "description": "Inclusive start of the reporting window. UTC timestamp in ISO 8601 / RFC 3339 format ending in 'Z' (e.g., '2026-04-01T00:00:00Z'). Numeric offsets are not accepted. Must be on or after 2025-04-09T00:00:00Z."
+          },
+          "trafficSource": {
+            "type": "string",
+            "description": "Restrict the report to a single traffic source code (e.g., 'SO' for Organic Search)."
+          },
+          "utmCampaign": {
+            "type": "string",
+            "description": "Restrict the report to a single utm_campaign value."
+          },
+          "utmMedium": {
+            "type": "string",
+            "description": "Restrict the report to a single utm_medium value."
+          },
+          "utmSource": {
+            "type": "string",
+            "description": "Restrict the report to a single utm_source value."
+          }
+        },
+        "type": "object",
+        "required": [
+          "siteId",
+          "startTime",
+          "endTime",
+          "dimension",
+          "metricScope"
+        ]
+      },
+      "outputs": {
+        "properties": {
+          "data": {
+            "description": "The ranked dimension values, highest count first.",
+            "items": {
+              "$ref": "#/types/webflow:index:AnalyticsDimensionRow"
+            },
+            "type": "array"
+          },
+          "dimension": {
+            "description": "The dimension whose values were ranked.",
+            "type": "string"
+          },
+          "filters": {
+            "additionalProperties": {
+              "$ref": "#/types/webflow:index:AnalyticsDimensionFilter"
+            },
+            "description": "The filters that were applied, keyed by dimension.",
+            "type": "object"
+          },
+          "limit": {
+            "description": "The row cap that was applied (echoes the request value, including the default).",
+            "type": "integer"
+          },
+          "metricScope": {
+            "description": "The unit each count is measured in: 'session' or 'user'.",
+            "type": "string"
+          },
+          "report": {
+            "description": "The report name, always 'top_dimensions'.",
+            "type": "string"
+          },
+          "window": {
+            "$ref": "#/types/webflow:index:AnalyticsWindow",
+            "description": "The reporting window that was applied."
+          }
+        },
+        "required": [
+          "report",
+          "window",
+          "dimension",
+          "metricScope",
+          "limit",
+          "data"
+        ],
+        "type": "object"
+      }
+    },
+    "webflow:index:getAnalyticsTopEvents": {
+      "description": "Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the 'referrer' filter, nor the 'nextCollectionId', 'nextItemSlug', 'nextPageId', 'previousCollectionId', 'previousItemSlug' and 'previousPageId' filter dimensions. Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.",
+      "inputs": {
+        "properties": {
+          "browser": {
+            "type": "string",
+            "description": "Restrict the report to a single browser name (e.g., 'Chrome')."
+          },
+          "country": {
+            "type": "string",
+            "description": "Restrict the report to a single country, as an ISO 3166-1 alpha-2 code (e.g., 'US'). Normalized to uppercase."
+          },
+          "deviceType": {
+            "type": "string",
+            "description": "Restrict the report to a single device type: 'desktop', 'mobile' or 'tablet'."
+          },
+          "endTime": {
+            "type": "string",
+            "description": "Exclusive end of the reporting window. UTC timestamp in ISO 8601 / RFC 3339 format ending in 'Z' (e.g., '2026-04-01T00:00:00Z'). Numeric offsets are not accepted. Must be after startTime and within 100 days of it."
+          },
+          "filters": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/types/webflow:index:AnalyticsDimensionFilter"
+            },
+            "description": "Advanced filters keyed by dimension (e.g., 'country', 'deviceType', 'pagePath', 'referrer', 'trafficSource', 'utmCampaign', 'os', 'language', 'locale', 'region', 'audienceIds', 'collectionId', 'itemSlug', 'pageId', 'dayOfWeek', 'timeOfDay', 'visitStatus', ...). Each entry supports 'eq', 'in', 'ne' and 'nin'. Filter a given dimension either here or with the matching single-value input, not both."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of rows to return. Defaults to 25, up to a maximum of 250."
+          },
+          "pagePath": {
+            "type": "string",
+            "description": "Restrict the report to a single page path (e.g., '/pricing')."
+          },
+          "referrer": {
+            "type": "string",
+            "description": "Restrict the report to a single referrer domain (e.g., 'google.com')."
+          },
+          "siteId": {
+            "type": "string",
+            "description": "The Webflow site ID (24-character lowercase hexadecimal string)."
+          },
+          "startTime": {
+            "type": "string",
+            "description": "Inclusive start of the reporting window. UTC timestamp in ISO 8601 / RFC 3339 format ending in 'Z' (e.g., '2026-04-01T00:00:00Z'). Numeric offsets are not accepted. Must be on or after 2025-04-09T00:00:00Z."
+          },
+          "timeseries": {
+            "$ref": "#/types/webflow:index:AnalyticsTimeseriesArgs",
+            "description": "Include a daily event count time series for each event, bucketed in the given IANA time zone. Omit to return ranked rows only."
+          },
+          "trafficSource": {
+            "type": "string",
+            "description": "Restrict the report to a single traffic source code (e.g., 'SO' for Organic Search)."
+          },
+          "utmCampaign": {
+            "type": "string",
+            "description": "Restrict the report to a single utm_campaign value."
+          },
+          "utmMedium": {
+            "type": "string",
+            "description": "Restrict the report to a single utm_medium value."
+          },
+          "utmSource": {
+            "type": "string",
+            "description": "Restrict the report to a single utm_source value."
+          }
+        },
+        "type": "object",
+        "required": [
+          "siteId",
+          "startTime",
+          "endTime"
+        ]
+      },
+      "outputs": {
+        "properties": {
+          "bucketing": {
+            "$ref": "#/types/webflow:index:AnalyticsBucketing",
+            "description": "The bucketing applied to per-event time series; present only when 'timeseries' was requested."
+          },
+          "data": {
+            "description": "The ranked events, most fired first.",
+            "items": {
+              "$ref": "#/types/webflow:index:AnalyticsTopEventRow"
+            },
+            "type": "array"
+          },
+          "filters": {
+            "additionalProperties": {
+              "$ref": "#/types/webflow:index:AnalyticsDimensionFilter"
+            },
+            "description": "The filters that were applied, keyed by dimension.",
+            "type": "object"
+          },
+          "limit": {
+            "description": "The row cap that was applied (echoes the request value, including the default).",
+            "type": "integer"
+          },
+          "report": {
+            "description": "The report name, always 'top_events'.",
+            "type": "string"
+          },
+          "window": {
+            "$ref": "#/types/webflow:index:AnalyticsWindow",
+            "description": "The reporting window that was applied."
+          }
+        },
+        "required": [
+          "report",
+          "window",
+          "limit",
+          "data"
+        ],
+        "type": "object"
+      }
+    },
+    "webflow:index:getAnalyticsTopPages": {
+      "description": "Returns the most-visited pages of a Webflow site, ranked by sessions, users or pageviews, with an optional daily pageview time series per page (Analyze API, beta). Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.",
+      "inputs": {
+        "properties": {
+          "browser": {
+            "type": "string",
+            "description": "Restrict the report to a single browser name (e.g., 'Chrome')."
+          },
+          "country": {
+            "type": "string",
+            "description": "Restrict the report to a single country, as an ISO 3166-1 alpha-2 code (e.g., 'US'). Normalized to uppercase."
+          },
+          "deviceType": {
+            "type": "string",
+            "description": "Restrict the report to a single device type: 'desktop', 'mobile' or 'tablet'."
+          },
+          "endTime": {
+            "type": "string",
+            "description": "Exclusive end of the reporting window. UTC timestamp in ISO 8601 / RFC 3339 format ending in 'Z' (e.g., '2026-04-01T00:00:00Z'). Numeric offsets are not accepted. Must be after startTime and within 100 days of it."
+          },
+          "filters": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/types/webflow:index:AnalyticsDimensionFilter"
+            },
+            "description": "Advanced filters keyed by dimension (e.g., 'country', 'deviceType', 'pagePath', 'referrer', 'trafficSource', 'utmCampaign', 'os', 'language', 'locale', 'region', 'audienceIds', 'collectionId', 'itemSlug', 'pageId', 'dayOfWeek', 'timeOfDay', 'visitStatus', ...). Each entry supports 'eq', 'in', 'ne' and 'nin'. Filter a given dimension either here or with the matching single-value input, not both."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of rows to return. Defaults to 25, up to a maximum of 250."
+          },
+          "pagePath": {
+            "type": "string",
+            "description": "Restrict the report to a single page path (e.g., '/pricing')."
+          },
+          "referrer": {
+            "type": "string",
+            "description": "Restrict the report to a single referrer domain (e.g., 'google.com')."
+          },
+          "siteId": {
+            "type": "string",
+            "description": "The Webflow site ID (24-character lowercase hexadecimal string)."
+          },
+          "sortBy": {
+            "type": "string",
+            "description": "Metric used to rank rows, descending: 'session' (default), 'user' or 'pageview'."
+          },
+          "startTime": {
+            "type": "string",
+            "description": "Inclusive start of the reporting window. UTC timestamp in ISO 8601 / RFC 3339 format ending in 'Z' (e.g., '2026-04-01T00:00:00Z'). Numeric offsets are not accepted. Must be on or after 2025-04-09T00:00:00Z."
+          },
+          "timeseries": {
+            "$ref": "#/types/webflow:index:AnalyticsTimeseriesArgs",
+            "description": "Include a daily pageview time series for each page, bucketed in the given IANA time zone. Omit to return ranked rows only."
+          },
+          "trafficSource": {
+            "type": "string",
+            "description": "Restrict the report to a single traffic source code (e.g., 'SO' for Organic Search)."
+          },
+          "utmCampaign": {
+            "type": "string",
+            "description": "Restrict the report to a single utm_campaign value."
+          },
+          "utmMedium": {
+            "type": "string",
+            "description": "Restrict the report to a single utm_medium value."
+          },
+          "utmSource": {
+            "type": "string",
+            "description": "Restrict the report to a single utm_source value."
+          }
+        },
+        "type": "object",
+        "required": [
+          "siteId",
+          "startTime",
+          "endTime"
+        ]
+      },
+      "outputs": {
+        "properties": {
+          "bucketing": {
+            "$ref": "#/types/webflow:index:AnalyticsBucketing",
+            "description": "The bucketing applied to per-page time series; present only when 'timeseries' was requested."
+          },
+          "data": {
+            "description": "The ranked pages, most visited first.",
+            "items": {
+              "$ref": "#/types/webflow:index:AnalyticsTopPageRow"
+            },
+            "type": "array"
+          },
+          "filters": {
+            "additionalProperties": {
+              "$ref": "#/types/webflow:index:AnalyticsDimensionFilter"
+            },
+            "description": "The filters that were applied, keyed by dimension.",
+            "type": "object"
+          },
+          "limit": {
+            "description": "The row cap that was applied (echoes the request value, including the default).",
+            "type": "integer"
+          },
+          "report": {
+            "description": "The report name, always 'top_pages'.",
+            "type": "string"
+          },
+          "sortBy": {
+            "description": "The metric rows were ranked by: 'session', 'user' or 'pageview'.",
+            "type": "string"
+          },
+          "window": {
+            "$ref": "#/types/webflow:index:AnalyticsWindow",
+            "description": "The reporting window that was applied."
+          }
+        },
+        "required": [
+          "report",
+          "window",
+          "sortBy",
+          "limit",
+          "data"
+        ],
+        "type": "object"
+      }
+    },
+    "webflow:index:getAnalyticsTraffic": {
+      "description": "Returns a daily time series of sessions, users or pageviews for a Webflow site over a chosen window, optionally filtered by device, country, page, traffic source, referrer, browser or UTM parameters (Analyze API, beta). Requires the 'sites:read' scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.",
+      "inputs": {
+        "properties": {
+          "browser": {
+            "type": "string",
+            "description": "Restrict the report to a single browser name (e.g., 'Chrome')."
+          },
+          "bucketTimeZone": {
+            "type": "string",
+            "description": "IANA time zone used to align daily bucket boundaries (e.g., 'UTC', 'America/New_York')."
+          },
+          "country": {
+            "type": "string",
+            "description": "Restrict the report to a single country, as an ISO 3166-1 alpha-2 code (e.g., 'US'). Normalized to uppercase."
+          },
+          "deviceType": {
+            "type": "string",
+            "description": "Restrict the report to a single device type: 'desktop', 'mobile' or 'tablet'."
+          },
+          "endTime": {
+            "type": "string",
+            "description": "Exclusive end of the reporting window. UTC timestamp in ISO 8601 / RFC 3339 format ending in 'Z' (e.g., '2026-04-01T00:00:00Z'). Numeric offsets are not accepted. Must be after startTime and within 100 days of it."
+          },
+          "filters": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/types/webflow:index:AnalyticsDimensionFilter"
+            },
+            "description": "Advanced filters keyed by dimension (e.g., 'country', 'deviceType', 'pagePath', 'referrer', 'trafficSource', 'utmCampaign', 'os', 'language', 'locale', 'region', 'audienceIds', 'collectionId', 'itemSlug', 'pageId', 'dayOfWeek', 'timeOfDay', 'visitStatus', ...). Each entry supports 'eq', 'in', 'ne' and 'nin'. Filter a given dimension either here or with the matching single-value input, not both."
+          },
+          "metricScope": {
+            "type": "string",
+            "description": "Unit of each data point: 'session' (sessions), 'user' (unique users) or 'pageview'."
+          },
+          "pagePath": {
+            "type": "string",
+            "description": "Restrict the report to a single page path (e.g., '/pricing')."
+          },
+          "referrer": {
+            "type": "string",
+            "description": "Restrict the report to a single referrer domain (e.g., 'google.com')."
+          },
+          "siteId": {
+            "type": "string",
+            "description": "The Webflow site ID (24-character lowercase hexadecimal string)."
+          },
+          "startTime": {
+            "type": "string",
+            "description": "Inclusive start of the reporting window. UTC timestamp in ISO 8601 / RFC 3339 format ending in 'Z' (e.g., '2026-04-01T00:00:00Z'). Numeric offsets are not accepted. Must be on or after 2025-04-09T00:00:00Z."
+          },
+          "trafficSource": {
+            "type": "string",
+            "description": "Restrict the report to a single traffic source code (e.g., 'SO' for Organic Search)."
+          },
+          "utmCampaign": {
+            "type": "string",
+            "description": "Restrict the report to a single utm_campaign value."
+          },
+          "utmMedium": {
+            "type": "string",
+            "description": "Restrict the report to a single utm_medium value."
+          },
+          "utmSource": {
+            "type": "string",
+            "description": "Restrict the report to a single utm_source value."
+          }
+        },
+        "type": "object",
+        "required": [
+          "siteId",
+          "startTime",
+          "endTime",
+          "metricScope",
+          "bucketTimeZone"
+        ]
+      },
+      "outputs": {
+        "properties": {
+          "bucketing": {
+            "$ref": "#/types/webflow:index:AnalyticsBucketing",
+            "description": "The bucketing applied to the time series (daily, in the requested time zone)."
+          },
+          "data": {
+            "description": "One data point per day, ordered by timestamp.",
+            "items": {
+              "$ref": "#/types/webflow:index:AnalyticsCountPoint"
+            },
+            "type": "array"
+          },
+          "filters": {
+            "additionalProperties": {
+              "$ref": "#/types/webflow:index:AnalyticsDimensionFilter"
+            },
+            "description": "The filters that were applied, keyed by dimension.",
+            "type": "object"
+          },
+          "metricScope": {
+            "description": "The unit each count is measured in: 'session', 'user' or 'pageview'.",
+            "type": "string"
+          },
+          "report": {
+            "description": "The report name, always 'traffic'.",
+            "type": "string"
+          },
+          "window": {
+            "$ref": "#/types/webflow:index:AnalyticsWindow",
+            "description": "The reporting window that was applied."
+          }
+        },
+        "required": [
+          "report",
+          "window",
+          "metricScope",
+          "data"
+        ],
+        "type": "object"
+      }
+    },
     "webflow:index:getAuthorizedUser": {
       "description": "Retrieves information about the user who authorized the current Webflow API token. This is useful for auditing and understanding which user's credentials are being used. Requires the 'authorized_user:read' scope.",
       "inputs": {
@@ -1331,8 +2595,233 @@
         "type": "object"
       }
     },
+    "webflow:index:getPage": {
+      "description": "Reads the metadata (title, slug, SEO, Open Graph, timestamps, flags) of a single Webflow page. Pages cannot be created via the API; they are built in the Webflow Designer. Requires the pages:read scope.",
+      "inputs": {
+        "properties": {
+          "localeId": {
+            "type": "string",
+            "description": "Optional locale ID. When omitted the primary locale is returned."
+          },
+          "pageId": {
+            "type": "string",
+            "description": "The Webflow page ID (24-character lowercase hexadecimal string)."
+          },
+          "translatable": {
+            "type": "string",
+            "description": "Optional ID of the secondary locale you are translating into (24-character lowercase hexadecimal string), sent verbatim as ?translatable=<localeId> to return the page's translatable content for that locale. Webflow returns a 400 error when this is the primary locale ID or any other value, and a 403 error when translation exclusions are not enabled for the site."
+          }
+        },
+        "type": "object",
+        "required": [
+          "pageId"
+        ]
+      },
+      "outputs": {
+        "properties": {
+          "archived": {
+            "description": "Whether the page is archived.",
+            "type": "boolean"
+          },
+          "branchId": {
+            "description": "The ID of the parent branch, or empty.",
+            "type": "string"
+          },
+          "canBranch": {
+            "description": "Whether the page can be branched.",
+            "type": "boolean"
+          },
+          "collectionId": {
+            "description": "The CMS collection ID for collection template pages, or empty.",
+            "type": "string"
+          },
+          "createdOn": {
+            "description": "The timestamp when the page was created (RFC3339 format).",
+            "type": "string"
+          },
+          "draft": {
+            "description": "Whether the page is a draft.",
+            "type": "boolean"
+          },
+          "isBranch": {
+            "description": "Whether the page is a branch of another page.",
+            "type": "boolean"
+          },
+          "lastUpdated": {
+            "description": "The timestamp when the page was last updated (RFC3339 format).",
+            "type": "string"
+          },
+          "localeId": {
+            "description": "The locale ID of the returned page data, or empty for the primary locale.",
+            "type": "string"
+          },
+          "openGraph": {
+            "$ref": "#/types/webflow:index:PageOpenGraphRecord",
+            "description": "The Open Graph settings of the page."
+          },
+          "pageId": {
+            "description": "The Webflow page ID.",
+            "type": "string"
+          },
+          "parentId": {
+            "description": "The ID of the parent folder, or empty when the page is at the root.",
+            "type": "string"
+          },
+          "publishedPath": {
+            "description": "The relative URL path of the published page.",
+            "type": "string"
+          },
+          "seo": {
+            "$ref": "#/types/webflow:index:PageSEORecord",
+            "description": "The SEO title and description of the page."
+          },
+          "siteId": {
+            "description": "The Webflow site ID this page belongs to.",
+            "type": "string"
+          },
+          "slug": {
+            "description": "The URL slug of the page (e.g., 'about' for '/about').",
+            "type": "string"
+          },
+          "title": {
+            "description": "The page title shown in browser tabs and search results.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pageId",
+          "siteId",
+          "title",
+          "slug",
+          "parentId",
+          "collectionId",
+          "createdOn",
+          "lastUpdated",
+          "archived",
+          "draft",
+          "canBranch",
+          "isBranch",
+          "branchId",
+          "localeId",
+          "publishedPath",
+          "seo",
+          "openGraph"
+        ],
+        "type": "object"
+      }
+    },
+    "webflow:index:getPageSchemaMarkup": {
+      "description": "Reads the JSON-LD schema markup (structured data) of a Webflow page, optionally for a secondary locale, using the Pages schema markup API (beta). When a secondary locale has no markup of its own, the primary locale's markup is returned and 'isInherited' is true. Requires the 'pages:read' scope.",
+      "inputs": {
+        "properties": {
+          "localeId": {
+            "type": "string",
+            "description": "Optional secondary locale ID (24-character lowercase hexadecimal string). Omit to read the primary locale's markup."
+          },
+          "pageId": {
+            "type": "string",
+            "description": "The Webflow page ID (24-character lowercase hexadecimal string, e.g., '6596da6045e56dee495bcbba')."
+          }
+        },
+        "type": "object",
+        "required": [
+          "pageId"
+        ]
+      },
+      "outputs": {
+        "properties": {
+          "effectiveLocaleId": {
+            "description": "The locale whose markup was returned; differs from 'localeId' when a secondary locale falls back to the primary locale. Empty when no markup exists.",
+            "type": "string"
+          },
+          "isInherited": {
+            "description": "True when the targeted secondary locale has no markup of its own and the primary locale's markup was returned.",
+            "type": "boolean"
+          },
+          "lastUpdated": {
+            "description": "The timestamp of the most recent update to the markup (RFC3339).",
+            "type": "string"
+          },
+          "localeId": {
+            "description": "The locale targeted by the request (empty when Webflow reports none).",
+            "type": "string"
+          },
+          "pageId": {
+            "description": "The page identifier.",
+            "type": "string"
+          },
+          "publishedPath": {
+            "description": "The relative published URL path of the page (e.g., '/about').",
+            "type": "string"
+          },
+          "rawSchemaMarkup": {
+            "description": "The raw stored markup including <script> tags. Only populated for legacy multi-block markup that cannot be represented as a single JSON object; empty otherwise.",
+            "type": "string"
+          },
+          "schemaMarkup": {
+            "description": "The JSON-LD document as a compact JSON string with sorted keys, or an empty string when the page has no schema markup. Parse it with JSON.parse / json.loads to work with it as an object.",
+            "type": "string"
+          },
+          "siteId": {
+            "description": "The ID of the Webflow site containing the page.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pageId",
+          "siteId",
+          "localeId",
+          "effectiveLocaleId",
+          "publishedPath",
+          "lastUpdated",
+          "schemaMarkup",
+          "rawSchemaMarkup",
+          "isInherited"
+        ],
+        "type": "object"
+      }
+    },
+    "webflow:index:getPages": {
+      "description": "Lists all pages of a Webflow site with their metadata, following API pagination. Useful for discovering page IDs for the PageMetadata, PageContent and PageCustomCode resources. Requires the pages:read scope.",
+      "inputs": {
+        "properties": {
+          "localeId": {
+            "type": "string",
+            "description": "Optional locale ID. When omitted the primary locale is returned."
+          },
+          "siteId": {
+            "type": "string",
+            "description": "The Webflow site ID (24-character lowercase hexadecimal string)."
+          }
+        },
+        "type": "object",
+        "required": [
+          "siteId"
+        ]
+      },
+      "outputs": {
+        "properties": {
+          "pages": {
+            "description": "All pages of the site.",
+            "items": {
+              "$ref": "#/types/webflow:index:PageRecord"
+            },
+            "type": "array"
+          },
+          "siteId": {
+            "description": "The site ID that was listed.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "siteId",
+          "pages"
+        ],
+        "type": "object"
+      }
+    },
     "webflow:index:getTokenInfo": {
-      "description": "Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.",
+      "description": "Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings > Apps & integrations > API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.",
       "inputs": {
         "type": "object"
       },

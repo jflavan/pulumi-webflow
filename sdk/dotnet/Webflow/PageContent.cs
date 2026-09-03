@@ -11,27 +11,25 @@ using Pulumi;
 namespace Community.Pulumi.Webflow
 {
     /// <summary>
-    /// Manages static content (text) for a Webflow page. This resource allows you to update text content within existing DOM nodes on a page. It does NOT manage page structure or layout - only content within existing nodes. To find node IDs, you must first retrieve the page DOM structure using the Webflow API.
-    /// 
-    /// **IMPORTANT LIMITATION:** This resource does NOT support drift detection for content changes. If content is modified outside of Pulumi (via Webflow UI or API), those changes will NOT be detected during 'pulumi refresh' or 'pulumi up'. The resource only verifies that the page still exists. This is due to the complexity of extracting and comparing specific node text from the full DOM structure.
+    /// Manages the static text content of a Webflow page in a secondary locale (POST /v2/pages/{page_id}/dom?localeId=...). Webflow's Update Page Content endpoint only edits secondary locales: localeId is required and must be a valid secondary locale of the site, and the primary locale's content cannot be changed via the API. This resource updates the HTML of existing text nodes; it does NOT manage page structure or layout. Find node IDs by fetching the page DOM (GET /v2/pages/{page_id}/dom?localeId=...). Each node's text is required, and its HTML tags must match the node's current content; an empty text does not clear a node and is rejected. At most 1000 nodes may be updated per resource. Webflow reports per-node failures in the response; the update fails if any node was rejected. Refresh reads the current text of the managed nodes from the page DOM, so content changed outside of Pulumi shows up as drift. Import with the ID {pageId}/content/{localeId} to adopt every text node of the page. Destroying the resource leaves the content in place.
     /// </summary>
     [WebflowResourceType("webflow:index:PageContent")]
     public partial class PageContent : global::Pulumi.CustomResource
     {
         /// <summary>
-        /// The timestamp when the page content was last updated (RFC3339 format). This is automatically set when content is updated and is read-only.
+        /// The ID of the secondary locale to update (24-character lowercase hexadecimal string). Required: the Update Page Content endpoint only edits secondary locales, and Webflow rejects the request when the locale is the primary locale or not a locale of the site. Locale IDs are listed under Site Settings &gt; Localization or via the Get Site endpoint. Changing it replaces the resource.
         /// </summary>
-        [Output("lastUpdated")]
-        public Output<string?> LastUpdated { get; private set; } = null!;
+        [Output("localeId")]
+        public Output<string> LocaleId { get; private set; } = null!;
 
         /// <summary>
-        /// List of node content updates to apply. Each update specifies the nodeId (from the page's DOM structure) and the new text content. Node IDs can be retrieved by fetching the page DOM using GET /pages/{page_id}/dom. Only text content in existing nodes can be updated via this resource.
+        /// List of node content updates to apply (1 to 1000 entries). Each entry names a nodeId from the page's DOM and the node's new HTML text. Node IDs must be unique within the list.
         /// </summary>
         [Output("nodes")]
         public Output<ImmutableArray<Outputs.NodeContentUpdate>> Nodes { get; private set; } = null!;
 
         /// <summary>
-        /// The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). You can find page IDs using the Pages API list endpoint or in the Webflow designer. This field will be validated before making any API calls.
+        /// The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs. Changing it replaces the resource.
         /// </summary>
         [Output("pageId")]
         public Output<string> PageId { get; private set; } = null!;
@@ -82,11 +80,17 @@ namespace Community.Pulumi.Webflow
 
     public sealed class PageContentArgs : global::Pulumi.ResourceArgs
     {
+        /// <summary>
+        /// The ID of the secondary locale to update (24-character lowercase hexadecimal string). Required: the Update Page Content endpoint only edits secondary locales, and Webflow rejects the request when the locale is the primary locale or not a locale of the site. Locale IDs are listed under Site Settings &gt; Localization or via the Get Site endpoint. Changing it replaces the resource.
+        /// </summary>
+        [Input("localeId", required: true)]
+        public Input<string> LocaleId { get; set; } = null!;
+
         [Input("nodes", required: true)]
         private InputList<Inputs.NodeContentUpdateArgs>? _nodes;
 
         /// <summary>
-        /// List of node content updates to apply. Each update specifies the nodeId (from the page's DOM structure) and the new text content. Node IDs can be retrieved by fetching the page DOM using GET /pages/{page_id}/dom. Only text content in existing nodes can be updated via this resource.
+        /// List of node content updates to apply (1 to 1000 entries). Each entry names a nodeId from the page's DOM and the node's new HTML text. Node IDs must be unique within the list.
         /// </summary>
         public InputList<Inputs.NodeContentUpdateArgs> Nodes
         {
@@ -95,7 +99,7 @@ namespace Community.Pulumi.Webflow
         }
 
         /// <summary>
-        /// The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). You can find page IDs using the Pages API list endpoint or in the Webflow designer. This field will be validated before making any API calls.
+        /// The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs. Changing it replaces the resource.
         /// </summary>
         [Input("pageId", required: true)]
         public Input<string> PageId { get; set; } = null!;

@@ -5,7 +5,7 @@ Get started with the Webflow Pulumi Provider in Go. Deploy your first Webflow re
 ## Prerequisites
 
 - **Pulumi CLI** - [Install](https://www.pulumi.com/docs/install/)
-- **Go** - [Install Go 1.21 or later](https://golang.org/dl/)
+- **Go** - [Install Go 1.24.7 or later](https://golang.org/dl/)
 - **Webflow account** - With API access enabled
 - **Webflow API token** - [Create one](https://webflow.com) in Account Settings > API Tokens
 - **Webflow Site ID** - Find in Webflow Designer > Project Settings > API & Webhooks
@@ -22,7 +22,7 @@ go mod tidy
 
 This downloads:
 - `github.com/pulumi/pulumi/sdk/v3` - Pulumi SDK
-- `github.com/jdetmar/pulumi-webflow/sdk/go/webflow` - Webflow provider
+- `github.com/JDetmar/pulumi-webflow/sdk/go/webflow` - Webflow provider
 
 ### Step 2: Configure Your Credentials (2 minutes)
 
@@ -106,7 +106,7 @@ The main program is in `main.go`:
 package main
 
 import (
-	"github.com/jdetmar/pulumi-webflow/sdk/go/webflow"
+	"github.com/JDetmar/pulumi-webflow/sdk/go/webflow"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
@@ -231,19 +231,19 @@ Error: Plugin webflow not found
 
 **Solution:**
 ```bash
-pulumi plugin install resource webflow
+pulumi plugin install resource webflow --server github://api.github.com/JDetmar/pulumi-webflow
 ```
 
 ### Go module issues
 
 ```
-go get: github.com/jdetmar/pulumi-webflow/sdk/go/webflow: unknown revision
+go get: github.com/JDetmar/pulumi-webflow/sdk/go/webflow: unknown revision
 ```
 
 **Solution:**
 ```bash
 # Update modules
-go get -u github.com/jdetmar/pulumi-webflow/sdk/go/webflow
+go get -u github.com/JDetmar/pulumi-webflow/sdk/go/webflow
 
 # Tidy up
 go mod tidy

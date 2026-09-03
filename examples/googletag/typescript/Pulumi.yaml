@@ -1,0 +1,10 @@
+name: webflow-googletag-example
+runtime: nodejs
+description: Example of managing Google Tag IDs on a Webflow site with Pulumi
+
+config:
+  siteId:
+    description: The Webflow site ID
+  ga4TagId:
+    description: Optional - a GA4 measurement ID (G-XXXXXXXXXX) to configure on the site
+    default: G-1A2B3C4D5E

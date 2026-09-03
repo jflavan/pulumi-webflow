@@ -8,137 +8,63 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
 )
 
 const testInlineScriptID = "test-inline-script-123"
 
+func validInlineScriptArgs() InlineScriptArgs {
+	return InlineScriptArgs{
+		SiteID: testSiteID, SourceCode: "console.log('hello');", Version: "1.0.0", DisplayName: "TestScript",
+	}
+}
+
 // TestInlineScriptCreate_ValidationErrors tests input validation in Create
 func TestInlineScriptCreate_ValidationErrors(t *testing.T) {
 	resource := &InlineScript{}
-
 	tests := []struct {
 		name   string
-		inputs InlineScriptArgs
+		modify func(a *InlineScriptArgs)
 		want   string
 	}{
+		{"invalid siteId", func(a *InlineScriptArgs) { a.SiteID = "invalid" }, "validation failed"},
+		{"missing sourceCode", func(a *InlineScriptArgs) { a.SourceCode = "" }, "sourceCode is required"},
+		{"sourceCode too long", func(a *InlineScriptArgs) { a.SourceCode = strings.Repeat("a", 2001) }, "too long"},
+		{"missing version", func(a *InlineScriptArgs) { a.Version = "" }, "version is required"},
+		{"invalid version format", func(a *InlineScriptArgs) { a.Version = "1" }, "Semantic Version format"},
+		{"missing displayName", func(a *InlineScriptArgs) { a.DisplayName = "" }, "displayName is required"},
+		{"displayName too long", func(a *InlineScriptArgs) { a.DisplayName = strings.Repeat("a", 51) }, "too long"},
 		{
-			name: "invalid siteId",
-			inputs: InlineScriptArgs{
-				SiteID:      "invalid", // Too short
-				SourceCode:  "console.log('hello');",
-				Version:     "1.0.0",
-				DisplayName: "TestScript",
-			},
-			want: "validation failed",
+			"displayName with special chars",
+			func(a *InlineScriptArgs) { a.DisplayName = "Script-With-Dashes" },
+			"invalid characters",
 		},
 		{
-			name: "missing sourceCode",
-			inputs: InlineScriptArgs{
-				SiteID:      testSiteID,
-				SourceCode:  "",
-				Version:     "1.0.0",
-				DisplayName: "TestScript",
-			},
-			want: "sourceCode is required",
-		},
-		{
-			name: "sourceCode too long",
-			inputs: InlineScriptArgs{
-				SiteID:      testSiteID,
-				SourceCode:  strings.Repeat("a", 2001),
-				Version:     "1.0.0",
-				DisplayName: "TestScript",
-			},
-			want: "too long",
-		},
-		{
-			name: "missing version",
-			inputs: InlineScriptArgs{
-				SiteID:      testSiteID,
-				SourceCode:  "console.log('hello');",
-				Version:     "",
-				DisplayName: "TestScript",
-			},
-			want: "version is required",
-		},
-		{
-			name: "invalid version format",
-			inputs: InlineScriptArgs{
-				SiteID:      testSiteID,
-				SourceCode:  "console.log('hello');",
-				Version:     "1",
-				DisplayName: "TestScript",
-			},
-			want: "Semantic Version format",
-		},
-		{
-			name: "missing displayName",
-			inputs: InlineScriptArgs{
-				SiteID:      testSiteID,
-				SourceCode:  "console.log('hello');",
-				Version:     "1.0.0",
-				DisplayName: "",
-			},
-			want: "displayName is required",
-		},
-		{
-			name: "displayName too long",
-			inputs: InlineScriptArgs{
-				SiteID:      testSiteID,
-				SourceCode:  "console.log('hello');",
-				Version:     "1.0.0",
-				DisplayName: "ThisIsAVeryLongNameThatExceedsTheMaximumLengthOfFiftyCharacters",
-			},
-			want: "too long",
-		},
-		{
-			name: "displayName with special chars",
-			inputs: InlineScriptArgs{
-				SiteID:      testSiteID,
-				SourceCode:  "console.log('hello');",
-				Version:     "1.0.0",
-				DisplayName: "Script-With-Dashes",
-			},
-			want: "invalid characters",
-		},
-		{
-			name: "invalid integrityHash format",
-			inputs: InlineScriptArgs{
-				SiteID:        testSiteID,
-				SourceCode:    "console.log('hello');",
-				Version:       "1.0.0",
-				DisplayName:   "TestScript",
-				IntegrityHash: "md5-abc123",
-			},
-			want: "must start with 'sha'",
+			"invalid integrityHash format",
+			func(a *InlineScriptArgs) { a.IntegrityHash = "md5-abc123" },
+			"must start with 'sha'",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
-			resp, err := resource.Create(ctx, infer.CreateRequest[InlineScriptArgs]{
-				Inputs: tt.inputs,
-			})
-
+			inputs := validInlineScriptArgs()
+			tt.modify(&inputs)
+			// No server and no token: validation must fail before any API call.
+			resp, err := resource.Create(context.Background(), infer.CreateRequest[InlineScriptArgs]{Inputs: inputs})
 			if err == nil {
 				t.Fatalf("Create() expected error, got nil")
 			}
-
 			if !containsStr(err.Error(), tt.want) {
 				t.Errorf("Create() error = %v, want substring %q", err, tt.want)
 			}
-
 			if resp.ID != "" {
 				t.Errorf("Create() returned ID when expecting error: %s", resp.ID)
 			}
@@ -146,315 +72,211 @@ func TestInlineScriptCreate_ValidationErrors(t *testing.T) {
 	}
 }
 
-// TestInlineScriptCreate_ValidIntegrityHash tests that a valid optional integrityHash passes
-func TestInlineScriptCreate_ValidIntegrityHash(t *testing.T) {
-	resource := &InlineScript{}
-
-	inputs := InlineScriptArgs{
-		SiteID:        testSiteID,
-		SourceCode:    "console.log('hello');",
-		Version:       "1.0.0",
-		DisplayName:   "TestScript",
-		IntegrityHash: "sha384-abc123",
-	}
-
-	ctx := context.Background()
-	resp, err := resource.Create(ctx, infer.CreateRequest[InlineScriptArgs]{
-		Inputs: inputs,
-		DryRun: true,
-	})
-	if err != nil {
-		t.Fatalf("Create() dry-run with valid integrityHash failed: %v", err)
-	}
-
-	if resp.ID == "" {
-		t.Errorf("Create() dry-run returned empty ID")
-	}
-}
-
-// TestInlineScriptCreate_EmptyIntegrityHashAllowed tests that empty integrityHash is valid
-func TestInlineScriptCreate_EmptyIntegrityHashAllowed(t *testing.T) {
-	resource := &InlineScript{}
-
-	inputs := InlineScriptArgs{
-		SiteID:        testSiteID,
-		SourceCode:    "console.log('hello');",
-		Version:       "1.0.0",
-		DisplayName:   "TestScript",
-		IntegrityHash: "", // empty is OK for inline scripts
-	}
-
-	ctx := context.Background()
-	resp, err := resource.Create(ctx, infer.CreateRequest[InlineScriptArgs]{
-		Inputs: inputs,
-		DryRun: true,
-	})
-	if err != nil {
-		t.Fatalf("Create() dry-run with empty integrityHash should succeed: %v", err)
-	}
-
-	if resp.ID == "" {
-		t.Errorf("Create() dry-run returned empty ID")
-	}
-}
-
-// TestInlineScriptCreate_DryRun tests dry-run behavior
+// TestInlineScriptCreate_DryRun tests dry-run behavior: no API call, an empty ID (so
+// dependents see unknown), no fabricated outputs, and validation deferred to apply time.
 func TestInlineScriptCreate_DryRun(t *testing.T) {
+	mockAPI(t, func(_ http.ResponseWriter, _ *http.Request) { t.Error("no API call expected during preview") })
 	resource := &InlineScript{}
+	withHash := validInlineScriptArgs()
+	withHash.IntegrityHash = "sha384-abc123"
+	withHash.CanCopy = true
+	for name, inputs := range map[string]InlineScriptArgs{
+		"valid":                validInlineScriptArgs(),
+		"with integrityHash":   withHash,
+		"unknown inputs":       {},
+		"invalid site (defer)": {SiteID: "bad"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp, err := resource.Create(context.Background(),
+				infer.CreateRequest[InlineScriptArgs]{Inputs: inputs, DryRun: true})
+			if err != nil {
+				t.Fatalf("Create() dry-run failed: %v", err)
+			}
+			if resp.ID != "" {
+				t.Errorf("Create() dry-run must return an empty ID, got %q", resp.ID)
+			}
+			if resp.Output.CreatedOn != "" || resp.Output.LastUpdated != "" ||
+				resp.Output.ScriptID != "" || resp.Output.HostedLocation != "" {
+				t.Errorf("Create() dry-run must not fabricate outputs: %+v", resp.Output)
+			}
+			if resp.Output.InlineScriptArgs != inputs {
+				t.Errorf("Create() dry-run should echo inputs: %+v", resp.Output)
+			}
+		})
+	}
+}
 
-	inputs := InlineScriptArgs{
-		SiteID:      testSiteID,
-		SourceCode:  "console.log('hello');",
-		Version:     "1.0.0",
-		DisplayName: "TestScript",
-		CanCopy:     true,
+// TestInlineScriptCheck verifies preview-time validation of known values only.
+func TestInlineScriptCheck(t *testing.T) {
+	resource := &InlineScript{}
+	valid := map[string]property.Value{
+		"siteId":        property.New(testSiteID),
+		"sourceCode":    property.New("console.log('hi');"),
+		"scriptVersion": property.New("1.0.0"),
+		"displayName":   property.New("CMS Slider"),
+	}
+	with := func(overrides map[string]property.Value) property.Map {
+		m := make(map[string]property.Value, len(valid))
+		for k, v := range valid {
+			m[k] = v
+		}
+		for k, v := range overrides {
+			m[k] = v
+		}
+		return property.NewMap(m)
 	}
 
-	ctx := context.Background()
-	resp, err := resource.Create(ctx, infer.CreateRequest[InlineScriptArgs]{
-		Inputs: inputs,
-		DryRun: true,
+	t.Run("valid inputs pass (integrityHash omitted)", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{NewInputs: with(nil)})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Fatalf("Check() = %+v, %v; want no failures", resp.Failures, err)
+		}
+		if resp.Inputs.DisplayName != "CMS Slider" || resp.Inputs.SourceCode != "console.log('hi');" {
+			t.Errorf("inputs not decoded: %+v", resp.Inputs)
+		}
 	})
-	if err != nil {
-		t.Fatalf("Create() dry-run failed: %v", err)
-	}
 
-	if resp.ID == "" {
-		t.Errorf("Create() dry-run returned empty ID")
-	}
+	t.Run("unknown values are skipped", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{NewInputs: with(map[string]property.Value{
+			"siteId":        property.New(property.Computed),
+			"sourceCode":    property.New(property.Computed),
+			"scriptVersion": property.New(property.Computed),
+			"displayName":   property.New(property.Computed),
+			"integrityHash": property.New(property.Computed),
+		})})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Fatalf("Check() with computed values = %+v, %v; want no failures", resp.Failures, err)
+		}
+	})
 
-	if !containsStr(resp.ID, testSiteID) {
-		t.Errorf("Create() dry-run ID should contain siteId: %s", resp.ID)
-	}
+	t.Run("multi-byte source code is counted in characters", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{NewInputs: with(map[string]property.Value{
+			"sourceCode": property.New(strings.Repeat("é", 2000)),
+		})})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Fatalf("Check() = %+v, %v; 2000 two-byte characters must be accepted", resp.Failures, err)
+		}
+	})
 
-	if resp.Output.CreatedOn == "" {
-		t.Errorf("Create() dry-run should set CreatedOn timestamp")
+	tests := []struct {
+		name     string
+		override map[string]property.Value
+		property string
+		reason   string
+	}{
+		{"bad siteId", map[string]property.Value{"siteId": property.New("nope")}, "siteId", "invalid format"},
+		{"empty sourceCode", map[string]property.Value{"sourceCode": property.New("")}, "sourceCode", "required"},
+		{
+			"sourceCode too long",
+			map[string]property.Value{"sourceCode": property.New(strings.Repeat("é", 2001))},
+			"sourceCode", "too long",
+		},
+		{"bad scriptVersion", map[string]property.Value{"scriptVersion": property.New("1")}, "scriptVersion", "Semantic"},
+		{
+			"bad displayName",
+			map[string]property.Value{"displayName": property.New("a_b")},
+			"displayName", "invalid characters",
+		},
+		{"bad integrityHash", map[string]property.Value{"integrityHash": property.New("md5-x")}, "integrityHash", "sha"},
 	}
-
-	if resp.Output.LastUpdated == "" {
-		t.Errorf("Create() dry-run should set LastUpdated timestamp")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := resource.Check(context.Background(), infer.CheckRequest{NewInputs: with(tt.override)})
+			if err != nil {
+				t.Fatalf("Check() error = %v", err)
+			}
+			found := false
+			for _, f := range resp.Failures {
+				if f.Property == tt.property && strings.Contains(f.Reason, tt.reason) {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("Check() failures = %+v, want one on %q containing %q", resp.Failures, tt.property, tt.reason)
+			}
+		})
 	}
 }
 
 // TestPostInlineScript_Success tests successful creation via API
 func TestPostInlineScript_Success(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			t.Errorf("Expected POST, got %s", r.Method)
+	client := mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v2/sites/"+testSiteID+"/registered_scripts/inline" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
-
-		if !containsStr(r.URL.Path, "/registered_scripts/inline") {
-			t.Errorf("Expected /registered_scripts/inline path, got %s", r.URL.Path)
+		if r.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("missing Content-Type header")
 		}
-
-		// Verify the request body
-		var reqBody InlineScriptRequest
-		if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
-			t.Errorf("Failed to decode request body: %v", err)
+		var req InlineScriptRequest
+		decodeJSONBody(t, r, &req)
+		if req.SourceCode != "console.log('hello');" || req.DisplayName != "TestScript" || req.Version != "1.0.0" ||
+			!req.CanCopy || req.IntegrityHash != "sha384-abc123" {
+			t.Errorf("unexpected request body: %+v", req)
 		}
-
-		if reqBody.SourceCode != "console.log('hello');" {
-			t.Errorf("Expected sourceCode 'console.log('hello');', got '%s'", reqBody.SourceCode)
-		}
-
-		if reqBody.DisplayName != "TestScript" {
-			t.Errorf("Expected displayName 'TestScript', got '%s'", reqBody.DisplayName)
-		}
-
-		if reqBody.Version != "1.0.0" {
-			t.Errorf("Expected version '1.0.0', got '%s'", reqBody.Version)
-		}
-
-		if reqBody.CanCopy != true {
-			t.Errorf("Expected canCopy true, got %v", reqBody.CanCopy)
-		}
-
-		if reqBody.IntegrityHash != "sha384-abc123" {
-			t.Errorf("Expected integrityHash 'sha384-abc123', got '%s'", reqBody.IntegrityHash)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(InlineScriptResponse{
-			ID:             testInlineScriptID,
-			DisplayName:    "TestScript",
-			SourceCode:     "console.log('hello');",
-			HostedLocation: "https://cdn.webflow.com/inline/test-script.js",
-			IntegrityHash:  "sha384-abc123",
-			Version:        "1.0.0",
-			CanCopy:        true,
-			CreatedOn:      time.Now().Format(time.RFC3339),
-			LastUpdated:    time.Now().Format(time.RFC3339),
+		writeJSON(t, w, http.StatusCreated, InlineScriptResponse{
+			ID: testInlineScriptID, DisplayName: req.DisplayName, SourceCode: req.SourceCode,
+			HostedLocation: "https://cdn.webflow.com/inline/test-script.js", IntegrityHash: req.IntegrityHash,
+			Version: req.Version, CanCopy: req.CanCopy, CreatedOn: "2025-01-01T00:00:00Z", LastUpdated: "2025-01-01T00:00:00Z",
 		})
-	}))
-	defer server.Close()
+	})
 
-	// Override base URL for testing
-	postInlineScriptBaseURL = server.URL
-	defer func() { postInlineScriptBaseURL = "" }()
-
-	client := &http.Client{}
-	resp, err := PostInlineScript(
-		context.Background(), client, testSiteID,
-		"console.log('hello');", "1.0.0", "TestScript", true, "sha384-abc123",
-	)
+	resp, err := PostInlineScript(context.Background(), client, testSiteID, InlineScriptRequest{
+		SourceCode: "console.log('hello');", Version: "1.0.0", DisplayName: "TestScript",
+		CanCopy: true, IntegrityHash: "sha384-abc123",
+	})
 	if err != nil {
 		t.Fatalf("PostInlineScript() failed: %v", err)
 	}
-
-	if resp.ID != testInlineScriptID {
-		t.Errorf("PostInlineScript() ID = %s, want %s", resp.ID, testInlineScriptID)
-	}
-
-	if resp.DisplayName != "TestScript" {
-		t.Errorf("PostInlineScript() DisplayName = %s, want TestScript", resp.DisplayName)
-	}
-
-	if resp.SourceCode != "console.log('hello');" {
-		t.Errorf("PostInlineScript() SourceCode = %s, want console.log('hello');", resp.SourceCode)
-	}
-
-	if resp.CanCopy != true {
-		t.Errorf("PostInlineScript() CanCopy = %v, want true", resp.CanCopy)
-	}
-
-	if resp.HostedLocation == "" {
-		t.Errorf("PostInlineScript() HostedLocation should not be empty")
+	if resp.ID != testInlineScriptID || resp.DisplayName != "TestScript" || !resp.CanCopy || resp.HostedLocation == "" {
+		t.Errorf("PostInlineScript() = %+v", resp)
 	}
 }
 
-// TestPostInlineScript_RateLimit tests rate limiting handling
+// TestPostInlineScript_RateLimit tests that a 429 is retried by the shared transport.
 func TestPostInlineScript_RateLimit(t *testing.T) {
 	attempt := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := mockAPI(t, func(w http.ResponseWriter, _ *http.Request) {
 		attempt++
-		if attempt <= 1 {
-			w.Header().Set("Retry-After", "1")
+		if attempt == 1 {
+			w.Header().Set("Retry-After", "0")
 			w.WriteHeader(http.StatusTooManyRequests)
 			return
 		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(InlineScriptResponse{
-			ID:          testInlineScriptID,
-			DisplayName: "TestScript",
-			SourceCode:  "console.log('hello');",
-			Version:     "1.0.0",
-			CreatedOn:   time.Now().Format(time.RFC3339),
-			LastUpdated: time.Now().Format(time.RFC3339),
-		})
-	}))
-	defer server.Close()
-
-	postInlineScriptBaseURL = server.URL
-	defer func() { postInlineScriptBaseURL = "" }()
-
-	client := &http.Client{}
-	resp, err := PostInlineScript(
-		context.Background(), client, testSiteID,
-		"console.log('hello');", "1.0.0", "TestScript", false, "",
-	)
+		writeJSON(t, w, http.StatusCreated, InlineScriptResponse{ID: testInlineScriptID})
+	})
+	resp, err := PostInlineScript(context.Background(), client, testSiteID,
+		InlineScriptRequest{SourceCode: "x", Version: "1.0.0", DisplayName: "T"})
 	if err != nil {
 		t.Fatalf("PostInlineScript() should retry on rate limit: %v", err)
 	}
-
-	if resp.ID != testInlineScriptID {
-		t.Errorf("PostInlineScript() ID = %s, want %s", resp.ID, testInlineScriptID)
+	if resp.ID != testInlineScriptID || attempt != 2 {
+		t.Errorf("PostInlineScript() = %+v after %d attempts", resp, attempt)
 	}
 }
 
 // TestPostInlineScript_ServerError tests server error handling
 func TestPostInlineScript_ServerError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	client := mockAPI(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "internal server error"})
-	}))
-	defer server.Close()
-
-	postInlineScriptBaseURL = server.URL
-	defer func() { postInlineScriptBaseURL = "" }()
-
-	client := &http.Client{}
-	_, err := PostInlineScript(
-		context.Background(), client, testSiteID,
-		"console.log('hello');", "1.0.0", "TestScript", false, "",
-	)
-	if err == nil {
+		_, _ = w.Write([]byte(`{"error":"internal server error"}`))
+	})
+	if _, err := PostInlineScript(context.Background(), client, testSiteID, InlineScriptRequest{}); err == nil {
 		t.Fatal("PostInlineScript() should fail on server error")
-	}
-}
-
-// TestInlineScriptDelete_Success tests successful deletion via the shared delete endpoint
-func TestInlineScriptDelete_Success(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "DELETE" {
-			t.Errorf("Expected DELETE, got %s", r.Method)
-		}
-
-		if !containsStr(r.URL.Path, "/registered_scripts/") {
-			t.Errorf("Expected /registered_scripts/ path, got %s", r.URL.Path)
-		}
-
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer server.Close()
-
-	// Override base URL for testing
-	deleteRegisteredScriptBaseURL = server.URL
-	defer func() { deleteRegisteredScriptBaseURL = "" }()
-
-	client := &http.Client{}
-	err := DeleteRegisteredScript(
-		context.Background(), client, testSiteID, testInlineScriptID,
-	)
-	if err != nil {
-		t.Fatalf("DeleteRegisteredScript() for inline script failed: %v", err)
-	}
-}
-
-// TestInlineScriptDelete_NotFound tests idempotent deletion (404 as success)
-func TestInlineScriptDelete_NotFound(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
-	}))
-	defer server.Close()
-
-	deleteRegisteredScriptBaseURL = server.URL
-	defer func() { deleteRegisteredScriptBaseURL = "" }()
-
-	client := &http.Client{}
-	err := DeleteRegisteredScript(
-		context.Background(), client, testSiteID, testInlineScriptID,
-	)
-	if err != nil {
-		t.Fatalf("DeleteRegisteredScript() should handle 404 gracefully: %v", err)
 	}
 }
 
 // TestInlineScriptResourceID tests ID generation and extraction
 func TestInlineScriptResourceID(t *testing.T) {
-	// Test generation
 	resourceID := GenerateInlineScriptResourceID(testSiteID, testInlineScriptID)
-	expectedID := fmt.Sprintf("%s/inline_scripts/%s", testSiteID, testInlineScriptID)
-
-	if resourceID != expectedID {
-		t.Errorf("GenerateInlineScriptResourceID() = %s, want %s", resourceID, expectedID)
+	if want := fmt.Sprintf("%s/inline_scripts/%s", testSiteID, testInlineScriptID); resourceID != want {
+		t.Errorf("GenerateInlineScriptResourceID() = %s, want %s", resourceID, want)
 	}
-
-	// Test extraction
-	extracted, scriptID, err := ExtractIDsFromInlineScriptResourceID(resourceID)
+	siteID, scriptID, err := ExtractIDsFromInlineScriptResourceID(resourceID)
 	if err != nil {
 		t.Fatalf("ExtractIDsFromInlineScriptResourceID() failed: %v", err)
 	}
-
-	if extracted != testSiteID {
-		t.Errorf("ExtractIDsFromInlineScriptResourceID() siteID = %s, want %s", extracted, testSiteID)
-	}
-
-	if scriptID != testInlineScriptID {
-		t.Errorf("ExtractIDsFromInlineScriptResourceID() scriptID = %s, want %s", scriptID, testInlineScriptID)
+	if siteID != testSiteID || scriptID != testInlineScriptID {
+		t.Errorf("ExtractIDsFromInlineScriptResourceID() = %s, %s", siteID, scriptID)
 	}
 }
 
@@ -465,31 +287,18 @@ func TestInlineScriptResourceID_Invalid(t *testing.T) {
 		inputID string
 		wantErr string
 	}{
-		{
-			name:    "empty ID",
-			inputID: "",
-			wantErr: "cannot be empty",
-		},
-		{
-			name:    "invalid format",
-			inputID: "invalid-format",
-			wantErr: "invalid resource ID format",
-		},
-		{
-			name:    "wrong resource type",
-			inputID: fmt.Sprintf("%s/webhooks/%s", testSiteID, testInlineScriptID),
-			wantErr: "invalid resource ID format",
-		},
+		{"empty ID", "", "cannot be empty"},
+		{"invalid format", "invalid-format", "invalid resource ID format"},
+		{"wrong resource type", fmt.Sprintf("%s/webhooks/%s", testSiteID, testInlineScriptID), "invalid resource ID format"},
+		{"empty site id", "/inline_scripts/" + testInlineScriptID, "invalid resource ID format"},
+		{"empty script id", testSiteID + "/inline_scripts/", "invalid resource ID format"},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, _, err := ExtractIDsFromInlineScriptResourceID(tt.inputID)
-
 			if err == nil {
 				t.Fatalf("ExtractIDsFromInlineScriptResourceID() expected error, got nil")
 			}
-
 			if !containsStr(err.Error(), tt.wantErr) {
 				t.Errorf("ExtractIDsFromInlineScriptResourceID() error = %v, want substring %q", err, tt.wantErr)
 			}
@@ -506,14 +315,15 @@ func TestValidateSourceCode(t *testing.T) {
 	}{
 		{"valid short code", "console.log('hello');", false},
 		{"valid at max length", strings.Repeat("a", 2000), false},
+		{"valid at max length with multi-byte characters (counted as runes)", strings.Repeat("é", 2000), false},
+		{"valid at max length with 4-byte characters", strings.Repeat("😀", 2000), false},
 		{"empty", "", true},
 		{"too long", strings.Repeat("a", 2001), true},
+		{"too long with multi-byte characters", strings.Repeat("é", 2001), true},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateSourceCode(tt.input)
-			if (err != nil) != tt.wantErr {
+			if err := ValidateSourceCode(tt.input); (err != nil) != tt.wantErr {
 				t.Errorf("ValidateSourceCode() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -524,87 +334,50 @@ func TestValidateSourceCode(t *testing.T) {
 // InlineScript Diff Tests
 // =============================================================================
 
-// TestInlineScriptDiff_SameVersion_NoChange tests that Diff correctly
-// reports NO changes when user input version matches state version.
-func TestInlineScriptDiff_SameVersion_NoChange(t *testing.T) {
+func TestInlineScriptDiff_NoChange(t *testing.T) {
 	resource := &InlineScript{}
-
-	userInputs := InlineScriptArgs{
-		SiteID:      "site123",
-		SourceCode:  "console.log('hello');",
-		Version:     "1.0.0",
-		DisplayName: "TestScript",
-		CanCopy:     false,
+	args := InlineScriptArgs{
+		SiteID: "site123", SourceCode: "console.log('hello');", Version: "1.0.0", DisplayName: "TestScript",
+	}
+	withVersion := func(version string) InlineScriptArgs {
+		a := args
+		a.Version = version
+		return a
+	}
+	withHash := func(hash string) InlineScriptArgs {
+		a := args
+		a.IntegrityHash = hash
+		return a
+	}
+	withSource := func(code string) InlineScriptArgs {
+		a := args
+		a.SourceCode = code
+		return a
 	}
 
-	stateFromRead := InlineScriptState{
-		InlineScriptArgs: InlineScriptArgs{
-			SiteID:      "site123",
-			SourceCode:  "console.log('hello');",
-			Version:     "1.0.0",
-			DisplayName: "TestScript",
-			CanCopy:     false,
-		},
+	tests := []struct {
+		name   string
+		inputs InlineScriptArgs
+		state  InlineScriptArgs
+	}{
+		{"identical", args, args},
+		{"empty state version (pre-scriptVersion state or import)", args, withVersion("")},
+		{"empty state sourceCode (import: the API never returns it)", args, withSource("")},
+		{"omitted integrityHash ignores the registered hash", args, withHash("sha384-fromapi")},
+		{"configured integrityHash matches state", withHash("sha384-abc"), withHash("sha384-abc")},
 	}
-
-	diffReq := infer.DiffRequest[InlineScriptArgs, InlineScriptState]{
-		Inputs: userInputs,
-		State:  stateFromRead,
-	}
-
-	diffResp, err := resource.Diff(context.Background(), diffReq)
-	if err != nil {
-		t.Fatalf("Diff() error = %v", err)
-	}
-
-	if diffResp.HasChanges {
-		t.Errorf("Diff() incorrectly detected changes when values are identical")
-		t.Errorf("DetailedDiff: %+v", diffResp.DetailedDiff)
-	}
-
-	if diffResp.DetailedDiff != nil {
-		if _, hasVersion := diffResp.DetailedDiff["scriptVersion"]; hasVersion {
-			t.Errorf("Diff() incorrectly flagged version for change when values are identical")
-		}
-	}
-}
-
-// TestInlineScriptDiff_VersionFromFallback_NoChange tests that
-// when API doesn't return version, Diff works correctly with fallback.
-func TestInlineScriptDiff_VersionFromFallback_NoChange(t *testing.T) {
-	resource := &InlineScript{}
-
-	userInputs := InlineScriptArgs{
-		SiteID:      "site123",
-		SourceCode:  "console.log('hello');",
-		Version:     "1.0.0",
-		DisplayName: "TestScript",
-		CanCopy:     false,
-	}
-
-	stateFromRead := InlineScriptState{
-		InlineScriptArgs: InlineScriptArgs{
-			SiteID:      "site123",
-			SourceCode:  "console.log('hello');",
-			Version:     "1.0.0", // Fallback from user input
-			DisplayName: "TestScript",
-			CanCopy:     false,
-		},
-	}
-
-	diffReq := infer.DiffRequest[InlineScriptArgs, InlineScriptState]{
-		Inputs: userInputs,
-		State:  stateFromRead,
-	}
-
-	diffResp, err := resource.Diff(context.Background(), diffReq)
-	if err != nil {
-		t.Fatalf("Diff() error = %v", err)
-	}
-
-	if diffResp.HasChanges {
-		t.Errorf("Diff() incorrectly detected changes with fallback version")
-		t.Errorf("DetailedDiff: %+v", diffResp.DetailedDiff)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			diffResp, err := resource.Diff(context.Background(), infer.DiffRequest[InlineScriptArgs, InlineScriptState]{
+				Inputs: tt.inputs, State: InlineScriptState{InlineScriptArgs: tt.state},
+			})
+			if err != nil {
+				t.Fatalf("Diff() error = %v", err)
+			}
+			if diffResp.HasChanges {
+				t.Errorf("Diff() incorrectly detected changes: %+v", diffResp.DetailedDiff)
+			}
+		})
 	}
 }
 
@@ -612,98 +385,43 @@ func TestInlineScriptDiff_VersionFromFallback_NoChange(t *testing.T) {
 // trigger UpdateReplace since Webflow API doesn't support PATCH for inline scripts.
 func TestInlineScriptDiff_ChangesRequireReplacement(t *testing.T) {
 	resource := &InlineScript{}
-
 	baseInputs := InlineScriptArgs{
-		SiteID:        "site123",
-		SourceCode:    "console.log('hello');",
-		Version:       "1.0.0",
-		DisplayName:   "TestScript",
-		CanCopy:       false,
-		IntegrityHash: "sha384-abc123",
+		SiteID: "site123", SourceCode: "console.log('hello');", Version: "1.0.0", DisplayName: "TestScript",
+		CanCopy: false, IntegrityHash: "sha384-abc123",
 	}
-
-	baseState := InlineScriptState{
-		InlineScriptArgs: baseInputs,
-	}
+	baseState := InlineScriptState{InlineScriptArgs: baseInputs}
 
 	tests := []struct {
 		name      string
 		modifyFn  func(args *InlineScriptArgs)
 		fieldName string
 	}{
-		{
-			name: "siteId change",
-			modifyFn: func(args *InlineScriptArgs) {
-				args.SiteID = "site456"
-			},
-			fieldName: "siteId",
-		},
-		{
-			name: "sourceCode change",
-			modifyFn: func(args *InlineScriptArgs) {
-				args.SourceCode = "console.log('world');"
-			},
-			fieldName: "sourceCode",
-		},
-		{
-			name: "displayName change",
-			modifyFn: func(args *InlineScriptArgs) {
-				args.DisplayName = "NewScriptName"
-			},
-			fieldName: "displayName",
-		},
-		{
-			name: "integrityHash change",
-			modifyFn: func(args *InlineScriptArgs) {
-				args.IntegrityHash = "sha384-def456"
-			},
-			fieldName: "integrityHash",
-		},
-		{
-			name: "version change",
-			modifyFn: func(args *InlineScriptArgs) {
-				args.Version = "2.0.0"
-			},
-			fieldName: "scriptVersion",
-		},
-		{
-			name: "canCopy change",
-			modifyFn: func(args *InlineScriptArgs) {
-				args.CanCopy = true
-			},
-			fieldName: "canCopy",
-		},
+		{"siteId change", func(a *InlineScriptArgs) { a.SiteID = "site456" }, "siteId"},
+		{"sourceCode change", func(a *InlineScriptArgs) { a.SourceCode = "console.log('world');" }, "sourceCode"},
+		{"displayName change", func(a *InlineScriptArgs) { a.DisplayName = "NewScriptName" }, "displayName"},
+		{"integrityHash change", func(a *InlineScriptArgs) { a.IntegrityHash = "sha384-def456" }, "integrityHash"},
+		{"version change", func(a *InlineScriptArgs) { a.Version = "2.0.0" }, "scriptVersion"},
+		{"canCopy change", func(a *InlineScriptArgs) { a.CanCopy = true }, "canCopy"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			modifiedInputs := baseInputs
 			tt.modifyFn(&modifiedInputs)
-
-			diffReq := infer.DiffRequest[InlineScriptArgs, InlineScriptState]{
-				Inputs: modifiedInputs,
-				State:  baseState,
-			}
-
-			diffResp, err := resource.Diff(context.Background(), diffReq)
+			diffResp, err := resource.Diff(context.Background(), infer.DiffRequest[InlineScriptArgs, InlineScriptState]{
+				Inputs: modifiedInputs, State: baseState,
+			})
 			if err != nil {
 				t.Fatalf("Diff() error = %v", err)
 			}
-
 			if !diffResp.HasChanges {
-				t.Errorf("Diff() should detect changes for %s", tt.fieldName)
+				t.Errorf("Diff() should detect a replacement for %s: %+v", tt.fieldName, diffResp)
 			}
-
-			if !diffResp.DeleteBeforeReplace {
-				t.Errorf("Diff() DeleteBeforeReplace should be true for %s", tt.fieldName)
+			if diffResp.DeleteBeforeReplace {
+				t.Errorf("Diff() must not delete first: Delete is a no-op and a failed registration would drop state")
 			}
-
-			if diff, ok := diffResp.DetailedDiff[tt.fieldName]; ok {
-				if diff.Kind != p.UpdateReplace {
-					t.Errorf("Diff() %s should be UpdateReplace, got %v", tt.fieldName, diff.Kind)
-				}
-			} else {
-				t.Errorf("Diff() DetailedDiff should contain %s", tt.fieldName)
+			if d, ok := diffResp.DetailedDiff[tt.fieldName]; !ok || d.Kind != p.UpdateReplace {
+				t.Errorf("Diff() DetailedDiff[%s] = %+v (present=%v), want UpdateReplace", tt.fieldName, d, ok)
 			}
 		})
 	}
@@ -713,103 +431,233 @@ func TestInlineScriptDiff_ChangesRequireReplacement(t *testing.T) {
 // since Webflow API doesn't support PATCH for inline scripts.
 func TestInlineScriptUpdate_ReturnsError(t *testing.T) {
 	resource := &InlineScript{}
-
-	updateReq := infer.UpdateRequest[InlineScriptArgs, InlineScriptState]{
+	_, err := resource.Update(context.Background(), infer.UpdateRequest[InlineScriptArgs, InlineScriptState]{
 		ID: "site123/inline_scripts/script456",
-		Inputs: InlineScriptArgs{
-			SiteID:      "site123",
-			SourceCode:  "console.log('new');",
-			Version:     "1.0.0",
-			DisplayName: "TestScript",
-		},
-		State: InlineScriptState{
-			InlineScriptArgs: InlineScriptArgs{
-				SiteID:      "site123",
-				SourceCode:  "console.log('old');",
-				Version:     "0.9.0",
-				DisplayName: "TestScript",
-			},
-		},
-	}
-
-	_, err := resource.Update(context.Background(), updateReq)
-
+	})
 	if err == nil {
 		t.Fatal("Update() should return an error")
 	}
-
-	if !containsStr(err.Error(), "cannot be updated in-place") {
-		t.Errorf("Update() error should mention updates not supported, got: %v", err)
-	}
-
-	if !containsStr(err.Error(), "PATCH") {
-		t.Errorf("Update() error should mention PATCH not supported, got: %v", err)
+	if !containsStr(err.Error(), "cannot be updated in-place") || !containsStr(err.Error(), "PATCH") {
+		t.Errorf("Update() error should mention in-place updates and PATCH not supported, got: %v", err)
 	}
 }
 
-// TestGetRegisteredScripts_FindsInlineScript tests that the shared list endpoint
-// can find inline scripts alongside hosted scripts.
-func TestGetRegisteredScripts_FindsInlineScript(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Errorf("Expected GET, got %s", r.Method)
-		}
+// =============================================================================
+// InlineScript resource-level CRUD tests
+// =============================================================================
 
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(RegisteredScriptsResponse{
-			RegisteredScripts: []RegisteredScript{
-				{
-					ID:             "hosted-script-1",
-					DisplayName:    "HostedScript",
-					HostedLocation: "https://example.com/script.js",
-					IntegrityHash:  "sha384-abc123",
-					Version:        "1.0.0",
-					CanCopy:        false,
-				},
-				{
-					ID:          testInlineScriptID,
-					DisplayName: "InlineScript",
-					Version:     "1.0.0",
-					CanCopy:     true,
-					CreatedOn:   time.Now().Format(time.RFC3339),
-					LastUpdated: time.Now().Format(time.RFC3339),
-				},
-			},
-			Pagination: PaginationInfo{
-				Limit:  10,
-				Offset: 0,
-				Total:  2,
-			},
+func TestInlineScriptCreate(t *testing.T) {
+	var got InlineScriptRequest
+	mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v2/sites/"+testSiteID+"/registered_scripts/inline" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		decodeJSONBody(t, r, &got)
+		writeJSON(t, w, http.StatusCreated, InlineScriptResponse{
+			ID: "testscript", DisplayName: got.DisplayName, SourceCode: got.SourceCode, Version: got.Version,
+			HostedLocation: "https://cdn.webflow.com/inline/testscript.js", IntegrityHash: "sha384-computed",
+			CreatedOn: "2025-01-01T00:00:00Z", LastUpdated: "2025-01-01T00:00:00Z",
 		})
-	}))
-	defer server.Close()
+	})
 
-	getRegisteredScriptsBaseURL = server.URL
-	defer func() { getRegisteredScriptsBaseURL = "" }()
-
-	client := &http.Client{}
-	resp, err := GetRegisteredScripts(context.Background(), client, testSiteID)
+	resource := &InlineScript{}
+	resp, err := resource.Create(context.Background(),
+		infer.CreateRequest[InlineScriptArgs]{Inputs: validInlineScriptArgs()})
 	if err != nil {
-		t.Fatalf("GetRegisteredScripts() failed: %v", err)
+		t.Fatalf("Create() error = %v", err)
 	}
-
-	if len(resp.RegisteredScripts) != 2 {
-		t.Errorf("GetRegisteredScripts() returned %d scripts, want 2", len(resp.RegisteredScripts))
+	if resp.ID != testSiteID+"/inline_scripts/testscript" || resp.Output.ScriptID != "testscript" ||
+		resp.Output.HostedLocation == "" || resp.Output.CreatedOn != "2025-01-01T00:00:00Z" {
+		t.Errorf("Create() = %+v", resp)
 	}
+	if resp.Output.IntegrityHash != "sha384-computed" {
+		t.Errorf("Create() should record the hash Webflow reports in state, got %q", resp.Output.IntegrityHash)
+	}
+	if got.SourceCode != "console.log('hello');" || got.DisplayName != "TestScript" ||
+		got.Version != "1.0.0" || got.IntegrityHash != "" {
+		t.Errorf("request body = %+v", got)
+	}
+}
 
-	// Find the inline script
-	found := false
-	for _, script := range resp.RegisteredScripts {
-		if script.ID == testInlineScriptID {
-			found = true
-			if script.DisplayName != "InlineScript" {
-				t.Errorf("Inline script DisplayName = %s, want InlineScript", script.DisplayName)
-			}
-			break
+func TestInlineScriptCreate_EmptyIDFromAPI(t *testing.T) {
+	mockAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(t, w, http.StatusCreated, InlineScriptResponse{DisplayName: "TestScript"})
+	})
+	resource := &InlineScript{}
+	_, err := resource.Create(context.Background(),
+		infer.CreateRequest[InlineScriptArgs]{Inputs: validInlineScriptArgs()})
+	if err == nil || !strings.Contains(err.Error(), "empty inline script ID") {
+		t.Fatalf("Create() error = %v", err)
+	}
+}
+
+func TestInlineScriptRead(t *testing.T) {
+	resource := &InlineScript{}
+	scripts := manyScripts(120)
+	scripts[110] = RegisteredScript{
+		ID: "inline110", DisplayName: "Inline110", HostedLocation: "https://cdn.webflow.com/inline/inline110.js",
+		IntegrityHash: "sha384-registered", Version: "1.0.0", CanCopy: true, CreatedOn: "2025-01-01T00:00:00Z",
+	}
+	resourceID := GenerateInlineScriptResourceID(testSiteID, "inline110")
+
+	t.Run("finds the script on a later page and preserves an omitted integrityHash", func(t *testing.T) {
+		var offsets []int
+		mockAPI(t, pagedScriptsHandler(t, scripts, 100, &offsets))
+		program := InlineScriptArgs{
+			SiteID: testSiteID, SourceCode: "console.log('x');", Version: "1.0.0", DisplayName: "Inline110",
 		}
-	}
+		resp, err := resource.Read(context.Background(), infer.ReadRequest[InlineScriptArgs, InlineScriptState]{
+			ID:     resourceID,
+			Inputs: program,
+			State:  InlineScriptState{InlineScriptArgs: program, ScriptID: "inline110"},
+		})
+		if err != nil {
+			t.Fatalf("Read() error = %v", err)
+		}
+		if len(offsets) != 2 {
+			t.Errorf("expected pagination to be followed, offsets = %v", offsets)
+		}
+		if resp.ID != resourceID || resp.State.ScriptID != "inline110" || !resp.State.CanCopy || resp.State.CreatedOn == "" {
+			t.Errorf("Read() state = %+v", resp.State)
+		}
+		if resp.State.SourceCode != "console.log('x');" {
+			t.Errorf("Read() should preserve sourceCode the list endpoint does not return, got %q", resp.State.SourceCode)
+		}
+		if resp.Inputs.IntegrityHash != "" {
+			t.Errorf("Read() must not copy the API integrityHash into inputs the user did not set, got %q",
+				resp.Inputs.IntegrityHash)
+		}
+		if resp.State.IntegrityHash != "sha384-registered" {
+			t.Errorf("Read() state should carry the registered integrityHash, got %q", resp.State.IntegrityHash)
+		}
+		// The refreshed state must not produce a diff against the unchanged program.
+		program.CanCopy = true
+		diffResp, err := resource.Diff(context.Background(), infer.DiffRequest[InlineScriptArgs, InlineScriptState]{
+			Inputs: program,
+			State:  resp.State,
+		})
+		if err != nil || diffResp.HasChanges {
+			t.Errorf("Diff() after Read() = %+v, %v; want no changes", diffResp.DetailedDiff, err)
+		}
+	})
 
-	if !found {
-		t.Errorf("GetRegisteredScripts() did not find inline script with ID %s", testInlineScriptID)
+	t.Run("configured integrityHash reflects the registered value", func(t *testing.T) {
+		var offsets []int
+		mockAPI(t, pagedScriptsHandler(t, scripts, 100, &offsets))
+		resp, err := resource.Read(context.Background(), infer.ReadRequest[InlineScriptArgs, InlineScriptState]{
+			ID:     resourceID,
+			Inputs: InlineScriptArgs{SiteID: testSiteID, IntegrityHash: "sha384-configured"},
+		})
+		if err != nil {
+			t.Fatalf("Read() error = %v", err)
+		}
+		if resp.Inputs.IntegrityHash != "sha384-registered" || resp.State.IntegrityHash != "sha384-registered" {
+			t.Errorf("Read() integrityHash = %q/%q, want registered value", resp.Inputs.IntegrityHash, resp.State.IntegrityHash)
+		}
+	})
+
+	t.Run("integrityHash omitted by the API keeps the recorded value", func(t *testing.T) {
+		mockAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+			writeJSON(t, w, http.StatusOK, RegisteredScriptsResponse{
+				RegisteredScripts: []RegisteredScript{{ID: "inline110", DisplayName: "Inline110", Version: "1.0.0"}},
+				Pagination:        PaginationInfo{Limit: 100, Total: 1},
+			})
+		})
+		resp, err := resource.Read(context.Background(), infer.ReadRequest[InlineScriptArgs, InlineScriptState]{
+			ID:    resourceID,
+			State: InlineScriptState{InlineScriptArgs: InlineScriptArgs{IntegrityHash: "sha384-previous"}},
+		})
+		if err != nil {
+			t.Fatalf("Read() error = %v", err)
+		}
+		if resp.State.IntegrityHash != "sha384-previous" || resp.Inputs.IntegrityHash != "" {
+			t.Errorf("Read() integrityHash = state %q / inputs %q", resp.State.IntegrityHash, resp.Inputs.IntegrityHash)
+		}
+	})
+
+	t.Run("import: omitted version and sourceCode stay empty and do not force a replace", func(t *testing.T) {
+		mockAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+			writeJSON(t, w, http.StatusOK, RegisteredScriptsResponse{
+				RegisteredScripts: []RegisteredScript{{
+					ID: "inline110", DisplayName: "Inline110", HostedLocation: "https://cdn.webflow.com/inline/inline110.js",
+				}},
+				Pagination: PaginationInfo{Limit: 100, Total: 1},
+			})
+		})
+		// Import: no inputs and no state.
+		resp, err := resource.Read(context.Background(),
+			infer.ReadRequest[InlineScriptArgs, InlineScriptState]{ID: resourceID})
+		if err != nil {
+			t.Fatalf("Read() error = %v", err)
+		}
+		if resp.State.Version != "" || resp.Inputs.Version != "" {
+			t.Errorf("Read() must not fabricate a version, got %q/%q", resp.State.Version, resp.Inputs.Version)
+		}
+		if resp.State.SourceCode != "" || resp.Inputs.SourceCode != "" {
+			t.Errorf("Read() must not fabricate sourceCode, got %q/%q", resp.State.SourceCode, resp.Inputs.SourceCode)
+		}
+		program := InlineScriptArgs{
+			SiteID: testSiteID, SourceCode: "console.log('imported');", Version: "4.0.0", DisplayName: "Inline110",
+		}
+		diffResp, err := resource.Diff(context.Background(), infer.DiffRequest[InlineScriptArgs, InlineScriptState]{
+			Inputs: program, State: resp.State,
+		})
+		if err != nil || diffResp.HasChanges {
+			t.Errorf("Diff() after import = %+v, %v; unknown sourceCode/version must not force a replace",
+				diffResp.DetailedDiff, err)
+		}
+	})
+
+	t.Run("script missing signals deletion", func(t *testing.T) {
+		var offsets []int
+		mockAPI(t, pagedScriptsHandler(t, scripts[:5], 100, &offsets))
+		resp, err := resource.Read(context.Background(),
+			infer.ReadRequest[InlineScriptArgs, InlineScriptState]{ID: resourceID})
+		if err != nil || resp.ID != "" {
+			t.Fatalf("Read() = (%q, %v), want empty ID and nil error", resp.ID, err)
+		}
+	})
+
+	t.Run("500 is an error", func(t *testing.T) {
+		mockAPI(t, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusInternalServerError) })
+		_, err := resource.Read(context.Background(),
+			infer.ReadRequest[InlineScriptArgs, InlineScriptState]{ID: resourceID})
+		if err == nil {
+			t.Fatal("Read() should return an error for 500")
+		}
+	})
+
+	t.Run("invalid site id in resource id", func(t *testing.T) {
+		mockAPI(t, func(_ http.ResponseWriter, _ *http.Request) { t.Error("no API call expected") })
+		_, err := resource.Read(context.Background(),
+			infer.ReadRequest[InlineScriptArgs, InlineScriptState]{ID: "site123/inline_scripts/x"})
+		if err == nil || !strings.Contains(err.Error(), "invalid resource ID") {
+			t.Fatalf("Read() error = %v", err)
+		}
+	})
+}
+
+// TestInlineScriptDelete verifies Delete is a no-op: Webflow has no endpoint to
+// unregister a script, so no HTTP request may be made.
+func TestInlineScriptDelete(t *testing.T) {
+	calls := 0
+	mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		t.Errorf("unexpected request %s %s: there is no unregister endpoint", r.Method, r.URL.Path)
+		w.WriteHeader(http.StatusNotFound)
+	})
+	resource := &InlineScript{}
+	if _, err := resource.Delete(context.Background(), infer.DeleteRequest[InlineScriptState]{
+		ID: GenerateInlineScriptResourceID(testSiteID, testInlineScriptID),
+	}); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if _, err := resource.Delete(context.Background(), infer.DeleteRequest[InlineScriptState]{
+		ID: "not-a-resource-id",
+	}); err == nil || !strings.Contains(err.Error(), "invalid resource ID") {
+		t.Errorf("Delete() should reject a malformed resource ID, got %v", err)
+	}
+	if calls != 0 {
+		t.Errorf("Delete() must not call the API, got %d calls", calls)
 	}
 }

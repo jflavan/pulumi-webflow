@@ -4,7 +4,7 @@ This directory contains an example demonstrating how to manage static text conte
 
 ## What You'll Learn
 
-- Update static text content within existing DOM nodes on a Webflow page
+- Update static text content within existing DOM nodes on a Webflow page, for a secondary locale
 - Manage hero section headings and subtitles programmatically
 - Automate footer copyright updates with dynamic year
 - Update multiple content sections in a single resource
@@ -12,9 +12,12 @@ This directory contains an example demonstrating how to manage static text conte
 
 ## What This Example Does
 
-The PageContent resource allows you to programmatically update text content within existing DOM nodes on a Webflow page. This is particularly useful for:
+The PageContent resource allows you to programmatically update the text content of existing DOM
+nodes on a Webflow page **in a secondary locale**. Webflow's DOM update endpoint only accepts
+localized content, so `localeId` is required and the primary locale cannot be edited through the
+API. This is particularly useful for:
 
-- **Automated Content Updates**: Keep copyright years, version numbers, or status messages current
+- **Localized Content Updates**: Keep translated copyright years, version numbers, or status messages current
 - **Multi-Page Consistency**: Update similar content across multiple pages from code
 - **Infrastructure-as-Code Content**: Manage content updates as part of your deployment pipeline
 - **Dynamic Text Generation**: Inject computed values (like current year) into page content
@@ -30,17 +33,29 @@ The PageContent resource allows you to programmatically update text content with
 Before running this example, you need:
 
 1. **Pulumi CLI** installed ([installation guide](https://www.pulumi.com/docs/get-started/install/))
-2. **Webflow API token** set as `WEBFLOW_API_TOKEN` environment variable
+2. **Webflow API token** with `pages:read` and `pages:write`, set as `WEBFLOW_API_TOKEN`
 3. **Page ID** from your Webflow site (24-character hex string)
-4. **Node IDs** from your page's DOM structure
+4. **A secondary locale ID** - the site must have Localization enabled with at least one secondary
+   locale; the API cannot edit primary-locale content
+5. **Node IDs** from your page's DOM structure
+
+### Finding Locale IDs
+
+```bash
+curl -X GET "https://api.webflow.com/v2/sites/{site_id}" \
+  -H "Authorization: Bearer YOUR_API_TOKEN"
+```
+
+The response's `locales.secondary[]` array lists every secondary locale with its `id`
+(`locales.primary.id` is the primary locale, which PageContent cannot target).
 
 ### Finding Node IDs
 
 To find node IDs for your page:
 
 ```bash
-# Using curl (replace with your page ID and API token)
-curl -X GET "https://api.webflow.com/v2/pages/{page_id}/dom" \
+# Using curl (replace with your page ID, locale ID and API token)
+curl -X GET "https://api.webflow.com/v2/pages/{page_id}/dom?localeId={locale_id}" \
   -H "Authorization: Bearer YOUR_API_TOKEN" \
   -H "accept: application/json"
 ```
@@ -57,7 +72,8 @@ Alternatively, you can use the Webflow Designer to inspect elements and find the
 cd typescript
 npm install
 pulumi stack init dev
-pulumi config set webflow:pageId your-page-id --secret
+pulumi config set pageId your-page-id --secret
+pulumi config set localeId your-secondary-locale-id
 pulumi up
 ```
 
@@ -68,6 +84,8 @@ pulumi up
 Updates the main heading and subtitle in a hero section:
 
 ```typescript
+pageId: pageId,
+localeId: localeId, // required: a secondary locale of the site
 nodes: [
   {
     nodeId: "hero-heading-node-id",
@@ -118,14 +136,20 @@ Each example requires the following configuration:
 
 | Config Key        | Required | Description                              |
 |-------------------|----------|------------------------------------------|
-| `webflow:pageId`  | Yes      | Your Webflow page ID (24-char hex string) |
+| `pageId`  | Yes      | Your Webflow page ID (24-char hex string) |
+| `localeId` | Yes     | A secondary locale ID of the site (24-char hex string) |
 | `environment`     | No       | Deployment environment (default: development) |
+
+**Locales:** `localeId` is required and must identify a **secondary** locale. Webflow's
+`POST /pages/{page_id}/dom` endpoint only writes localized content; passing the primary locale (or
+omitting the locale) is rejected by the API.
 
 ### Setting Configuration
 
 ```bash
-# Required: Set your page ID
-pulumi config set webflow:pageId 5f0c8c9e1c9d440000e8d8c4 --secret
+# Required: Set your page ID and the secondary locale to update
+pulumi config set pageId 5f0c8c9e1c9d440000e8d8c4 --secret
+pulumi config set localeId 653fd9af6a07fc9cfd7a5e57
 
 # Optional: Set environment
 pulumi config set environment production
@@ -138,13 +162,26 @@ After successful deployment, you'll see exports like:
 ```
 Outputs:
     deployedPageId      : [secret]
-    heroContentId       : "pagecontent-abc123..."
-    heroLastUpdated     : "2025-01-06T10:30:00Z"
-    footerContentId     : "pagecontent-def456..."
-    featureContentId    : "pagecontent-ghi789..."
+    deployedLocaleId    : "653fd9af6a07fc9cfd7a5e57"
+    heroContentId       : "..."
+    heroNodeCount       : 2
+    footerContentId     : "..."
+    featureContentId    : "..."
 ```
 
 ## Important Limitations
+
+### Secondary Locales Only
+
+The API cannot edit the primary locale's text. To change primary-locale content, edit it in the
+Designer; PageContent manages translations only.
+
+### Request Limits
+
+- At most **1000 nodes** per resource - Webflow rejects larger DOM update requests. Split bigger
+  updates across several PageContent resources.
+- `text` must be non-empty. An empty string does **not** clear a node; remove the node entry (or
+  the text in the Designer) instead.
 
 ### Drift Detection
 
@@ -195,10 +232,15 @@ The specified node ID doesn't exist on the page:
 ### "Validation failed" Error
 
 Common causes:
-- Missing required fields (`pageId` or `nodes`)
-- Empty `text` field in a node update
-- Empty `nodes` array (at least one node required)
+- Missing required fields (`pageId`, `localeId` or `nodes`)
+- Empty `text` field in a node update (empty text cannot clear a node)
+- Empty `nodes` array (at least one node required) or more than 1000 nodes
 - Invalid node ID format
+
+### "localeId must be a secondary locale" / 400 From the API
+
+You passed the site's primary locale ID (or a locale that does not exist on the site). Use one of
+the IDs from `locales.secondary[]` in the site response.
 
 ### Content Not Updating
 
@@ -229,7 +271,7 @@ If your content isn't changing:
 Creates the PageContent resource and applies text updates to the specified nodes.
 
 ### Update
-Updates node content when you change the `text` values in your configuration. If you change the `pageId`, the resource will be replaced (delete + create).
+Updates node content when you change the `text` values in your configuration. If you change the `pageId` or `localeId`, the resource will be replaced (delete + create).
 
 ### Delete
 Removes the PageContent resource from Pulumi state. **Does NOT delete content from the page** - the text remains as-is.

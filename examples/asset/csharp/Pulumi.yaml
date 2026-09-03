@@ -9,3 +9,5 @@ config:
   environment:
     description: Deployment environment (development, staging, production)
     default: development
+  heroImageUrl:
+    description: Optional - an http(s) URL uploaded as the hero-image asset (omit to skip it)

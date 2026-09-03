@@ -24,7 +24,7 @@ Detailed information useful for development and debugging:
 
 **Example:**
 ```
-DEBUG Creating Webflow site [workspaceId=abc123, displayName=My Site, shortName=my-site]
+DEBUG Creating Webflow site [workspaceId=abc123, displayName=My Site]
 DEBUG Calling Webflow API to create site
 DEBUG HTTP request completed [method=POST, url=/v2/sites, status=200, attempt=1]
 ```
@@ -71,56 +71,51 @@ ERROR API returned empty site ID
 
 ## Enabling Verbose Logging
 
-### Environment Variable
-Set the `PULUMI_LOG_LEVEL` environment variable:
+There is no `PULUMI_LOG_LEVEL` environment variable. The provider emits its messages through
+Pulumi's logging API: INFO/WARN/ERROR messages are shown as diagnostics in normal `pulumi`
+output, while DEBUG messages are only visible when the Pulumi CLI runs with verbose logging
+enabled.
+
+### Command Line Flags
+Use the CLI's `-v` (verbosity) flag together with `--logtostderr`:
 
 ```bash
-# Enable all logging (DEBUG and above)
-export PULUMI_LOG_LEVEL=debug
-pulumi up
+# Maximum verbosity - shows the provider's DEBUG messages
+pulumi up -v=9 --logtostderr
 
-# Enable INFO and above (default)
-export PULUMI_LOG_LEVEL=info
-pulumi up
+# Less verbose (engine-level messages only)
+pulumi up -v=3 --logtostderr
 
-# Enable WARN and above only
-export PULUMI_LOG_LEVEL=warning
-pulumi up
+# Capture everything to a file for analysis
+pulumi up -v=9 --logtostderr 2>&1 | tee deployment.log
 ```
 
-### Command Line Flag
-Use the `--verbose` or `--log-level` flag:
-
-```bash
-# Maximum verbosity (DEBUG level)
-pulumi up --verbose=9
-
-# INFO level
-pulumi up --verbose=3
-
-# Specific log level
-pulumi up --log-level=debug
-```
+Without `--logtostderr`, Pulumi writes verbose logs to files in the system temp directory
+instead of the terminal.
 
 ### Per-Operation
 Enable logging for a specific operation:
 
 ```bash
 # Debug a preview operation
-PULUMI_LOG_LEVEL=debug pulumi preview
+pulumi preview -v=9 --logtostderr
 
 # Debug an update operation
-PULUMI_LOG_LEVEL=debug pulumi up
+pulumi up -v=9 --logtostderr
 
 # Debug a refresh operation
-PULUMI_LOG_LEVEL=debug pulumi refresh
+pulumi refresh -v=9 --logtostderr
 ```
+
+### Provider Internals
+`PULUMI_DEBUG_GRPC=<file>` records the raw gRPC traffic between the engine and the provider,
+which is occasionally useful for reporting provider bugs.
 
 ## Logging in Different Scenarios
 
 ### Resource Creation
 ```
-INFO Creating Webflow site [workspaceId=ws123, displayName=Marketing Site, shortName=marketing-site]
+INFO Creating Webflow site [workspaceId=ws123, displayName=Marketing Site]
 DEBUG Calling Webflow API to create site
 DEBUG HTTP request completed [method=POST, url=/v2/sites, status=201, attempt=1]
 INFO Site created successfully [siteId=site456]
@@ -136,7 +131,7 @@ INFO Collection created successfully [collectionId=col789]
 
 ### Validation Errors
 ```
-INFO Creating Webflow site [workspaceId=, displayName=, shortName=]
+INFO Creating Webflow site [workspaceId=, displayName=]
 ERROR Validation failed: workspaceId is required [workspaceId=, displayName=]
 ```
 
@@ -191,7 +186,7 @@ Fields containing sensitive keywords are automatically redacted:
 ### Issue: "Site not found" after creation
 **Enable DEBUG logging to see the API response:**
 ```bash
-PULUMI_LOG_LEVEL=debug pulumi up
+pulumi up -v=9 --logtostderr
 ```
 
 Look for:
@@ -205,7 +200,7 @@ Verify the `siteId` is correctly returned.
 ### Issue: Intermittent failures
 **Enable DEBUG logging to see retry behavior:**
 ```bash
-PULUMI_LOG_LEVEL=debug pulumi up
+pulumi up -v=9 --logtostderr
 ```
 
 Look for:
@@ -217,9 +212,9 @@ WARN Rate limit exceeded, max retries exhausted [maxRetries=3]
 This indicates you're hitting API rate limits.
 
 ### Issue: Unexpected resource updates
-**Enable INFO logging to see what changed:**
+**INFO messages are shown by default; use `--diff` to see the property changes:**
 ```bash
-PULUMI_LOG_LEVEL=info pulumi up
+pulumi preview --diff
 ```
 
 Look for:
@@ -231,9 +226,9 @@ INFO Site updated successfully
 Compare with your code to identify the difference.
 
 ### Issue: Authentication failures
-**Enable ERROR logging to see the specific error:**
+**ERROR messages are always shown; run the operation and read the diagnostic:**
 ```bash
-PULUMI_LOG_LEVEL=error pulumi up
+pulumi up
 ```
 
 Look for:
@@ -267,10 +262,10 @@ pulumi up --json | jq 'select(.type == "error")'
 
 ## Best Practices
 
-1. **Development**: Use `PULUMI_LOG_LEVEL=debug` to see all operations
-2. **Production**: Use `PULUMI_LOG_LEVEL=info` for operational visibility
-3. **CI/CD**: Use `PULUMI_LOG_LEVEL=warning` to focus on issues
-4. **Troubleshooting**: Enable DEBUG temporarily when investigating issues
+1. **Development**: Use `pulumi up -v=9 --logtostderr` to see all provider operations
+2. **Production**: Run without `-v`; INFO/WARN/ERROR diagnostics are shown by default
+3. **CI/CD**: Keep the default verbosity and archive the output; add `-v=9 --logtostderr` only when re-running a failed job
+4. **Troubleshooting**: Enable `-v=9` temporarily when investigating issues
 5. **Audit Trail**: Capture INFO logs for compliance and audit requirements
 
 ## Performance Considerations

@@ -14,7 +14,7 @@ namespace Community.Pulumi.Webflow
     public partial class Provider : global::Pulumi.ProviderResource
     {
         /// <summary>
-        /// Webflow API v2 bearer token for authentication. Can also be set via WEBFLOW_API_TOKEN environment variable.
+        /// Webflow API v2 bearer token for authentication. Explicit configuration takes precedence over the WEBFLOW_API_TOKEN environment variable, which is used as a fallback when no token is configured.
         /// </summary>
         [Output("apiToken")]
         public Output<string?> ApiToken { get; private set; } = null!;
@@ -56,7 +56,7 @@ namespace Community.Pulumi.Webflow
         private Input<string>? _apiToken;
 
         /// <summary>
-        /// Webflow API v2 bearer token for authentication. Can also be set via WEBFLOW_API_TOKEN environment variable.
+        /// Webflow API v2 bearer token for authentication. Explicit configuration takes precedence over the WEBFLOW_API_TOKEN environment variable, which is used as a fallback when no token is configured.
         /// </summary>
         public Input<string>? ApiToken
         {
@@ -70,6 +70,7 @@ namespace Community.Pulumi.Webflow
 
         public ProviderArgs()
         {
+            ApiToken = Utilities.GetEnv("WEBFLOW_API_TOKEN");
         }
         public static new ProviderArgs Empty => new ProviderArgs();
     }

@@ -24,7 +24,7 @@ This directory contains examples demonstrating how to apply registered custom Ja
 cd typescript
 npm install
 pulumi stack init dev
-pulumi config set webflow:siteId your-site-id --secret
+pulumi config set siteId your-site-id --secret
 pulumi config set landingPageId your-landing-page-id
 pulumi config set productPageId your-product-page-id
 pulumi up
@@ -62,7 +62,7 @@ const landingPageScripts = new webflow.PageCustomCode("landing-page-scripts", {
   scripts: [
     {
       id: conversionTrackingScript.id,
-      version: "3.2.1",
+      scriptVersion: "3.2.1",
       location: "header",
       attributes: {
         "data-campaign-id": "summer-2025",
@@ -71,7 +71,7 @@ const landingPageScripts = new webflow.PageCustomCode("landing-page-scripts", {
     },
     {
       id: heatmapScript.id,
-      version: "2.0.0",
+      scriptVersion: "2.0.0",
       location: "footer",
       attributes: {
         "data-page-type": "landing",
@@ -92,7 +92,7 @@ const productPageScripts = new webflow.PageCustomCode("product-page-scripts", {
   scripts: [
     {
       id: productViewerScript.id,
-      version: "1.5.0",
+      scriptVersion: "1.5.0",
       location: "footer",
       attributes: {
         "data-viewer-container": "#product-viewer",
@@ -114,7 +114,7 @@ const thankYouPageScripts = new webflow.PageCustomCode("thank-you-page-scripts",
   scripts: [
     {
       id: conversionTrackingScript.id,
-      version: "3.2.1",
+      scriptVersion: "3.2.1",
       location: "header",
     },
   ],
@@ -125,10 +125,13 @@ const thankYouPageScripts = new webflow.PageCustomCode("thank-you-page-scripts",
 
 Before using PageCustomCode, you must:
 
-1. **Register your scripts** using the `RegisteredScript` resource
-2. **Know the script ID** from the registered script
-3. **Know the version** you want to deploy
-4. **Have page IDs** for the pages you want to customize
+1. **Use a Data Client (OAuth app) token** - the custom code endpoints are not available to site
+   API tokens. The token needs `custom_code:read` and `custom_code:write`, plus `pages:write` so
+   `pulumi destroy` can remove the applied code from the page
+2. **Register your scripts** using the `RegisteredScript` resource
+3. **Know the script ID** from the registered script
+4. **Know the version** you want to deploy
+5. **Have page IDs** for the pages you want to customize
 
 See the [RegisteredScript example](../registeredscript/) for how to register scripts.
 
@@ -138,7 +141,7 @@ Each example requires the following configuration:
 
 | Config Key        | Required | Description                              |
 |-------------------|----------|------------------------------------------|
-| `webflow:siteId`  | Yes      | Your Webflow site ID (stored as secret)  |
+| `siteId`  | Yes      | Your Webflow site ID (stored as secret)  |
 | `landingPageId`   | Yes*     | Page ID for landing page example        |
 | `productPageId`   | Yes*     | Page ID for product page example        |
 | `environment`     | No       | Deployment environment (default: development) |
@@ -230,7 +233,7 @@ See the [SiteCustomCode example](../sitecustomcode/) for site-wide scripts.
 // Track conversions specifically on landing pages
 {
   id: conversionPixelScript.id,
-  version: "1.0.0",
+  scriptVersion: "1.0.0",
   location: "header",
   attributes: {
     "data-campaign": "fb-ads-summer",
@@ -243,7 +246,7 @@ See the [SiteCustomCode example](../sitecustomcode/) for site-wide scripts.
 // Add 360 product viewer only to product pages
 {
   id: productViewerScript.id,
-  version: "2.0.0",
+  scriptVersion: "2.0.0",
   location: "footer",
   attributes: {
     "data-container": ".product-viewer",
@@ -256,7 +259,7 @@ See the [SiteCustomCode example](../sitecustomcode/) for site-wide scripts.
 // Enhanced tracking on checkout pages
 {
   id: enhancedAnalyticsScript.id,
-  version: "1.5.0",
+  scriptVersion: "1.5.0",
   location: "header",
   attributes: {
     "data-track-cart": "true",
@@ -270,7 +273,7 @@ See the [SiteCustomCode example](../sitecustomcode/) for site-wide scripts.
 // Social sharing widgets on blog posts
 {
   id: socialShareScript.id,
-  version: "3.0.0",
+  scriptVersion: "3.0.0",
   location: "footer",
 }
 ```
@@ -282,13 +285,13 @@ See the [SiteCustomCode example](../sitecustomcode/) for site-wide scripts.
 To update to a new version:
 
 1. Register the new version with RegisteredScript (if not already registered)
-2. Update the `version` field in PageCustomCode
+2. Update the `scriptVersion` field in PageCustomCode
 3. Run `pulumi up`
 
 ```typescript
 scripts: [{
   id: myScript.id,
-  version: "2.0.0",  // Changed from "1.0.0"
+  scriptVersion: "2.0.0",  // Changed from "1.0.0"
   location: "header",
 }]
 ```
@@ -303,7 +306,7 @@ scripts: [
   {
     // New script
     id: newScript.id,
-    version: "1.0.0",
+    scriptVersion: "1.0.0",
     location: "footer",
   },
 ]
@@ -357,7 +360,9 @@ pulumi destroy
 pulumi stack rm dev
 ```
 
-**Note:** This only removes the custom code configuration from pages. The registered scripts remain available for future use.
+**Note:** This only removes the custom code configuration from pages (`DELETE /pages/{id}/custom_code`,
+which needs `pages:write`). The registered scripts remain in the registry - Webflow has no
+unregister endpoint - and stay available for future use.
 
 ## Troubleshooting
 
@@ -382,7 +387,7 @@ const myScript = new webflow.RegisteredScript("my-script", {
   displayName: "MyScript",
   hostedLocation: "https://cdn.example.com/script.js",
   integrityHash: "sha384-...",
-  version: "1.0.0",
+  scriptVersion: "1.0.0",
 });
 
 // 2. Then apply it to pages
@@ -390,7 +395,7 @@ const pageCode = new webflow.PageCustomCode("page-code", {
   pageId: pageId,
   scripts: [{
     id: myScript.id,  // Reference the registered script
-    version: "1.0.0",
+    scriptVersion: "1.0.0",
     location: "header",
   }],
 });
@@ -402,20 +407,20 @@ Location must be exactly `"header"` or `"footer"`:
 - Valid: `"header"`, `"footer"`
 - Invalid: `"head"`, `"body"`, `"Header"`, `"FOOTER"`
 
-### "Version not found" Error
+### "scriptVersion not found" Error
 
 The version must match a registered version:
 ```typescript
 // RegisteredScript has version "1.0.0"
 const script = new webflow.RegisteredScript("script", {
-  version: "1.0.0",  // Registered version
+  scriptVersion: "1.0.0",  // Registered version
   // ...
 });
 
 // PageCustomCode must use the same version
 scripts: [{
   id: script.id,
-  version: "1.0.0",  // Must match exactly
+  scriptVersion: "1.0.0",  // Must match exactly
   location: "header",
 }]
 ```
@@ -430,7 +435,7 @@ scripts: []
 // Valid
 scripts: [{
   id: myScript.id,
-  version: "1.0.0",
+  scriptVersion: "1.0.0",
   location: "header",
 }]
 ```

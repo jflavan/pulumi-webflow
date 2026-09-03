@@ -19,28 +19,28 @@ import javax.annotation.Nullable;
 @ResourceType(type="webflow:index:RobotsTxt")
 public class RobotsTxt extends com.pulumi.resources.CustomResource {
     /**
-     * The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives.
+     * The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives. Comments and other directives are not stored by Webflow and are dropped with a warning. Formatting differences (blank lines, spacing, directive casing) do not cause a diff.
      * 
      */
     @Export(name="content", refs={String.class}, tree="[0]")
     private Output<String> content;
 
     /**
-     * @return The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives.
+     * @return The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives. Comments and other directives are not stored by Webflow and are dropped with a warning. Formatting differences (blank lines, spacing, directive casing) do not cause a diff.
      * 
      */
     public Output<String> content() {
         return this.content;
     }
     /**
-     * RFC3339 timestamp of the last modification.
+     * RFC3339 timestamp of the last modification made through this provider. The Webflow API does not report one, so the provider records the time of its last successful write.
      * 
      */
     @Export(name="lastModified", refs={String.class}, tree="[0]")
     private Output<String> lastModified;
 
     /**
-     * @return RFC3339 timestamp of the last modification.
+     * @return RFC3339 timestamp of the last modification made through this provider. The Webflow API does not report one, so the provider records the time of its last successful write.
      * 
      */
     public Output<String> lastModified() {

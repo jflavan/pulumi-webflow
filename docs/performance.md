@@ -106,7 +106,7 @@ These values are optimized for typical Webflow API usage and cannot be customize
 Enable verbose logging to see API timing:
 
 ```bash
-PULUMI_LOG_LEVEL=debug pulumi up
+pulumi up -v=9 --logtostderr
 ```
 
 ### Identifying Bottlenecks

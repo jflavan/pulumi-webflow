@@ -12,37 +12,39 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-// Manages assets (images, files, documents) for a Webflow site. This resource allows you to upload and manage files that can be used in your Webflow site. Note: Assets are immutable - changing any property will delete and recreate the asset.
+// Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow's storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset. After 'pulumi import' the fileSource and fileHash are unknown; set them in your program and the first refresh adopts them without replacing the asset.
 type Asset struct {
 	pulumi.CustomResourceState
 
-	// The Webflow-assigned asset ID (read-only). This unique identifier can be used to reference the asset in API calls.
+	// The Webflow-assigned asset ID (read-only).
 	AssetId pulumi.StringPtrOutput `pulumi:"assetId"`
-	// The direct S3 URL for the asset (read-only). This is the raw S3 location where the file is stored.
+	// The direct S3 URL for the asset (read-only).
 	AssetUrl pulumi.StringPtrOutput `pulumi:"assetUrl"`
-	// The MIME type of the asset (read-only). Examples: 'image/png', 'image/jpeg', 'application/pdf'. Determined by the fileName extension.
+	// The MIME type of the asset (read-only), e.g., 'image/png', 'application/pdf'.
 	ContentType pulumi.StringPtrOutput `pulumi:"contentType"`
-	// The timestamp when the asset metadata was created (RFC3339 format, read-only). This is set when the asset is registered with Webflow.
+	// The timestamp when the asset metadata was created (RFC3339 format, read-only).
 	CreatedOn pulumi.StringPtrOutput `pulumi:"createdOn"`
-	// MD5 hash of the file content (required). Webflow uses this hash to identify and deduplicate assets. Generate using: md5sum <filename> (Linux) or md5 <filename> (macOS). Example: 'd41d8cd98f00b204e9800998ecf8427e'.
-	FileHash pulumi.StringOutput `pulumi:"fileHash"`
-	// The name of the file to upload, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. The file name must not exceed 255 characters and should not contain invalid characters (<, >, :, ", |, ?, *).
+	// MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
+	FileHash pulumi.StringPtrOutput `pulumi:"fileHash"`
+	// The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, ", |, ?, *.
 	FileName pulumi.StringOutput `pulumi:"fileName"`
-	// The source of the file to upload. For the current implementation, this is a reference field. In future versions, this may support URLs or local file paths for automatic upload. Examples: 'https://example.com/logo.png', '/path/to/local/file.png'.
-	FileSource pulumi.StringPtrOutput `pulumi:"fileSource"`
-	// The Webflow CDN URL where the asset will be hosted (read-only). This URL becomes accessible after completing the S3 upload. Example: 'https://assets.website-files.com/.../logo.png'.
+	// Where the file bytes come from: a local file path (resolved relative to the Pulumi program's working directory, e.g., './assets/logo.png') or an http(s) URL (e.g., 'https://example.com/logo.png'). The content is read at apply time, MD5-hashed and uploaded to Webflow.
+	FileSource pulumi.StringOutput `pulumi:"fileSource"`
+	// The ID of the asset folder the asset belongs to, or empty when it is at the site root (read-only).
+	FolderId pulumi.StringPtrOutput `pulumi:"folderId"`
+	// The Webflow CDN URL where the asset is hosted (read-only). Example: 'https://cdn.prod.website-files.com/.../logo.png'.
 	HostedUrl pulumi.StringPtrOutput `pulumi:"hostedUrl"`
-	// The timestamp when the asset was last modified (RFC3339 format, read-only). For most assets, this will be the same as createdOn since assets are immutable.
+	// The timestamp when the asset was last modified (RFC3339 format, read-only).
 	LastUpdated pulumi.StringPtrOutput `pulumi:"lastUpdated"`
-	// Optional folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset will be placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
+	// Optional asset folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset is placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
 	ParentFolder pulumi.StringPtrOutput `pulumi:"parentFolder"`
-	// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
+	// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings.
 	SiteId pulumi.StringOutput `pulumi:"siteId"`
-	// The size of the asset in bytes (read-only). This is the actual size of the uploaded file.
+	// The size of the uploaded file in bytes (read-only).
 	Size pulumi.IntPtrOutput `pulumi:"size"`
-	// AWS S3 POST form fields required to complete the upload (read-only). Include these as form fields when POSTing the file to uploadUrl. Keys: acl, bucket, key, Content-Type, X-Amz-Algorithm, X-Amz-Credential, X-Amz-Date, Policy, X-Amz-Signature, success_action_status, Cache-Control.
+	// The signed AWS S3 POST form fields used for the upload (read-only, secret).
 	UploadDetails pulumi.StringMapOutput `pulumi:"uploadDetails"`
-	// The presigned S3 URL for uploading the file content (read-only). Use this URL along with uploadDetails to complete the asset upload. See AWS S3 POST documentation: https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPOST.html
+	// The presigned S3 URL the file was uploaded to (read-only, secret). The provider performs the upload; this is recorded for reference only.
 	UploadUrl pulumi.StringPtrOutput `pulumi:"uploadUrl"`
 }
 
@@ -53,15 +55,20 @@ func NewAsset(ctx *pulumi.Context,
 		return nil, errors.New("missing one or more required arguments")
 	}
 
-	if args.FileHash == nil {
-		return nil, errors.New("invalid value for required argument 'FileHash'")
-	}
 	if args.FileName == nil {
 		return nil, errors.New("invalid value for required argument 'FileName'")
+	}
+	if args.FileSource == nil {
+		return nil, errors.New("invalid value for required argument 'FileSource'")
 	}
 	if args.SiteId == nil {
 		return nil, errors.New("invalid value for required argument 'SiteId'")
 	}
+	secrets := pulumi.AdditionalSecretOutputs([]string{
+		"uploadDetails",
+		"uploadUrl",
+	})
+	opts = append(opts, secrets)
 	opts = internal.PkgResourceDefaultOpts(opts)
 	var resource Asset
 	err := ctx.RegisterResource("webflow:index:Asset", name, args, &resource, opts...)
@@ -95,29 +102,29 @@ func (AssetState) ElementType() reflect.Type {
 }
 
 type assetArgs struct {
-	// MD5 hash of the file content (required). Webflow uses this hash to identify and deduplicate assets. Generate using: md5sum <filename> (Linux) or md5 <filename> (macOS). Example: 'd41d8cd98f00b204e9800998ecf8427e'.
-	FileHash string `pulumi:"fileHash"`
-	// The name of the file to upload, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. The file name must not exceed 255 characters and should not contain invalid characters (<, >, :, ", |, ?, *).
+	// MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
+	FileHash *string `pulumi:"fileHash"`
+	// The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, ", |, ?, *.
 	FileName string `pulumi:"fileName"`
-	// The source of the file to upload. For the current implementation, this is a reference field. In future versions, this may support URLs or local file paths for automatic upload. Examples: 'https://example.com/logo.png', '/path/to/local/file.png'.
-	FileSource *string `pulumi:"fileSource"`
-	// Optional folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset will be placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
+	// Where the file bytes come from: a local file path (resolved relative to the Pulumi program's working directory, e.g., './assets/logo.png') or an http(s) URL (e.g., 'https://example.com/logo.png'). The content is read at apply time, MD5-hashed and uploaded to Webflow.
+	FileSource string `pulumi:"fileSource"`
+	// Optional asset folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset is placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
 	ParentFolder *string `pulumi:"parentFolder"`
-	// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
+	// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings.
 	SiteId string `pulumi:"siteId"`
 }
 
 // The set of arguments for constructing a Asset resource.
 type AssetArgs struct {
-	// MD5 hash of the file content (required). Webflow uses this hash to identify and deduplicate assets. Generate using: md5sum <filename> (Linux) or md5 <filename> (macOS). Example: 'd41d8cd98f00b204e9800998ecf8427e'.
-	FileHash pulumi.StringInput
-	// The name of the file to upload, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. The file name must not exceed 255 characters and should not contain invalid characters (<, >, :, ", |, ?, *).
+	// MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
+	FileHash pulumi.StringPtrInput
+	// The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, ", |, ?, *.
 	FileName pulumi.StringInput
-	// The source of the file to upload. For the current implementation, this is a reference field. In future versions, this may support URLs or local file paths for automatic upload. Examples: 'https://example.com/logo.png', '/path/to/local/file.png'.
-	FileSource pulumi.StringPtrInput
-	// Optional folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset will be placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
+	// Where the file bytes come from: a local file path (resolved relative to the Pulumi program's working directory, e.g., './assets/logo.png') or an http(s) URL (e.g., 'https://example.com/logo.png'). The content is read at apply time, MD5-hashed and uploaded to Webflow.
+	FileSource pulumi.StringInput
+	// Optional asset folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset is placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
 	ParentFolder pulumi.StringPtrInput
-	// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
+	// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings.
 	SiteId pulumi.StringInput
 }
 
@@ -158,72 +165,77 @@ func (o AssetOutput) ToAssetOutputWithContext(ctx context.Context) AssetOutput {
 	return o
 }
 
-// The Webflow-assigned asset ID (read-only). This unique identifier can be used to reference the asset in API calls.
+// The Webflow-assigned asset ID (read-only).
 func (o AssetOutput) AssetId() pulumi.StringPtrOutput {
 	return o.ApplyT(func(v *Asset) pulumi.StringPtrOutput { return v.AssetId }).(pulumi.StringPtrOutput)
 }
 
-// The direct S3 URL for the asset (read-only). This is the raw S3 location where the file is stored.
+// The direct S3 URL for the asset (read-only).
 func (o AssetOutput) AssetUrl() pulumi.StringPtrOutput {
 	return o.ApplyT(func(v *Asset) pulumi.StringPtrOutput { return v.AssetUrl }).(pulumi.StringPtrOutput)
 }
 
-// The MIME type of the asset (read-only). Examples: 'image/png', 'image/jpeg', 'application/pdf'. Determined by the fileName extension.
+// The MIME type of the asset (read-only), e.g., 'image/png', 'application/pdf'.
 func (o AssetOutput) ContentType() pulumi.StringPtrOutput {
 	return o.ApplyT(func(v *Asset) pulumi.StringPtrOutput { return v.ContentType }).(pulumi.StringPtrOutput)
 }
 
-// The timestamp when the asset metadata was created (RFC3339 format, read-only). This is set when the asset is registered with Webflow.
+// The timestamp when the asset metadata was created (RFC3339 format, read-only).
 func (o AssetOutput) CreatedOn() pulumi.StringPtrOutput {
 	return o.ApplyT(func(v *Asset) pulumi.StringPtrOutput { return v.CreatedOn }).(pulumi.StringPtrOutput)
 }
 
-// MD5 hash of the file content (required). Webflow uses this hash to identify and deduplicate assets. Generate using: md5sum <filename> (Linux) or md5 <filename> (macOS). Example: 'd41d8cd98f00b204e9800998ecf8427e'.
-func (o AssetOutput) FileHash() pulumi.StringOutput {
-	return o.ApplyT(func(v *Asset) pulumi.StringOutput { return v.FileHash }).(pulumi.StringOutput)
+// MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
+func (o AssetOutput) FileHash() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v *Asset) pulumi.StringPtrOutput { return v.FileHash }).(pulumi.StringPtrOutput)
 }
 
-// The name of the file to upload, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. The file name must not exceed 255 characters and should not contain invalid characters (<, >, :, ", |, ?, *).
+// The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, ", |, ?, *.
 func (o AssetOutput) FileName() pulumi.StringOutput {
 	return o.ApplyT(func(v *Asset) pulumi.StringOutput { return v.FileName }).(pulumi.StringOutput)
 }
 
-// The source of the file to upload. For the current implementation, this is a reference field. In future versions, this may support URLs or local file paths for automatic upload. Examples: 'https://example.com/logo.png', '/path/to/local/file.png'.
-func (o AssetOutput) FileSource() pulumi.StringPtrOutput {
-	return o.ApplyT(func(v *Asset) pulumi.StringPtrOutput { return v.FileSource }).(pulumi.StringPtrOutput)
+// Where the file bytes come from: a local file path (resolved relative to the Pulumi program's working directory, e.g., './assets/logo.png') or an http(s) URL (e.g., 'https://example.com/logo.png'). The content is read at apply time, MD5-hashed and uploaded to Webflow.
+func (o AssetOutput) FileSource() pulumi.StringOutput {
+	return o.ApplyT(func(v *Asset) pulumi.StringOutput { return v.FileSource }).(pulumi.StringOutput)
 }
 
-// The Webflow CDN URL where the asset will be hosted (read-only). This URL becomes accessible after completing the S3 upload. Example: 'https://assets.website-files.com/.../logo.png'.
+// The ID of the asset folder the asset belongs to, or empty when it is at the site root (read-only).
+func (o AssetOutput) FolderId() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v *Asset) pulumi.StringPtrOutput { return v.FolderId }).(pulumi.StringPtrOutput)
+}
+
+// The Webflow CDN URL where the asset is hosted (read-only). Example: 'https://cdn.prod.website-files.com/.../logo.png'.
 func (o AssetOutput) HostedUrl() pulumi.StringPtrOutput {
 	return o.ApplyT(func(v *Asset) pulumi.StringPtrOutput { return v.HostedUrl }).(pulumi.StringPtrOutput)
 }
 
-// The timestamp when the asset was last modified (RFC3339 format, read-only). For most assets, this will be the same as createdOn since assets are immutable.
+// The timestamp when the asset was last modified (RFC3339 format, read-only).
 func (o AssetOutput) LastUpdated() pulumi.StringPtrOutput {
 	return o.ApplyT(func(v *Asset) pulumi.StringPtrOutput { return v.LastUpdated }).(pulumi.StringPtrOutput)
 }
 
-// Optional folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset will be placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
+// Optional asset folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset is placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
 func (o AssetOutput) ParentFolder() pulumi.StringPtrOutput {
 	return o.ApplyT(func(v *Asset) pulumi.StringPtrOutput { return v.ParentFolder }).(pulumi.StringPtrOutput)
 }
 
-// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
+// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings.
 func (o AssetOutput) SiteId() pulumi.StringOutput {
 	return o.ApplyT(func(v *Asset) pulumi.StringOutput { return v.SiteId }).(pulumi.StringOutput)
 }
 
-// The size of the asset in bytes (read-only). This is the actual size of the uploaded file.
+// The size of the uploaded file in bytes (read-only).
 func (o AssetOutput) Size() pulumi.IntPtrOutput {
 	return o.ApplyT(func(v *Asset) pulumi.IntPtrOutput { return v.Size }).(pulumi.IntPtrOutput)
 }
 
-// AWS S3 POST form fields required to complete the upload (read-only). Include these as form fields when POSTing the file to uploadUrl. Keys: acl, bucket, key, Content-Type, X-Amz-Algorithm, X-Amz-Credential, X-Amz-Date, Policy, X-Amz-Signature, success_action_status, Cache-Control.
+// The signed AWS S3 POST form fields used for the upload (read-only, secret).
 func (o AssetOutput) UploadDetails() pulumi.StringMapOutput {
 	return o.ApplyT(func(v *Asset) pulumi.StringMapOutput { return v.UploadDetails }).(pulumi.StringMapOutput)
 }
 
-// The presigned S3 URL for uploading the file content (read-only). Use this URL along with uploadDetails to complete the asset upload. See AWS S3 POST documentation: https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPOST.html
+// The presigned S3 URL the file was uploaded to (read-only, secret). The provider performs the upload; this is recorded for reference only.
 func (o AssetOutput) UploadUrl() pulumi.StringPtrOutput {
 	return o.ApplyT(func(v *Asset) pulumi.StringPtrOutput { return v.UploadUrl }).(pulumi.StringPtrOutput)
 }

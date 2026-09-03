@@ -6,7 +6,7 @@ This guide helps you resolve common issues when using the Webflow Pulumi Provide
 
 | Error | Category | Solution |
 |-------|----------|----------|
-| `Plugin not found` | Installation | Install provider plugin: `pulumi plugin install resource webflow` |
+| `Plugin not found` | Installation | Install provider plugin: `pulumi plugin install resource webflow --server github://api.github.com/JDetmar/pulumi-webflow` |
 | `API token not configured` | Authentication | Set `WEBFLOW_API_TOKEN` environment variable or configure in stack |
 | `invalid site ID` | Configuration | Get your site ID from Webflow Designer → Project Settings → API & Webhooks |
 | `Site not found` | Configuration | Verify site ID is correct and account has access |
@@ -42,7 +42,7 @@ This guide helps you resolve common issues when using the Webflow Pulumi Provide
 **Solution:**
 1. Install the plugin:
    ```bash
-   pulumi plugin install resource webflow v0.1.0
+   pulumi plugin install resource webflow v0.10.1 --server github://api.github.com/JDetmar/pulumi-webflow
    ```
 2. Verify installation:
    ```bash
@@ -81,21 +81,21 @@ pip install pulumi-webflow
 
 **Go:**
 ```bash
-go get github.com/jdetmar/pulumi-webflow/sdk/go/webflow
+go get github.com/JDetmar/pulumi-webflow/sdk/go/webflow
 ```
 
 **.NET:**
 ```bash
-dotnet add package Pulumi.Webflow
+dotnet add package Community.Pulumi.Webflow
 ```
 
 **Java:**
 ```bash
 # Add to pom.xml:
 <dependency>
-  <groupId>com.github.jdetmar</groupId>
+  <groupId>io.github.jdetmar.pulumi</groupId>
   <artifactId>pulumi-webflow</artifactId>
-  <version>0.1.0</version>
+  <version>0.10.1</version>
 </dependency>
 ```
 
@@ -115,15 +115,17 @@ dotnet add package Pulumi.Webflow
 2. Check SDK version in your project:
    - **TypeScript:** `npm list @jdetmar/pulumi-webflow`
    - **Python:** `pip show pulumi-webflow`
-   - **Go:** `go list -m github.com/jdetmar/pulumi-webflow`
+   - **Go:** `go list -m github.com/JDetmar/pulumi-webflow/sdk/go/webflow`
+   - **.NET:** `dotnet list package | grep Community.Pulumi.Webflow`
+   - **Java:** `mvn dependency:tree | grep pulumi-webflow`
 
 3. Update to matching versions:
    ```bash
-   # Update SDK
-   npm install @jdetmar/pulumi-webflow@0.1.0
+   # Update SDK (the SDK version determines which plugin version Pulumi downloads)
+   npm install @jdetmar/pulumi-webflow@0.10.1
 
    # Update plugin
-   pulumi plugin install resource webflow v0.1.0
+   pulumi plugin install resource webflow v0.10.1 --server github://api.github.com/JDetmar/pulumi-webflow
    ```
 
 **Prevention:** Pin SDK versions in your lock files (package-lock.json, poetry.lock, go.mod, etc.)
@@ -302,7 +304,7 @@ These error codes are designed for programmatic error handling in CI/CD pipeline
 
 2. Update your configuration:
    ```bash
-   pulumi config set webflow:siteId "correct_site_id"
+   pulumi config set siteId "correct_site_id"
    ```
 
 3. For individual resources:
@@ -346,7 +348,7 @@ These error codes are designed for programmatic error handling in CI/CD pipeline
 
 4. Update configuration:
    ```bash
-   pulumi config set webflow:siteId "correct_site_id"
+   pulumi config set siteId "correct_site_id"
    ```
 
 ---
@@ -401,7 +403,7 @@ These error codes are designed for programmatic error handling in CI/CD pipeline
 
 3. Set required configuration:
    ```bash
-   pulumi config set webflow:siteId "your_site_id"
+   pulumi config set siteId "your_site_id"
    pulumi config set webflow:apiToken "your_token" --secret
    ```
 
@@ -619,7 +621,7 @@ These error codes are designed for programmatic error handling in CI/CD pipeline
 3. Verify site access:
    ```bash
    # Confirm site ID is correct
-   pulumi config get webflow:siteId
+   pulumi config get siteId
    ```
 
 **Common Mistakes:**
@@ -1115,16 +1117,16 @@ redirect = webflow.Redirect("old-to-new",
 1. Verify each stack has unique site ID:
    ```bash
    pulumi stack select dev
-   pulumi config get webflow:siteId
+   pulumi config get siteId
 
    pulumi stack select staging
-   pulumi config get webflow:siteId
+   pulumi config get siteId
    ```
 
 2. Update if needed:
    ```bash
    pulumi stack select staging
-   pulumi config set webflow:siteId "staging_site_id"
+   pulumi config set siteId "staging_site_id"
    ```
 
 3. Document site ID mapping:
@@ -1368,7 +1370,7 @@ Use this when you're unsure where the problem is.
 **Step 4: Validate Configuration**
 1. Check site ID format:
    ```bash
-   pulumi config get webflow:siteId
+   pulumi config get siteId
    # Should be 24-character hex string
    ```
 
@@ -1381,7 +1383,7 @@ Use this when you're unsure where the problem is.
 3. Check site access:
    ```bash
    curl -H "Authorization: Bearer $WEBFLOW_API_TOKEN" \
-        https://api.webflow.com/sites/$(pulumi config get webflow:siteId)
+        https://api.webflow.com/sites/$(pulumi config get siteId)
    ```
 
 **Step 5: Run Preview**
@@ -1626,10 +1628,10 @@ grep -i "apitoken\|password\|secret" deployment.log
 
 If you can't find your issue here:
 
-1. **Check Recent Issues:** https://github.com/jdetmar/pulumi-webflow/issues
+1. **Check Recent Issues:** https://github.com/JDetmar/pulumi-webflow/issues
 2. **Search Documentation:** Use Ctrl+F to search this page
 3. **Enable Verbose Logging:** Use `--debug` flag for more details
-4. **File Issue:** https://github.com/jdetmar/pulumi-webflow/issues/new
+4. **File Issue:** https://github.com/JDetmar/pulumi-webflow/issues/new
    - Include error output
    - Include steps to reproduce
    - Include output of `pulumi version` and `pulumi plugin ls`

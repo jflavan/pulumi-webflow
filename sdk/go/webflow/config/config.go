@@ -11,7 +11,15 @@ import (
 
 var _ = internal.GetEnvOrDefault
 
-// Webflow API v2 bearer token for authentication. Can also be set via WEBFLOW_API_TOKEN environment variable.
+// Webflow API v2 bearer token for authentication. Explicit configuration takes precedence over the WEBFLOW_API_TOKEN environment variable, which is used as a fallback when no token is configured.
 func GetApiToken(ctx *pulumi.Context) string {
-	return config.Get(ctx, "webflow:apiToken")
+	v, err := config.Try(ctx, "webflow:apiToken")
+	if err == nil {
+		return v
+	}
+	var value string
+	if d := internal.GetEnvOrDefault(nil, nil, "WEBFLOW_API_TOKEN"); d != nil {
+		value = d.(string)
+	}
+	return value
 }

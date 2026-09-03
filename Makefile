@@ -4,11 +4,14 @@ PACK             := webflow
 PACKDIR          := sdk
 PROJECT          := github.com/JDetmar/pulumi-webflow
 NODE_MODULE_NAME := @jdetmar/pulumi-webflow
-NUGET_PKG_NAME   := Pulumi.Webflow
+NUGET_PKG_NAME   := Community.Pulumi.Webflow
 
 PROVIDER        := pulumi-resource-${PACK}
 PROVIDER_PATH   := provider
-VERSION_PATH    := ${PROVIDER_PATH}/version.Version
+# Go symbol (relative to PROJECT) that receives the build version via -ldflags -X.
+# The variable is `provider.Version` (provider/provider.go); .goreleaser.yml and
+# .ci-mgmt.yaml reference the same fully-qualified path.
+VERSION_PATH    := ${PROVIDER_PATH}.Version
 
 PULUMI          := pulumi
 
@@ -18,38 +21,29 @@ export GOPATH   := $(shell go env GOPATH)
 WORKING_DIR     := $(shell pwd)
 TESTPARALLELISM := 4
 
-prepare:
-	@if test -z "${NAME}"; then echo "NAME not set"; exit 1; fi
-	@if test -z "${REPOSITORY}"; then echo "REPOSITORY not set"; exit 1; fi
-	@if test -z "${ORG}"; then echo "ORG not set"; exit 1; fi
-	@if test ! -d "provider/cmd/pulumi-resource-webflow"; then "Project already prepared"; exit 1; fi # SED_SKIP
-
-	# SED needs to not fail when encountering unicode characters
-	LC_CTYPE=C 
-	LANG=C
-
-	mv "provider/cmd/pulumi-resource-webflow" provider/cmd/pulumi-resource-${NAME} # SED_SKIP
-	
-	# In MacOS the -i parameter needs an empty  to execute in place.
-	if [[ "${OS}" == "Darwin" ]]; then \
-		find . \( -path './.git' -o -path './sdk' \) -prune -o -not -name 'go.sum' -type f -exec sed -i '' '/SED_SKIP/!s,github.com/pulumi/pulumi-[x]yz,${REPOSITORY},g' {} \; ; \
-		find . \( -path './.git' -o -path './sdk' \) -prune -o -not -name 'go.sum' -type f -exec sed -i '' '/SED_SKIP/!s/[xX]yz/${NAME}/g' {} \; ; \
-		find . \( -path './.git' -o -path './sdk' \) -prune -o -not -name 'go.sum' -type f -exec sed -i '' '/SED_SKIP/!s/[aA]bc/${ORG}/g' {} \; ; \
-	else \
-		find . \( -path './.git' -o -path './sdk' \) -prune -o -not -name 'go.sum' -type f -exec sed -i '/SED_SKIP/!s,github.com/pulumi/pulumi-[x]yz,${REPOSITORY},g' {} \; ; \
-		find . \( -path './.git' -o -path './sdk' \) -prune -o -not -name 'go.sum' -type f -exec sed -i '/SED_SKIP/!s/[xX]yz/${NAME}/g' {} \; ; \
-		find . \( -path './.git' -o -path './sdk' \) -prune -o -not -name 'go.sum' -type f -exec sed -i '/SED_SKIP/!s/[aA]bc/${ORG}/g' {} \; ; \
-	fi
-
 # Override during CI using `make [TARGET] PROVIDER_VERSION=""` or by setting a PROVIDER_VERSION environment variable
 # Local & branch builds will just used this fixed default version unless specified
 PROVIDER_VERSION ?= 1.0.0-alpha.0+dev
 # Use this normalised version everywhere rather than the raw input to ensure consistency.
+# Requires pulumictl (installed by `mise install`, see .config/mise.toml). Can be overridden
+# on the command line, e.g. `make provider VERSION_GENERIC=0.0.0-test`.
 VERSION_GENERIC = $(shell pulumictl convert-version --language generic --version "$(PROVIDER_VERSION)")
+
+# Fail loudly when the version could not be computed (pulumictl missing or PROVIDER_VERSION
+# invalid) instead of silently baking an empty version into artifacts. Every target that
+# embeds VERSION_GENERIC starts its recipe with $(require_version).
+define require_version
+@if [ -z "$(VERSION_GENERIC)" ]; then \
+	echo "error: VERSION_GENERIC is empty: could not convert PROVIDER_VERSION='$(PROVIDER_VERSION)' with pulumictl." >&2; \
+	echo "       Install pulumictl (run 'mise install'; see .config/mise.toml) or pass VERSION_GENERIC=<semver> explicitly." >&2; \
+	exit 1; \
+fi
+endef
 
 # Need to pick up locally pinned pulumi-langage-* plugins.
 export PULUMI_IGNORE_AMBIENT_PLUGINS = true
 
+.PHONY: ensure
 ensure::
 	go mod tidy
 
@@ -63,14 +57,13 @@ $(SCHEMA_FILE): provider
 # To build the SDKs, use `make build_sdks`
 #
 # Required by CI (weekly-pulumi-update)
+.PHONY: codegen
 codegen: $(SCHEMA_FILE) sdk/dotnet sdk/go sdk/nodejs sdk/python sdk/java
 
-.PHONY: sdk/%
-sdk/%: $(SCHEMA_FILE)
-	rm -rf $@
-	$(PULUMI) package gen-sdk --language $* $(SCHEMA_FILE) --version "${VERSION_GENERIC}"
+.PHONY: sdk/dotnet sdk/go sdk/nodejs sdk/python sdk/java
 
 sdk/nodejs: $(SCHEMA_FILE)
+	$(require_version)
 	rm -rf $@
 	$(PULUMI) package gen-sdk --language nodejs $(SCHEMA_FILE) --version "${VERSION_GENERIC}"
 	cp README.md ${PACKDIR}/nodejs/
@@ -90,6 +83,7 @@ sdk/java: $(SCHEMA_FILE)
 	@python3 scripts/patch-java-build-gradle.py sdk/java/build.gradle
 
 sdk/python: $(SCHEMA_FILE)
+	$(require_version)
 	rm -rf $@
 	$(PULUMI) package gen-sdk --language python $(SCHEMA_FILE) --version "${VERSION_GENERIC}"
 	# Pulumi SDK generator doesn't set version in setup.py, so we patch it manually
@@ -97,11 +91,14 @@ sdk/python: $(SCHEMA_FILE)
 	cp README.md ${PACKDIR}/python/
 
 sdk/dotnet: $(SCHEMA_FILE)
+	$(require_version)
 	rm -rf $@
 	$(PULUMI) package gen-sdk --language dotnet $(SCHEMA_FILE) --version "${VERSION_GENERIC}"
-
+	# The generator hardcodes net6.0; compile the package for net8.0 and net10.0 instead.
+	python3 scripts/patch-dotnet-csproj.py $@/$(NUGET_PKG_NAME).csproj
 
 sdk/go: ${SCHEMA_FILE}
+	$(require_version)
 	rm -rf $@
 	$(PULUMI) package gen-sdk --language go ${SCHEMA_FILE} --version "${VERSION_GENERIC}"
 	GO_PKG_DIR=${PACKDIR}/go/webflow; \
@@ -118,28 +115,56 @@ provider: bin/${PROVIDER} bin/pulumi-gen-${PACK} # Required by CI
 PROVIDER_SRC := $(shell find provider -name '*.go')
 
 bin/${PROVIDER}: $(PROVIDER_SRC)
+	$(require_version)
 	cd provider && go build -o $(WORKING_DIR)/bin/${PROVIDER} -ldflags "-X ${PROJECT}/${VERSION_PATH}=${VERSION_GENERIC}" $(PROJECT)/${PROVIDER_PATH}/cmd/$(PROVIDER)
 
 .PHONY: provider_debug
 provider_debug:
+	$(require_version)
 	(cd provider && go build -o $(WORKING_DIR)/bin/${PROVIDER} -gcflags="all=-N -l" -ldflags "-X ${PROJECT}/${VERSION_PATH}=${VERSION_GENERIC}" $(PROJECT)/${PROVIDER_PATH}/cmd/$(PROVIDER))
 
-test_provider:
-	cd provider && go test -short -race -v -count=1 -cover -timeout 2h -parallel ${TESTPARALLELISM} -coverprofile="coverage.txt" ./...
+GO_TEST := go test -race -v -count=1 -cover -timeout 2h -parallel ${TESTPARALLELISM}
 
+# Unit tests for the provider package (mocked HTTP, no API token needed).
+.PHONY: test_provider
+test_provider:
+	cd provider && $(GO_TEST) -short -coverprofile="coverage.txt" ./...
+
+# Integration tests in tests/ that drive the provider through the pulumi-go-provider
+# integration server (no network access needed).
+.PHONY: test_integration
+test_integration:
+	$(GO_TEST) ./tests/...
+
+.PHONY: dotnet_sdk
 dotnet_sdk: sdk/dotnet
+	$(require_version)
 	cd ${PACKDIR}/dotnet/&& \
 		echo "${VERSION_GENERIC}" > version.txt && \
 		dotnet build
 
+.PHONY: go_sdk
 go_sdk:	sdk/go
 
+# The Node.js package is published from ${PACKDIR}/nodejs/bin (where tsc emits the
+# JavaScript and .d.ts files), so package.json, README and LICENSE are copied there
+# and an .npmignore is generated. bin/package.json is patched to point at the compiled
+# entry points.
+.PHONY: nodejs_sdk
 nodejs_sdk: sdk/nodejs
 	cd ${PACKDIR}/nodejs/ && \
 		yarn install && \
 		yarn run tsc
 	cp README.md LICENSE ${PACKDIR}/nodejs/package.json ${PACKDIR}/nodejs/yarn.lock ${PACKDIR}/nodejs/bin/
+	# The package is published from bin/. Without an .npmignore npm falls back to
+	# .gitignore, which excludes bin/ and would publish a tarball with no JavaScript.
+	# sdk/nodejs is wiped by codegen, so the file is generated here rather than committed.
+	printf '%s\n' 'node_modules/' 'tsconfig.json' 'yarn.lock' '*.ts' '!*.d.ts' > ${PACKDIR}/nodejs/bin/.npmignore
+	cd ${PACKDIR}/nodejs/bin && \
+		jq '. + {main: (.main // "index.js"), types: (.types // "index.d.ts")}' package.json > package.json.tmp && \
+		mv package.json.tmp package.json
 
+.PHONY: python_sdk
 python_sdk: sdk/python
 	cp README.md ${PACKDIR}/python/
 	cd ${PACKDIR}/python/ && \
@@ -149,8 +174,10 @@ python_sdk: sdk/python
 		cd ./bin && \
 		../venv/bin/python -m build .
 
+.PHONY: java_sdk
 java_sdk:: PACKAGE_VERSION := $(VERSION_GENERIC)
 java_sdk:: sdk/java
+	$(require_version)
 	cd sdk/java/ && \
 		gradle --console=plain build
 
@@ -161,44 +188,57 @@ build:: provider build_sdks
 build_sdks: dotnet_sdk go_sdk nodejs_sdk python_sdk java_sdk
 
 # Required for the codegen action that runs in pulumi/pulumi
+.PHONY: only_build
 only_build:: build
 
+.PHONY: lint
 lint:
 	golangci-lint --path-prefix provider --config .golangci.yml run --fix
 
+# Type-check every TypeScript example against the locally built Node.js SDK (requires build_nodejs).
+.PHONY: check_examples
+check_examples:
+	./scripts/check-examples.sh
 
+# Build every C# example against the local .NET SDK sources (compiles the SDK for net8.0 and net10.0).
+.PHONY: check_dotnet_examples
+check_dotnet_examples:
+	./scripts/check-dotnet-examples.sh
+
+.PHONY: install
 install:: install_nodejs_sdk install_dotnet_sdk
 	cp $(WORKING_DIR)/bin/${PROVIDER} ${GOPATH}/bin
 
+# Run every Go test in the repository (provider unit tests + tests/ integration tests) from the module root.
+.PHONY: test_all
+test_all::
+	$(GO_TEST) ./provider/... ./tests/...
 
-GO_TEST := go test -race -v -count=1 -cover -timeout 2h -parallel ${TESTPARALLELISM}
-
-test_all:: test
-	cd provider/pkg && $(GO_TEST) ./...
-	cd tests/sdk/nodejs && $(GO_TEST) ./...
-	cd tests/sdk/python && $(GO_TEST) ./...
-	cd tests/sdk/dotnet && $(GO_TEST) ./...
-	cd tests/sdk/go && $(GO_TEST) ./...
-
+.PHONY: install_dotnet_sdk
 install_dotnet_sdk::
 	rm -rf $(WORKING_DIR)/nuget/$(NUGET_PKG_NAME).*.nupkg
 	mkdir -p $(WORKING_DIR)/nuget
 	find . -name '*.nupkg' -print -exec cp -p {} ${WORKING_DIR}/nuget \;
 
+.PHONY: install_python_sdk
 install_python_sdk::
 	#target intentionally blank
 
+.PHONY: install_go_sdk
 install_go_sdk::
 	#target intentionally blank
 
+.PHONY: install_java_sdk
 install_java_sdk::
 	#target intentionally blank
 
+.PHONY: install_nodejs_sdk
 install_nodejs_sdk::
 	-yarn unlink --cwd $(WORKING_DIR)/sdk/nodejs/bin
 	yarn link --cwd $(WORKING_DIR)/sdk/nodejs/bin
 
-test:: test_provider
+.PHONY: test
+test:: test_provider test_integration
 
 # Set these variables to enable signing of the windows binary
 AZURE_SIGNING_CLIENT_ID ?=
@@ -246,31 +286,32 @@ sign-goreleaser-exe-%: bin/jsign-6.0.jar
 		fi; \
 	fi
 
-.PHONY:local_generate
+.PHONY: local_generate
 local_generate: # Required by CI
 
 .PHONY: generate_schema
 generate_schema: ${SCHEMA_FILE} # Required by CI
 
-.PHONY: build_go install_go_sdk
+.PHONY: generate_go build_go
 generate_go: sdk/go # Required by CI
 build_go: # Required by CI
 
-.PHONY: build_java install_java_sdk
+.PHONY: generate_java build_java
 generate_java: sdk/java # Required by CI
 build_java: java_sdk # Required by CI
 
-.PHONY: build_python install_python_sdk
+.PHONY: generate_python build_python
 generate_python: sdk/python # Required by CI
 build_python: python_sdk # Required by CI
 
-.PHONY: build_nodejs install_nodejs_sdk
+.PHONY: generate_nodejs build_nodejs
 generate_nodejs: sdk/nodejs # Required by CI
 build_nodejs: nodejs_sdk # Required by CI
 
-.PHONY: build_dotnet install_dotnet_sdk
+.PHONY: generate_dotnet build_dotnet
 generate_dotnet: sdk/dotnet # Required by CI
 build_dotnet: dotnet_sdk # Required by CI
 
 bin/pulumi-gen-${PACK}: # Required by CI
+	mkdir -p bin
 	touch bin/pulumi-gen-${PACK}

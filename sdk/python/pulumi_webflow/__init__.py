@@ -12,12 +12,22 @@ from .collection import *
 from .collection_field import *
 from .collection_item import *
 from .ecommerce_settings import *
+from .get_analytics_time_on_page import *
+from .get_analytics_top_dimensions import *
+from .get_analytics_top_events import *
+from .get_analytics_top_pages import *
+from .get_analytics_traffic import *
 from .get_authorized_user import *
+from .get_page import *
+from .get_page_schema_markup import *
+from .get_pages import *
 from .get_token_info import *
+from .google_tag import *
 from .inline_script import *
 from .page_content import *
 from .page_custom_code import *
-from .page_data import *
+from .page_metadata import *
+from .page_schema_markup import *
 from .provider import *
 from .redirect import *
 from .registered_script import *
@@ -49,10 +59,12 @@ _utilities.register(
    "webflow:index:CollectionField": "CollectionField",
    "webflow:index:CollectionItem": "CollectionItem",
    "webflow:index:EcommerceSettings": "EcommerceSettings",
+   "webflow:index:GoogleTag": "GoogleTag",
    "webflow:index:InlineScript": "InlineScript",
    "webflow:index:PageContent": "PageContent",
    "webflow:index:PageCustomCode": "PageCustomCode",
-   "webflow:index:PageData": "PageData",
+   "webflow:index:PageMetadata": "PageMetadata",
+   "webflow:index:PageSchemaMarkup": "PageSchemaMarkup",
    "webflow:index:Redirect": "Redirect",
    "webflow:index:RegisteredScript": "RegisteredScript",
    "webflow:index:RobotsTxt": "RobotsTxt",

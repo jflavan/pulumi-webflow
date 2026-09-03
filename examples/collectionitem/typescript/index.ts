@@ -52,8 +52,11 @@ const publishedProduct = new webflow.CollectionItem("published-product", {
     // "category": "Electronics",
     // "in-stock": true,
   },
-  isDraft: false, // Published to live site
+  isDraft: false, // Staged: goes out with the next site publish
   isArchived: false,
+  // Publish the item to the live site right away, after every create and
+  // update. Requires the site to have been published at least once.
+  live: true,
 });
 
 // Example 3: Archived Content
@@ -128,6 +131,7 @@ export const draftPostCreatedOn = draftBlogPost.createdOn;
 export const publishedProductId = publishedProduct.id;
 export const publishedProductItemId = publishedProduct.itemId;
 export const publishedProductLastUpdated = publishedProduct.lastUpdated;
+export const publishedProductLastPublished = publishedProduct.lastPublished; // set because live: true
 
 // Archived item exports
 export const archivedItemId = archivedItem.id;

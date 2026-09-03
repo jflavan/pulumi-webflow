@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
@@ -31,17 +30,22 @@ type CollectionFieldArgs struct {
 	// DisplayName is the human-readable name of the field.
 	// Example: "Title", "Description", "Author"
 	DisplayName string `pulumi:"displayName"`
-	// Slug is the URL-friendly slug for the field (optional).
-	// If not provided, Webflow will auto-generate from displayName.
-	// Example: "title", "description"
+	// Slug is deprecated: the Create Field endpoint does not accept a slug, Webflow generates
+	// it from displayName. The input is kept for schema compatibility but is never sent to the
+	// API and never diffed; the generated slug is reported in the outputs.
 	Slug string `pulumi:"slug,optional"`
 	// IsRequired indicates whether the field is required (optional, defaults to false).
 	IsRequired bool `pulumi:"isRequired,optional"`
 	// HelpText is optional help text shown in the CMS interface.
 	HelpText string `pulumi:"helpText,optional"`
-	// Validations contains type-specific validation rules (optional).
-	// Example for Number: {"min": 0, "max": 100}
+	// Validations is deprecated: "field validation is currently not available through the API",
+	// so the value is ignored. It is kept for schema compatibility, is never sent and never
+	// diffed; the validations Webflow reports are available in the outputs.
 	Validations map[string]interface{} `pulumi:"validations,optional"`
+	// Metadata carries the type-specific configuration required by Option fields
+	// ({"options": [{"name": "..."}]}) and Reference/MultiReference fields ({"collectionId": "..."}).
+	// Create-only.
+	Metadata map[string]interface{} `pulumi:"metadata,optional"`
 }
 
 // CollectionFieldState defines the output properties for the CollectionField resource.
@@ -59,7 +63,11 @@ func (f *CollectionField) Annotate(a infer.Annotator) {
 	a.SetToken("index", "CollectionField")
 	a.Describe(f, "Manages fields for a Webflow CMS collection. "+
 		"Collection fields define the structure of content items in a collection. "+
-		"Note: The field type cannot be changed after creation - changing it requires replacement (delete + recreate).")
+		"Only displayName, helpText and isRequired can be updated in place; "+
+		"type and metadata cannot be changed after creation and "+
+		"changing them requires replacement (delete + recreate). "+
+		"The Webflow API does not accept a slug or validations when creating a field: "+
+		"the slug is generated from displayName and both are reported as outputs only.")
 }
 
 // Annotate adds descriptions to the CollectionFieldArgs fields.
@@ -72,8 +80,7 @@ func (args *CollectionFieldArgs) Annotate(a infer.Annotator) {
 
 	a.Describe(&args.Type,
 		"The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). "+
-			"Supported types: PlainText, RichText, Image, MultiImage, Video, Link, Email, Phone, "+
-			"Number, DateTime, Switch, Color, Option, File, Reference, MultiReference. "+
+			"Supported types: "+supportedFieldTypeList+". "+
 			"IMPORTANT: Cannot be changed after creation - changing this requires replacement.")
 
 	a.Describe(&args.DisplayName,
@@ -82,9 +89,12 @@ func (args *CollectionFieldArgs) Annotate(a infer.Annotator) {
 			"Maximum length: 255 characters.")
 
 	a.Describe(&args.Slug,
-		"The URL-friendly slug for the field (optional, e.g., 'title', 'description'). "+
-			"If not provided, Webflow will auto-generate a slug from the displayName. "+
-			"The slug is used in API requests and exports.")
+		"Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates "+
+			"the slug from displayName. This input is ignored - it is never sent to the API and never "+
+			"causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.")
+	a.Deprecate(&args.Slug,
+		"The Webflow API does not accept a slug when creating a field; Webflow generates it from "+
+			"displayName. This input is ignored; read the generated slug from the outputs.")
 
 	a.Describe(&args.IsRequired,
 		"Whether the field is required (optional, defaults to false). "+
@@ -95,11 +105,19 @@ func (args *CollectionFieldArgs) Annotate(a infer.Annotator) {
 			"Helps content editors understand what to enter in this field.")
 
 	a.Describe(&args.Validations,
-		"Type-specific validation rules (optional). "+
-			"Different field types support different validations. "+
-			"Example for Number type: {\"min\": 0, \"max\": 100}. "+
-			"Example for PlainText type: {\"maxLength\": 500}. "+
-			"Refer to Webflow API documentation for validation options for each field type.")
+		"Deprecated: the Webflow API does not accept validations when creating a field "+
+			"(\"field validation is currently not available through the API\"). "+
+			"This input is ignored - it is never sent to the API and never causes a diff. "+
+			"The validations Webflow reports for the field are available in the outputs.")
+	a.Deprecate(&args.Validations,
+		"The Webflow API does not accept field validations; this input is ignored. "+
+			"The validations Webflow reports are available in the outputs.")
+
+	a.Describe(&args.Metadata,
+		"Type-specific configuration (create-only). "+
+			"Required for Option fields: {\"options\": [{\"name\": \"Draft\"}, {\"name\": \"Published\"}]}. "+
+			"Required for Reference and MultiReference fields: {\"collectionId\": \"<referenced collection ID>\"}. "+
+			"Not accepted for other field types. Changing metadata requires replacement.")
 }
 
 // Annotate adds descriptions to the CollectionFieldState fields.
@@ -113,130 +131,157 @@ func (state *CollectionFieldState) Annotate(a infer.Annotator) {
 			"System fields may not be editable.")
 }
 
+// collectionFieldValidators are the per-property string checks shared by Check and the
+// apply-time validation.
+var collectionFieldValidators = []stringValidator{
+	{property: "collectionId", validate: ValidateCollectionID},
+	{property: "type", validate: ValidateFieldType},
+	{property: "displayName", validate: ValidateFieldDisplayName},
+}
+
+// Check validates the known inputs at preview time. Unknown (computed) values - a
+// collectionId that comes from a Collection resource, or metadata whose collectionId does -
+// are skipped and validated again in Create/Update once resolved.
+func (f *CollectionField) Check(
+	ctx context.Context, req infer.CheckRequest,
+) (infer.CheckResponse[CollectionFieldArgs], error) {
+	inputs, failures, err := checkStrings[CollectionFieldArgs](ctx, req.NewInputs, collectionFieldValidators...)
+	if err != nil {
+		return infer.CheckResponse[CollectionFieldArgs]{Inputs: inputs, Failures: failures}, err
+	}
+	// The metadata shape depends on the type, so both must be known. A missing metadata is
+	// known (and is an error for Option/Reference/MultiReference fields).
+	fieldType, typeKnown := knownString(req.NewInputs, "type")
+	metadataPresent := false
+	if v, ok := req.NewInputs.GetOk("metadata"); ok && !v.IsNull() {
+		metadataPresent = true
+	}
+	if typeKnown && ValidFieldTypes[fieldType] && (!metadataPresent || isKnown(req.NewInputs, "metadata")) {
+		if verr := ValidateFieldMetadata(fieldType, inputs.Metadata); verr != nil {
+			failures = append(failures, checkFailure("metadata", verr))
+		}
+	}
+	return infer.CheckResponse[CollectionFieldArgs]{Inputs: inputs, Failures: failures}, nil
+}
+
 // Diff determines what changes need to be made to the collection field resource.
-// CollectionID and Type changes trigger replacement (cannot be changed).
-// Other fields can be updated in-place.
+//
+// collectionId, type and metadata are create-only in the Webflow API and trigger
+// replacement. displayName, isRequired and helpText are updated in place. slug and
+// validations are not accepted by the API (deprecated inputs) and never diff.
+// An omitted metadata input means "don't care" and never diffs against the value Read
+// recorded from the API; an explicit value is compared as a subset of what the API reports,
+// since Webflow decorates option entries with server-generated IDs.
 func (f *CollectionField) Diff(
 	ctx context.Context, req infer.DiffRequest[CollectionFieldArgs, CollectionFieldState],
 ) (infer.DiffResponse, error) {
 	diff := infer.DiffResponse{}
 	detailedDiff := map[string]p.PropertyDiff{}
 
-	// Check for collectionId change (requires replacement)
+	replace := func(property string) {
+		detailedDiff[property] = p.PropertyDiff{Kind: p.UpdateReplace}
+		diff.DeleteBeforeReplace = true
+		diff.HasChanges = true
+	}
+	update := func(property string) {
+		detailedDiff[property] = p.PropertyDiff{Kind: p.Update}
+		diff.HasChanges = true
+	}
+
 	if req.State.CollectionID != req.Inputs.CollectionID {
-		detailedDiff["collectionId"] = p.PropertyDiff{Kind: p.UpdateReplace}
-		diff.DeleteBeforeReplace = true
-		diff.HasChanges = true
+		replace("collectionId")
 	}
-
-	// Check for type change (requires replacement - cannot change field type)
 	if req.State.Type != req.Inputs.Type {
-		detailedDiff["type"] = p.PropertyDiff{Kind: p.UpdateReplace}
-		diff.DeleteBeforeReplace = true
-		diff.HasChanges = true
+		replace("type")
+	}
+	if len(req.Inputs.Metadata) > 0 && !subsetEqual(req.Inputs.Metadata, req.State.Metadata) {
+		replace("metadata")
 	}
 
-	// Check for displayName change (can be updated in-place)
 	if req.State.DisplayName != req.Inputs.DisplayName {
-		detailedDiff["displayName"] = p.PropertyDiff{Kind: p.Update}
-		diff.HasChanges = true
+		update("displayName")
 	}
-
-	// Check for slug change (can be updated in-place)
-	if req.State.Slug != req.Inputs.Slug {
-		detailedDiff["slug"] = p.PropertyDiff{Kind: p.Update}
-		diff.HasChanges = true
-	}
-
-	// Check for isRequired change (can be updated in-place)
 	if req.State.IsRequired != req.Inputs.IsRequired {
-		detailedDiff["isRequired"] = p.PropertyDiff{Kind: p.Update}
-		diff.HasChanges = true
+		update("isRequired")
 	}
-
-	// Check for helpText change (can be updated in-place)
 	if req.State.HelpText != req.Inputs.HelpText {
-		detailedDiff["helpText"] = p.PropertyDiff{Kind: p.Update}
-		diff.HasChanges = true
+		update("helpText")
 	}
 
-	// Note: validations comparison is simplified here.
-	// In a production system, you might want deep comparison of the map.
-	// For now, we assume if the map reference changed, it needs updating.
-
-	// Only set DetailedDiff if changes were detected
 	if len(detailedDiff) > 0 {
 		diff.DetailedDiff = detailedDiff
 	}
-
 	return diff, nil
+}
+
+// validateCollectionFieldArgs validates the inputs shared by Create and Update.
+func validateCollectionFieldArgs(args CollectionFieldArgs) error {
+	if err := ValidateCollectionID(args.CollectionID); err != nil {
+		return fmt.Errorf("validation failed for CollectionField resource: %w", err)
+	}
+	if err := ValidateFieldType(args.Type); err != nil {
+		return fmt.Errorf("validation failed for CollectionField resource: %w", err)
+	}
+	if err := ValidateFieldDisplayName(args.DisplayName); err != nil {
+		return fmt.Errorf("validation failed for CollectionField resource: %w", err)
+	}
+	if err := ValidateFieldMetadata(args.Type, args.Metadata); err != nil {
+		return fmt.Errorf("validation failed for CollectionField resource: %w", err)
+	}
+	return nil
 }
 
 // Create creates a new field for a Webflow collection.
 func (f *CollectionField) Create(
 	ctx context.Context, req infer.CreateRequest[CollectionFieldArgs],
 ) (infer.CreateResponse[CollectionFieldState], error) {
-	// Validate inputs BEFORE generating resource ID
-	if err := ValidateCollectionID(req.Inputs.CollectionID); err != nil {
-		return infer.CreateResponse[CollectionFieldState]{}, fmt.Errorf(
-			"validation failed for CollectionField resource: %w", err)
-	}
-	if err := ValidateFieldType(req.Inputs.Type); err != nil {
-		return infer.CreateResponse[CollectionFieldState]{}, fmt.Errorf(
-			"validation failed for CollectionField resource: %w", err)
-	}
-	if err := ValidateFieldDisplayName(req.Inputs.DisplayName); err != nil {
-		return infer.CreateResponse[CollectionFieldState]{}, fmt.Errorf(
-			"validation failed for CollectionField resource: %w", err)
-	}
-
 	state := CollectionFieldState{
 		CollectionFieldArgs: req.Inputs,
-		FieldID:             "", // Will be populated from API response
 		IsEditable:          true,
 	}
 
-	// During preview, return expected state without making API calls
+	// During preview, return the expected state without validating or calling the API:
+	// inputs that come from other resources (e.g. collectionId) are unknown at this point.
+	// The ID is left empty so dependents see it as unknown.
 	if req.DryRun {
-		// Generate a predictable ID for dry-run
-		previewID := "preview-field"
-		return infer.CreateResponse[CollectionFieldState]{
-			ID:     GenerateCollectionFieldResourceID(req.Inputs.CollectionID, previewID),
-			Output: state,
-		}, nil
+		return infer.CreateResponse[CollectionFieldState]{Output: state}, nil
 	}
 
-	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	if err := validateCollectionFieldArgs(req.Inputs); err != nil {
+		return infer.CreateResponse[CollectionFieldState]{}, err
+	}
+
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.CreateResponse[CollectionFieldState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API
-	response, err := PostCollectionField(
-		ctx, client, req.Inputs.CollectionID,
-		req.Inputs.Type, req.Inputs.DisplayName, req.Inputs.Slug,
-		req.Inputs.HelpText, req.Inputs.IsRequired, req.Inputs.Validations,
-	)
+	// slug and validations are deliberately not sent: the Create Field endpoint does not
+	// accept them (see CollectionFieldCreateRequest).
+	isRequired := req.Inputs.IsRequired
+	response, err := PostCollectionField(ctx, client, req.Inputs.CollectionID, CollectionFieldCreateRequest{
+		Type:        req.Inputs.Type,
+		DisplayName: req.Inputs.DisplayName,
+		IsRequired:  &isRequired,
+		HelpText:    req.Inputs.HelpText,
+		Metadata:    req.Inputs.Metadata,
+	})
 	if err != nil {
 		return infer.CreateResponse[CollectionFieldState]{}, fmt.Errorf("failed to create collection field: %w", err)
 	}
 
-	// Defensive check: Ensure Webflow API returned a valid field ID
 	if response.ID == "" {
 		return infer.CreateResponse[CollectionFieldState]{}, errors.New(
 			"webflow API returned empty field ID - " +
 				"this is unexpected and may indicate an API issue")
 	}
 
-	// Update state with API response
 	state.FieldID = response.ID
 	state.IsEditable = response.IsEditable
-
-	resourceID := GenerateCollectionFieldResourceID(req.Inputs.CollectionID, response.ID)
+	applyFieldResponseOutputs(&state, response)
 
 	return infer.CreateResponse[CollectionFieldState]{
-		ID:     resourceID,
+		ID:     GenerateCollectionFieldResourceID(req.Inputs.CollectionID, response.ID),
 		Output: state,
 	}, nil
 }
@@ -246,47 +291,63 @@ func (f *CollectionField) Create(
 func (f *CollectionField) Read(
 	ctx context.Context, req infer.ReadRequest[CollectionFieldArgs, CollectionFieldState],
 ) (infer.ReadResponse[CollectionFieldArgs, CollectionFieldState], error) {
-	// Extract collectionID and fieldID from resource ID
 	collectionID, fieldID, err := ExtractIDsFromCollectionFieldResourceID(req.ID)
 	if err != nil {
 		return infer.ReadResponse[CollectionFieldArgs, CollectionFieldState]{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
+	if err := ValidateCollectionID(collectionID); err != nil {
+		return infer.ReadResponse[CollectionFieldArgs, CollectionFieldState]{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
+	if err := ValidateFieldID(fieldID); err != nil {
+		return infer.ReadResponse[CollectionFieldArgs, CollectionFieldState]{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
 
-	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[CollectionFieldArgs, CollectionFieldState]{}, fmt.Errorf(
 			"failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API to get field details
 	response, err := GetCollectionField(ctx, client, collectionID, fieldID)
 	if err != nil {
-		// Resource not found - return empty ID to signal deletion
-		if strings.Contains(err.Error(), "not found") {
-			return infer.ReadResponse[CollectionFieldArgs, CollectionFieldState]{
-				ID: "",
-			}, nil
+		if IsNotFound(err) {
+			// Collection or field no longer exists - return empty ID to signal deletion
+			return infer.ReadResponse[CollectionFieldArgs, CollectionFieldState]{}, nil
 		}
 		return infer.ReadResponse[CollectionFieldArgs, CollectionFieldState]{}, fmt.Errorf(
 			"failed to read collection field: %w", err)
 	}
 
-	// Build current state from API response
+	// Inputs the user omitted stay omitted (metadata is "don't care" when absent); an
+	// explicit metadata is refreshed from the API so drift is visible. slug and validations
+	// are deprecated inputs the API does not accept: they are left exactly as the user wrote
+	// them and only the state (outputs) reflects what Webflow reports.
 	currentInputs := CollectionFieldArgs{
 		CollectionID: collectionID,
 		Type:         response.Type,
 		DisplayName:  response.DisplayName,
-		Slug:         response.Slug,
+		Slug:         req.Inputs.Slug,
 		IsRequired:   response.IsRequired,
 		HelpText:     response.HelpText,
-		Validations:  response.Validations,
+		Validations:  req.Inputs.Validations,
+		Metadata:     req.Inputs.Metadata,
 	}
+	if len(req.Inputs.Metadata) > 0 {
+		// Get Collection reports no metadata; it is reconstructed from validations. Inputs get
+		// the user-facing shape (option names only), state keeps the Webflow option IDs.
+		if len(response.Metadata) > 0 {
+			currentInputs.Metadata = response.Metadata
+		} else {
+			currentInputs.Metadata = metadataFromValidations(response.Type, response.Validations, false)
+		}
+	}
+
 	currentState := CollectionFieldState{
 		CollectionFieldArgs: currentInputs,
 		FieldID:             response.ID,
 		IsEditable:          response.IsEditable,
 	}
+	applyFieldResponseOutputs(&currentState, response)
 
 	return infer.ReadResponse[CollectionFieldArgs, CollectionFieldState]{
 		ID:     req.ID,
@@ -295,80 +356,102 @@ func (f *CollectionField) Read(
 	}, nil
 }
 
-// Update modifies an existing collection field.
+// Update modifies the mutable properties (displayName, isRequired, helpText) of a field.
 func (f *CollectionField) Update(
 	ctx context.Context, req infer.UpdateRequest[CollectionFieldArgs, CollectionFieldState],
 ) (infer.UpdateResponse[CollectionFieldState], error) {
-	// Validate inputs BEFORE making API calls
-	if err := ValidateCollectionID(req.Inputs.CollectionID); err != nil {
-		return infer.UpdateResponse[CollectionFieldState]{}, fmt.Errorf(
-			"validation failed for CollectionField resource: %w", err)
-	}
-	if err := ValidateFieldDisplayName(req.Inputs.DisplayName); err != nil {
-		return infer.UpdateResponse[CollectionFieldState]{}, fmt.Errorf(
-			"validation failed for CollectionField resource: %w", err)
-	}
-
 	state := CollectionFieldState{
 		CollectionFieldArgs: req.Inputs,
 		FieldID:             req.State.FieldID,    // Preserve field ID
 		IsEditable:          req.State.IsEditable, // Preserve editability flag
 	}
+	// slug, validations and metadata are outputs recorded from the API; carry them over.
+	state.Slug = req.State.Slug
+	state.Validations = req.State.Validations
+	if len(req.State.Metadata) > 0 {
+		state.Metadata = req.State.Metadata
+	}
 
 	// During preview, return expected state without making API calls
 	if req.DryRun {
-		return infer.UpdateResponse[CollectionFieldState]{
-			Output: state,
-		}, nil
+		return infer.UpdateResponse[CollectionFieldState]{Output: state}, nil
 	}
 
-	// Extract the Webflow field ID from the Pulumi resource ID
-	_, fieldID, err := ExtractIDsFromCollectionFieldResourceID(req.ID)
+	if err := validateCollectionFieldArgs(req.Inputs); err != nil {
+		return infer.UpdateResponse[CollectionFieldState]{}, err
+	}
+
+	collectionID, fieldID, err := ExtractIDsFromCollectionFieldResourceID(req.ID)
 	if err != nil {
 		return infer.UpdateResponse[CollectionFieldState]{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
+	if err := ValidateCollectionID(collectionID); err != nil {
+		return infer.UpdateResponse[CollectionFieldState]{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
+	if err := ValidateFieldID(fieldID); err != nil {
+		return infer.UpdateResponse[CollectionFieldState]{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
 
-	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.UpdateResponse[CollectionFieldState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API
-	response, err := PutCollectionField(
-		ctx, client, req.Inputs.CollectionID, fieldID,
-		req.Inputs.DisplayName, req.Inputs.Slug, req.Inputs.HelpText,
-		req.Inputs.IsRequired, req.Inputs.Validations,
-	)
+	isRequired := req.Inputs.IsRequired
+	response, err := PatchCollectionField(ctx, client, collectionID, fieldID, CollectionFieldUpdateRequest{
+		IsRequired:  &isRequired,
+		DisplayName: req.Inputs.DisplayName,
+		HelpText:    req.Inputs.HelpText,
+	})
 	if err != nil {
 		return infer.UpdateResponse[CollectionFieldState]{}, fmt.Errorf("failed to update collection field: %w", err)
 	}
 
-	// Update state with API response
 	state.IsEditable = response.IsEditable
+	applyFieldResponseOutputs(&state, response)
 
-	return infer.UpdateResponse[CollectionFieldState]{
-		Output: state,
-	}, nil
+	return infer.UpdateResponse[CollectionFieldState]{Output: state}, nil
+}
+
+// applyFieldResponseOutputs records the server-owned properties of a field response in state:
+// the Webflow-generated slug, the validations Webflow reports and the metadata (taken from
+// the response when present, otherwise reconstructed from validations, keeping option IDs).
+// Properties the response does not carry keep their current state value.
+func applyFieldResponseOutputs(state *CollectionFieldState, response *CollectionFieldResponse) {
+	if response.Slug != "" {
+		state.Slug = response.Slug
+	}
+	if response.Validations != nil {
+		state.Validations = response.Validations
+	}
+	if len(response.Metadata) > 0 {
+		state.Metadata = response.Metadata
+	} else if metadata := metadataFromValidations(response.Type, response.Validations, true); metadata != nil {
+		state.Metadata = metadata
+	}
 }
 
 // Delete removes a field from a Webflow collection.
 func (f *CollectionField) Delete(
 	ctx context.Context, req infer.DeleteRequest[CollectionFieldState],
 ) (infer.DeleteResponse, error) {
-	// Extract collectionID and fieldID from resource ID
 	collectionID, fieldID, err := ExtractIDsFromCollectionFieldResourceID(req.ID)
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
+	if err := ValidateCollectionID(collectionID); err != nil {
+		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
+	if err := ValidateFieldID(fieldID); err != nil {
+		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
 
-	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API (handles 404 gracefully for idempotency)
+	// 404 is treated as success so deletes are idempotent
 	if err := DeleteCollectionField(ctx, client, collectionID, fieldID); err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("failed to delete collection field: %w", err)
 	}

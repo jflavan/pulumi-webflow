@@ -11,7 +11,7 @@ using Pulumi;
 namespace Community.Pulumi.Webflow
 {
     /// <summary>
-    /// Manages fields for a Webflow CMS collection. Collection fields define the structure of content items in a collection. Note: The field type cannot be changed after creation - changing it requires replacement (delete + recreate).
+    /// Manages fields for a Webflow CMS collection. Collection fields define the structure of content items in a collection. Only displayName, helpText and isRequired can be updated in place; type and metadata cannot be changed after creation and changing them requires replacement (delete + recreate). The Webflow API does not accept a slug or validations when creating a field: the slug is generated from displayName and both are reported as outputs only.
     /// </summary>
     [WebflowResourceType("webflow:index:CollectionField")]
     public partial class CollectionField : global::Pulumi.CustomResource
@@ -53,19 +53,25 @@ namespace Community.Pulumi.Webflow
         public Output<bool?> IsRequired { get; private set; } = null!;
 
         /// <summary>
-        /// The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName. The slug is used in API requests and exports.
+        /// Type-specific configuration (create-only). Required for Option fields: {"options": [{"name": "Draft"}, {"name": "Published"}]}. Required for Reference and MultiReference fields: {"collectionId": "&lt;referenced collection ID&gt;"}. Not accepted for other field types. Changing metadata requires replacement.
+        /// </summary>
+        [Output("metadata")]
+        public Output<ImmutableDictionary<string, object>?> Metadata { get; private set; } = null!;
+
+        /// <summary>
+        /// Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.
         /// </summary>
         [Output("slug")]
         public Output<string?> Slug { get; private set; } = null!;
 
         /// <summary>
-        /// The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: PlainText, RichText, Image, MultiImage, Video, Link, Email, Phone, Number, DateTime, Switch, Color, Option, File, Reference, MultiReference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
+        /// The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: Color, DateTime, Email, File, Image, Link, MultiImage, Number, Phone, PlainText, RichText, Switch, VideoLink, Option, MultiReference, Reference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
         /// </summary>
         [Output("type")]
         public Output<string> Type { get; private set; } = null!;
 
         /// <summary>
-        /// Type-specific validation rules (optional). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Refer to Webflow API documentation for validation options for each field type.
+        /// Deprecated: the Webflow API does not accept validations when creating a field ("field validation is currently not available through the API"). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.
         /// </summary>
         [Output("validations")]
         public Output<ImmutableDictionary<string, object>?> Validations { get; private set; } = null!;
@@ -140,14 +146,26 @@ namespace Community.Pulumi.Webflow
         [Input("isRequired")]
         public Input<bool>? IsRequired { get; set; }
 
+        [Input("metadata")]
+        private InputMap<object>? _metadata;
+
         /// <summary>
-        /// The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName. The slug is used in API requests and exports.
+        /// Type-specific configuration (create-only). Required for Option fields: {"options": [{"name": "Draft"}, {"name": "Published"}]}. Required for Reference and MultiReference fields: {"collectionId": "&lt;referenced collection ID&gt;"}. Not accepted for other field types. Changing metadata requires replacement.
+        /// </summary>
+        public InputMap<object> Metadata
+        {
+            get => _metadata ?? (_metadata = new InputMap<object>());
+            set => _metadata = value;
+        }
+
+        /// <summary>
+        /// Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.
         /// </summary>
         [Input("slug")]
         public Input<string>? Slug { get; set; }
 
         /// <summary>
-        /// The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: PlainText, RichText, Image, MultiImage, Video, Link, Email, Phone, Number, DateTime, Switch, Color, Option, File, Reference, MultiReference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
+        /// The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: Color, DateTime, Email, File, Image, Link, MultiImage, Number, Phone, PlainText, RichText, Switch, VideoLink, Option, MultiReference, Reference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
         /// </summary>
         [Input("type", required: true)]
         public Input<string> Type { get; set; } = null!;
@@ -156,8 +174,9 @@ namespace Community.Pulumi.Webflow
         private InputMap<object>? _validations;
 
         /// <summary>
-        /// Type-specific validation rules (optional). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Refer to Webflow API documentation for validation options for each field type.
+        /// Deprecated: the Webflow API does not accept validations when creating a field ("field validation is currently not available through the API"). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.
         /// </summary>
+        [Obsolete(@"The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs.")]
         public InputMap<object> Validations
         {
             get => _validations ?? (_validations = new InputMap<object>());

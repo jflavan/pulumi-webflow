@@ -22,6 +22,7 @@ class EcommerceSettingsArgs:
                  site_id: pulumi.Input[_builtins.str]):
         """
         The set of arguments for constructing a EcommerceSettings resource.
+
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). The site must have ecommerce enabled through the Webflow dashboard. You can find your site ID in the Webflow dashboard under Site Settings.
         """
         pulumi.set(__self__, "site_id", site_id)
@@ -45,7 +46,7 @@ class EcommerceSettings(pulumi.CustomResource):
     def __init__(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         """
         Manages (imports) ecommerce settings for a Webflow site. This is a read-only resource that allows you to track and reference existing ecommerce settings. Ecommerce must be enabled through the Webflow dashboard before this resource can be used. Use this resource to access the site's default currency and verify ecommerce is enabled.
@@ -78,7 +79,7 @@ class EcommerceSettings(pulumi.CustomResource):
     def _internal_init(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         opts = pulumi.ResourceOptions.merge(_utilities.get_resource_opts_defaults(), opts)
         if not isinstance(opts, pulumi.ResourceOptions):
@@ -130,7 +131,7 @@ class EcommerceSettings(pulumi.CustomResource):
 
     @_builtins.property
     @pulumi.getter(name="defaultCurrency")
-    def default_currency(self) -> pulumi.Output[_builtins.str]:
+    def default_currency(self) -> pulumi.Output[Optional[_builtins.str]]:
         """
         The three-letter ISO 4217 currency code for the site (e.g., 'USD', 'EUR', 'GBP'). This is the default currency used for ecommerce transactions on this site. This value is set in the Webflow dashboard and is read-only.
         """

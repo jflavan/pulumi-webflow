@@ -8,6 +8,7 @@ import com.pulumi.core.annotations.Import;
 import com.pulumi.exceptions.MissingRequiredPropertyException;
 import java.lang.Boolean;
 import java.lang.String;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import javax.annotation.Nullable;
@@ -33,14 +34,14 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
     }
 
     /**
-     * The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. This is useful for organizing multiple sites into logical groups within your workspace.
+     * The folder ID where the site will be organized in the Webflow dashboard (24-character lowercase hexadecimal string). Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
      * 
      */
     @Import(name="parentFolderId")
     private @Nullable Output<String> parentFolderId;
 
     /**
-     * @return The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. This is useful for organizing multiple sites into logical groups within your workspace.
+     * @return The folder ID where the site will be organized in the Webflow dashboard (24-character lowercase hexadecimal string). Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
      * 
      */
     public Optional<Output<String>> parentFolderId() {
@@ -48,14 +49,14 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
     }
 
     /**
-     * Automatically publish the site after creation or updates. When set to true, the provider will publish the site to production after successfully creating or updating it. Default: false (manual publishing required). Note: Site must have at least one published version before automatic publishing will work. If publishing fails, the entire operation will fail with an error (site may exist but Pulumi will report failure). Recommendation: Set to false for initial site creation, then enable after first manual publish.
+     * Automatically publish the site after creation or updates. When set to true, the provider calls the Webflow publish endpoint after successfully creating or updating the site, using `publishToWebflowSubdomain`, `publishCustomDomains` and `publishPageId` to build the publish request. If neither `publishToWebflowSubdomain` nor `publishCustomDomains` is set, the site is published to its webflow.io subdomain. Default: false (manual publishing required). If publishing fails, the operation fails with an error (the site may exist but Pulumi will report failure).
      * 
      */
     @Import(name="publish")
     private @Nullable Output<Boolean> publish;
 
     /**
-     * @return Automatically publish the site after creation or updates. When set to true, the provider will publish the site to production after successfully creating or updating it. Default: false (manual publishing required). Note: Site must have at least one published version before automatic publishing will work. If publishing fails, the entire operation will fail with an error (site may exist but Pulumi will report failure). Recommendation: Set to false for initial site creation, then enable after first manual publish.
+     * @return Automatically publish the site after creation or updates. When set to true, the provider calls the Webflow publish endpoint after successfully creating or updating the site, using `publishToWebflowSubdomain`, `publishCustomDomains` and `publishPageId` to build the publish request. If neither `publishToWebflowSubdomain` nor `publishCustomDomains` is set, the site is published to its webflow.io subdomain. Default: false (manual publishing required). If publishing fails, the operation fails with an error (the site may exist but Pulumi will report failure).
      * 
      */
     public Optional<Output<Boolean>> publish() {
@@ -63,14 +64,59 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
     }
 
     /**
-     * The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **WARNING: This field is IMMUTABLE.** Once set, it cannot be changed. Changing this value will trigger a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., &#39;mast-framework&#39;, &#39;blank&#39;). Consider using resource protection (`protect: true`) to prevent accidental replacement.
+     * When `publish` is true, the list of custom domain IDs (not host names) to publish to. Maps to the `customDomains` field of the Webflow publish endpoint. Custom domain IDs can be read from the Webflow site settings or the sites API.
+     * 
+     */
+    @Import(name="publishCustomDomains")
+    private @Nullable Output<List<String>> publishCustomDomains;
+
+    /**
+     * @return When `publish` is true, the list of custom domain IDs (not host names) to publish to. Maps to the `customDomains` field of the Webflow publish endpoint. Custom domain IDs can be read from the Webflow site settings or the sites API.
+     * 
+     */
+    public Optional<Output<List<String>>> publishCustomDomains() {
+        return Optional.ofNullable(this.publishCustomDomains);
+    }
+
+    /**
+     * When `publish` is true, publish only the page with this ID (24-character lowercase hexadecimal string) instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
+     * 
+     */
+    @Import(name="publishPageId")
+    private @Nullable Output<String> publishPageId;
+
+    /**
+     * @return When `publish` is true, publish only the page with this ID (24-character lowercase hexadecimal string) instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
+     * 
+     */
+    public Optional<Output<String>> publishPageId() {
+        return Optional.ofNullable(this.publishPageId);
+    }
+
+    /**
+     * When `publish` is true, publish to the site&#39;s default webflow.io subdomain. Maps to the `publishToWebflowSubdomain` field of the Webflow publish endpoint. Default: false.
+     * 
+     */
+    @Import(name="publishToWebflowSubdomain")
+    private @Nullable Output<Boolean> publishToWebflowSubdomain;
+
+    /**
+     * @return When `publish` is true, publish to the site&#39;s default webflow.io subdomain. Maps to the `publishToWebflowSubdomain` field of the Webflow publish endpoint. Default: false.
+     * 
+     */
+    public Optional<Output<Boolean>> publishToWebflowSubdomain() {
+        return Optional.ofNullable(this.publishToWebflowSubdomain);
+    }
+
+    /**
+     * The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **This value only affects creation.** The Webflow API does not report which template a site was created from, so it cannot be read back: after `pulumi import` the state holds no templateName, and adding one to the program later does not change or replace the site. **WARNING:** changing from one non-empty template to a different non-empty template triggers a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., &#39;mast-framework&#39;, &#39;blank&#39;). Consider using resource protection (`protect: true`) to prevent accidental replacement.
      * 
      */
     @Import(name="templateName")
     private @Nullable Output<String> templateName;
 
     /**
-     * @return The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **WARNING: This field is IMMUTABLE.** Once set, it cannot be changed. Changing this value will trigger a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., &#39;mast-framework&#39;, &#39;blank&#39;). Consider using resource protection (`protect: true`) to prevent accidental replacement.
+     * @return The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **This value only affects creation.** The Webflow API does not report which template a site was created from, so it cannot be read back: after `pulumi import` the state holds no templateName, and adding one to the program later does not change or replace the site. **WARNING:** changing from one non-empty template to a different non-empty template triggers a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., &#39;mast-framework&#39;, &#39;blank&#39;). Consider using resource protection (`protect: true`) to prevent accidental replacement.
      * 
      */
     public Optional<Output<String>> templateName() {
@@ -78,14 +124,14 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
     }
 
     /**
-     * The Webflow workspace ID where the site will be created. Required for site creation (Enterprise workspace required by Webflow API). Example: &#39;5f0c8c9e1c9d440000e8d8c3&#39;. You can find your workspace ID in the Webflow dashboard under Account Settings &gt; Workspace.
+     * The Webflow workspace ID where the site will be created (24-character lowercase hexadecimal string). Required for site creation (Enterprise workspace and the `workspace:write` scope are required by the Webflow API). Example: &#39;5f0c8c9e1c9d440000e8d8c3&#39;. You can find your workspace ID in the Webflow dashboard under Account Settings &gt; Workspace. Changing this value replaces the site.
      * 
      */
     @Import(name="workspaceId", required=true)
     private Output<String> workspaceId;
 
     /**
-     * @return The Webflow workspace ID where the site will be created. Required for site creation (Enterprise workspace required by Webflow API). Example: &#39;5f0c8c9e1c9d440000e8d8c3&#39;. You can find your workspace ID in the Webflow dashboard under Account Settings &gt; Workspace.
+     * @return The Webflow workspace ID where the site will be created (24-character lowercase hexadecimal string). Required for site creation (Enterprise workspace and the `workspace:write` scope are required by the Webflow API). Example: &#39;5f0c8c9e1c9d440000e8d8c3&#39;. You can find your workspace ID in the Webflow dashboard under Account Settings &gt; Workspace. Changing this value replaces the site.
      * 
      */
     public Output<String> workspaceId() {
@@ -98,6 +144,9 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
         this.displayName = $.displayName;
         this.parentFolderId = $.parentFolderId;
         this.publish = $.publish;
+        this.publishCustomDomains = $.publishCustomDomains;
+        this.publishPageId = $.publishPageId;
+        this.publishToWebflowSubdomain = $.publishToWebflowSubdomain;
         this.templateName = $.templateName;
         this.workspaceId = $.workspaceId;
     }
@@ -142,7 +191,7 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param parentFolderId The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. This is useful for organizing multiple sites into logical groups within your workspace.
+         * @param parentFolderId The folder ID where the site will be organized in the Webflow dashboard (24-character lowercase hexadecimal string). Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
          * 
          * @return builder
          * 
@@ -153,7 +202,7 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param parentFolderId The folder ID where the site will be organized in the Webflow dashboard. Optional - the site will be placed at the workspace root if not specified. This is useful for organizing multiple sites into logical groups within your workspace.
+         * @param parentFolderId The folder ID where the site will be organized in the Webflow dashboard (24-character lowercase hexadecimal string). Optional - the site will be placed at the workspace root if not specified. Removing this property from your program moves the site back to the workspace root. This is useful for organizing multiple sites into logical groups within your workspace.
          * 
          * @return builder
          * 
@@ -163,7 +212,7 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param publish Automatically publish the site after creation or updates. When set to true, the provider will publish the site to production after successfully creating or updating it. Default: false (manual publishing required). Note: Site must have at least one published version before automatic publishing will work. If publishing fails, the entire operation will fail with an error (site may exist but Pulumi will report failure). Recommendation: Set to false for initial site creation, then enable after first manual publish.
+         * @param publish Automatically publish the site after creation or updates. When set to true, the provider calls the Webflow publish endpoint after successfully creating or updating the site, using `publishToWebflowSubdomain`, `publishCustomDomains` and `publishPageId` to build the publish request. If neither `publishToWebflowSubdomain` nor `publishCustomDomains` is set, the site is published to its webflow.io subdomain. Default: false (manual publishing required). If publishing fails, the operation fails with an error (the site may exist but Pulumi will report failure).
          * 
          * @return builder
          * 
@@ -174,7 +223,7 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param publish Automatically publish the site after creation or updates. When set to true, the provider will publish the site to production after successfully creating or updating it. Default: false (manual publishing required). Note: Site must have at least one published version before automatic publishing will work. If publishing fails, the entire operation will fail with an error (site may exist but Pulumi will report failure). Recommendation: Set to false for initial site creation, then enable after first manual publish.
+         * @param publish Automatically publish the site after creation or updates. When set to true, the provider calls the Webflow publish endpoint after successfully creating or updating the site, using `publishToWebflowSubdomain`, `publishCustomDomains` and `publishPageId` to build the publish request. If neither `publishToWebflowSubdomain` nor `publishCustomDomains` is set, the site is published to its webflow.io subdomain. Default: false (manual publishing required). If publishing fails, the operation fails with an error (the site may exist but Pulumi will report failure).
          * 
          * @return builder
          * 
@@ -184,7 +233,80 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param templateName The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **WARNING: This field is IMMUTABLE.** Once set, it cannot be changed. Changing this value will trigger a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., &#39;mast-framework&#39;, &#39;blank&#39;). Consider using resource protection (`protect: true`) to prevent accidental replacement.
+         * @param publishCustomDomains When `publish` is true, the list of custom domain IDs (not host names) to publish to. Maps to the `customDomains` field of the Webflow publish endpoint. Custom domain IDs can be read from the Webflow site settings or the sites API.
+         * 
+         * @return builder
+         * 
+         */
+        public Builder publishCustomDomains(@Nullable Output<List<String>> publishCustomDomains) {
+            $.publishCustomDomains = publishCustomDomains;
+            return this;
+        }
+
+        /**
+         * @param publishCustomDomains When `publish` is true, the list of custom domain IDs (not host names) to publish to. Maps to the `customDomains` field of the Webflow publish endpoint. Custom domain IDs can be read from the Webflow site settings or the sites API.
+         * 
+         * @return builder
+         * 
+         */
+        public Builder publishCustomDomains(List<String> publishCustomDomains) {
+            return publishCustomDomains(Output.of(publishCustomDomains));
+        }
+
+        /**
+         * @param publishCustomDomains When `publish` is true, the list of custom domain IDs (not host names) to publish to. Maps to the `customDomains` field of the Webflow publish endpoint. Custom domain IDs can be read from the Webflow site settings or the sites API.
+         * 
+         * @return builder
+         * 
+         */
+        public Builder publishCustomDomains(String... publishCustomDomains) {
+            return publishCustomDomains(List.of(publishCustomDomains));
+        }
+
+        /**
+         * @param publishPageId When `publish` is true, publish only the page with this ID (24-character lowercase hexadecimal string) instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
+         * 
+         * @return builder
+         * 
+         */
+        public Builder publishPageId(@Nullable Output<String> publishPageId) {
+            $.publishPageId = publishPageId;
+            return this;
+        }
+
+        /**
+         * @param publishPageId When `publish` is true, publish only the page with this ID (24-character lowercase hexadecimal string) instead of the whole site. Maps to the `pageId` field of the Webflow publish endpoint.
+         * 
+         * @return builder
+         * 
+         */
+        public Builder publishPageId(String publishPageId) {
+            return publishPageId(Output.of(publishPageId));
+        }
+
+        /**
+         * @param publishToWebflowSubdomain When `publish` is true, publish to the site&#39;s default webflow.io subdomain. Maps to the `publishToWebflowSubdomain` field of the Webflow publish endpoint. Default: false.
+         * 
+         * @return builder
+         * 
+         */
+        public Builder publishToWebflowSubdomain(@Nullable Output<Boolean> publishToWebflowSubdomain) {
+            $.publishToWebflowSubdomain = publishToWebflowSubdomain;
+            return this;
+        }
+
+        /**
+         * @param publishToWebflowSubdomain When `publish` is true, publish to the site&#39;s default webflow.io subdomain. Maps to the `publishToWebflowSubdomain` field of the Webflow publish endpoint. Default: false.
+         * 
+         * @return builder
+         * 
+         */
+        public Builder publishToWebflowSubdomain(Boolean publishToWebflowSubdomain) {
+            return publishToWebflowSubdomain(Output.of(publishToWebflowSubdomain));
+        }
+
+        /**
+         * @param templateName The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **This value only affects creation.** The Webflow API does not report which template a site was created from, so it cannot be read back: after `pulumi import` the state holds no templateName, and adding one to the program later does not change or replace the site. **WARNING:** changing from one non-empty template to a different non-empty template triggers a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., &#39;mast-framework&#39;, &#39;blank&#39;). Consider using resource protection (`protect: true`) to prevent accidental replacement.
          * 
          * @return builder
          * 
@@ -195,7 +317,7 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param templateName The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **WARNING: This field is IMMUTABLE.** Once set, it cannot be changed. Changing this value will trigger a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., &#39;mast-framework&#39;, &#39;blank&#39;). Consider using resource protection (`protect: true`) to prevent accidental replacement.
+         * @param templateName The template to use for site creation. Optional - if not specified, Webflow will create a blank site. **This value only affects creation.** The Webflow API does not report which template a site was created from, so it cannot be read back: after `pulumi import` the state holds no templateName, and adding one to the program later does not change or replace the site. **WARNING:** changing from one non-empty template to a different non-empty template triggers a REPLACE operation, which will: (1) DELETE your existing site and ALL its content (pages, CMS items, assets, etc.), (2) CREATE a new site with the new template, (3) REPLACE all dependent resources (redirects, robots.txt, etc.). This is a DESTRUCTIVE operation that cannot be undone. Use any valid Webflow template identifier (e.g., &#39;mast-framework&#39;, &#39;blank&#39;). Consider using resource protection (`protect: true`) to prevent accidental replacement.
          * 
          * @return builder
          * 
@@ -205,7 +327,7 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param workspaceId The Webflow workspace ID where the site will be created. Required for site creation (Enterprise workspace required by Webflow API). Example: &#39;5f0c8c9e1c9d440000e8d8c3&#39;. You can find your workspace ID in the Webflow dashboard under Account Settings &gt; Workspace.
+         * @param workspaceId The Webflow workspace ID where the site will be created (24-character lowercase hexadecimal string). Required for site creation (Enterprise workspace and the `workspace:write` scope are required by the Webflow API). Example: &#39;5f0c8c9e1c9d440000e8d8c3&#39;. You can find your workspace ID in the Webflow dashboard under Account Settings &gt; Workspace. Changing this value replaces the site.
          * 
          * @return builder
          * 
@@ -216,7 +338,7 @@ public final class SiteArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param workspaceId The Webflow workspace ID where the site will be created. Required for site creation (Enterprise workspace required by Webflow API). Example: &#39;5f0c8c9e1c9d440000e8d8c3&#39;. You can find your workspace ID in the Webflow dashboard under Account Settings &gt; Workspace.
+         * @param workspaceId The Webflow workspace ID where the site will be created (24-character lowercase hexadecimal string). Required for site creation (Enterprise workspace and the `workspace:write` scope are required by the Webflow API). Example: &#39;5f0c8c9e1c9d440000e8d8c3&#39;. You can find your workspace ID in the Webflow dashboard under Account Settings &gt; Workspace. Changing this value replaces the site.
          * 
          * @return builder
          * 

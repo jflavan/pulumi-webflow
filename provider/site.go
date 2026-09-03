@@ -7,15 +7,12 @@
 package provider
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
-	"time"
 )
 
 // Site represents a Webflow site configuration.
@@ -40,11 +37,52 @@ type Site struct {
 	// ParentFolderID is the folder where the site is organized (optional).
 	ParentFolderID string `json:"parentFolderId,omitempty"`
 	// CustomDomains is the list of custom domains attached to the site (read-only for now).
-	CustomDomains []string `json:"customDomains,omitempty"`
+	// The API returns domain objects ({id, url}); older mocks return plain strings. Both decode.
+	CustomDomains SiteCustomDomains `json:"customDomains,omitempty"`
 	// DataCollectionEnabled indicates if data collection is enabled for the site (read-only).
 	DataCollectionEnabled bool `json:"dataCollectionEnabled,omitempty"`
 	// DataCollectionType is the type of data collection enabled (read-only).
 	DataCollectionType string `json:"dataCollectionType,omitempty"`
+}
+
+// SiteCustomDomains is the list of custom domain URLs attached to a site.
+// The Webflow API returns custom domains as objects ({"id": "...", "url": "example.com"}); this
+// type also accepts a plain string array so that either representation decodes to the URL list.
+type SiteCustomDomains []string
+
+// UnmarshalJSON accepts either ["example.com"] or [{"id": "...", "url": "example.com"}].
+// Elements that carry no usable value (JSON null, "", or an object without id and url) are
+// skipped rather than decoded as an empty string.
+func (d *SiteCustomDomains) UnmarshalJSON(data []byte) error {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	out := make([]string, 0, len(raw))
+	for _, item := range raw {
+		var s string
+		if err := json.Unmarshal(item, &s); err == nil {
+			if s != "" {
+				out = append(out, s)
+			}
+			continue
+		}
+		var obj struct {
+			ID  string `json:"id"`
+			URL string `json:"url"`
+		}
+		if err := json.Unmarshal(item, &obj); err != nil {
+			return fmt.Errorf("customDomains: unexpected element %s", string(item))
+		}
+		switch {
+		case obj.URL != "":
+			out = append(out, obj.URL)
+		case obj.ID != "":
+			out = append(out, obj.ID)
+		}
+	}
+	*d = out
+	return nil
 }
 
 // SiteResponse represents the API response structure for site list/get operations.
@@ -63,26 +101,60 @@ type SiteCreateRequest struct {
 	ParentFolderID string `json:"parentFolderId,omitempty"`
 }
 
-// SiteUpdateRequest represents the request body for updating a site.
-// The Webflow PATCH API accepts "name" (not "displayName") and "parentFolderId".
-// Note: shortName is read-only (auto-generated from name) and cannot be set via API.
-// Note: TimeZone is read-only and cannot be updated via API.
+// SiteUpdateRequest represents the request body for PATCH /v2/sites/{site_id}.
+// The API accepts "name" (not "displayName") and a nullable "parentFolderId".
+//
+// ParentFolderID has three states:
+//   - nil: the field is omitted from the request (leave the folder unchanged)
+//   - pointer to "": the field is sent as JSON null (move the site back to the workspace root)
+//   - pointer to a value: the field is sent as that folder ID
+//
+// Note: shortName and timeZone are read-only and cannot be set via the API.
 type SiteUpdateRequest struct {
-	Name           string `json:"name,omitempty"`
-	ParentFolderID string `json:"parentFolderId,omitempty"`
+	Name           string
+	ParentFolderID *string
 }
 
-// SitePublishRequest represents the request body for publishing a site.
-// All fields are optional - if domains not specified, publishes to all configured domains.
+// MarshalJSON encodes the request, emitting an explicit null for a cleared parentFolderId.
+func (r SiteUpdateRequest) MarshalJSON() ([]byte, error) {
+	body := make(map[string]any, 2)
+	if r.Name != "" {
+		body["name"] = r.Name
+	}
+	if r.ParentFolderID != nil {
+		if *r.ParentFolderID == "" {
+			body["parentFolderId"] = nil
+		} else {
+			body["parentFolderId"] = *r.ParentFolderID
+		}
+	}
+	return json.Marshal(body)
+}
+
+// SitePublishRequest represents the request body for POST /v2/sites/{site_id}/publish.
+// See https://developers.webflow.com/data/reference/sites/publish
 type SitePublishRequest struct {
-	Domains []string `json:"domains,omitempty"`
+	// CustomDomains is the list of custom domain IDs to publish to.
+	CustomDomains []string `json:"customDomains,omitempty"`
+	// PublishToWebflowSubdomain publishes to the site's default webflow.io subdomain.
+	PublishToWebflowSubdomain bool `json:"publishToWebflowSubdomain"`
+	// PageID limits the publish to a single page (added to the API in April 2026).
+	PageID string `json:"pageId,omitempty"`
 }
 
-// SitePublishResponse represents the API response from publishing a site.
+// SitePublishedDomain is one custom domain entry in a publish response.
+type SitePublishedDomain struct {
+	ID            string `json:"id,omitempty"`
+	URL           string `json:"url,omitempty"`
+	LastPublished string `json:"lastPublished,omitempty"`
+}
+
+// SitePublishResponse represents the API response from publishing a site (202 Accepted).
 type SitePublishResponse struct {
-	Published bool   `json:"published,omitempty"`
-	Queued    bool   `json:"queued,omitempty"`
-	Message   string `json:"message,omitempty"`
+	CustomDomains             []SitePublishedDomain `json:"customDomains,omitempty"`
+	PublishToWebflowSubdomain bool                  `json:"publishToWebflowSubdomain,omitempty"`
+	// PublishScope is "site" or "page" depending on whether a single page was published.
+	PublishScope string `json:"publishScope,omitempty"`
 }
 
 // ValidateDisplayName validates that displayName meets Webflow requirements.
@@ -128,7 +200,14 @@ func ValidateShortName(shortName string) error {
 	return nil
 }
 
-// ValidateWorkspaceID validates that workspaceID is a non-empty string.
+// webflowObjectIDPattern matches the 24-character lowercase hexadecimal IDs Webflow assigns
+// to workspaces, folders, sites and other objects.
+var webflowObjectIDPattern = regexp.MustCompile(`^[a-f0-9]{24}$`)
+
+// templateNamePattern matches Webflow template identifiers such as "blank" or "mast-framework".
+var templateNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+// ValidateWorkspaceID validates that workspaceID is a Webflow workspace ID.
 // Workspace IDs are required for site creation via the Webflow API.
 // Actionable error messages explain: what's wrong, expected format, and how to fix it.
 func ValidateWorkspaceID(workspaceID string) error {
@@ -138,576 +217,137 @@ func ValidateWorkspaceID(workspaceID string) error {
 			"Fix: Provide your workspace ID. You can find it in your Webflow dashboard under Account Settings > Workspace. " +
 			"Note: Creating sites via API requires an Enterprise workspace")
 	}
-
+	if !webflowObjectIDPattern.MatchString(workspaceID) {
+		return fmt.Errorf("workspaceId has invalid format: got '%s'. "+
+			"Expected a 24-character lowercase hexadecimal string (e.g., '7a2b3c4d5e6f708192a3b4c5'). "+
+			"Fix: Copy the workspace ID from the Webflow dashboard under Account Settings > Workspace", workspaceID)
+	}
 	return nil
 }
 
-// postSiteBaseURL is used internally for testing to override the API base URL.
-var postSiteBaseURL = ""
+// ValidateParentFolderID validates an optional site folder ID. An empty value is allowed and
+// means the workspace root.
+func ValidateParentFolderID(parentFolderID string) error {
+	if parentFolderID == "" {
+		return nil
+	}
+	if !webflowObjectIDPattern.MatchString(parentFolderID) {
+		return fmt.Errorf("parentFolderId has invalid format: got '%s'. "+
+			"Expected a 24-character lowercase hexadecimal string (e.g., '5f0c8c9e1c9d440000e8d8c3'). "+
+			"Fix: Copy the folder ID from the Webflow dashboard, or omit parentFolderId to keep the site "+
+			"at the workspace root", parentFolderID)
+	}
+	return nil
+}
 
-// patchSiteBaseURL is used internally for testing to override the API base URL.
-var patchSiteBaseURL = ""
+// ValidateTemplateName validates an optional site template identifier.
+func ValidateTemplateName(templateName string) error {
+	if templateName == "" {
+		return nil
+	}
+	if len(templateName) > 255 || !templateNamePattern.MatchString(templateName) {
+		return fmt.Errorf("templateName has invalid format: got '%s'. "+
+			"Expected a Webflow template identifier made of letters, digits, dots, underscores and hyphens "+
+			"(e.g., 'blank', 'mast-framework')", templateName)
+	}
+	return nil
+}
 
-// publishSiteBaseURL is used internally for testing to override the API base URL.
-var publishSiteBaseURL = ""
-
-// deleteSiteBaseURL is used internally for testing to override the API base URL.
-var deleteSiteBaseURL = ""
-
-// getSiteBaseURL is used internally for testing to override the API base URL.
-var getSiteBaseURL = ""
+// ValidatePublishPageID validates the optional page ID used to publish a single page.
+func ValidatePublishPageID(pageID string) error {
+	if pageID == "" {
+		return nil
+	}
+	if err := ValidatePageID(pageID); err != nil {
+		return fmt.Errorf("publishPageId: %w", err)
+	}
+	return nil
+}
 
 // PostSite creates a new site in the specified Webflow workspace.
-// Enterprise workspace is required for site creation via API.
+// Enterprise workspace is required for site creation via API (scope workspace:write).
 // Note: API request uses "name" but response returns "displayName".
+// The documented success status is 201 Created; 200 is tolerated for older API behaviour.
 // Returns the created Site or an error if the request fails.
 func PostSite(
 	ctx context.Context, client *http.Client,
 	workspaceID, displayName, parentFolderID, templateName string,
 ) (*Site, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
-	}
-
-	baseURL := webflowAPIBaseURL
-	if postSiteBaseURL != "" {
-		baseURL = postSiteBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/workspaces/%s/sites", baseURL, workspaceID)
-
-	// Map displayName → name for API request
 	requestBody := SiteCreateRequest{
 		Name:           displayName,
 		TemplateName:   templateName,   // Optional, empty string OK
 		ParentFolderID: parentFolderID, // Optional, empty string OK
 	}
 
-	bodyBytes, err := json.Marshal(requestBody)
+	var site Site
+	_, err := doRequest(ctx, client, http.MethodPost, apiURL("/v2/workspaces/%s/sites", workspaceID),
+		requestBody, &site, http.StatusCreated, http.StatusOK)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+		return nil, err
 	}
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// Exponential backoff on retry
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyBytes))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			// Enhanced rate limiting error message with clear delay information
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			// Wait before next retry if we haven't exhausted retries
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Accept both 200 and 201 as success
-		if resp.StatusCode != 200 && resp.StatusCode != 201 {
-			return nil, handleSiteError(resp.StatusCode, body)
-		}
-
-		var site Site
-		if err := json.Unmarshal(body, &site); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &site, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &site, nil
 }
 
-// PatchSite updates an existing site's configuration.
-// Only changed fields should be sent in the request to minimize API payload.
-// Note: shortName is read-only (auto-generated from name) and cannot be set via API.
-// Note: TimeZone is read-only and cannot be updated via API.
+// PatchSite updates an existing site's configuration via PATCH /v2/sites/{site_id}
+// (scope sites:write).
+//
+// parentFolderID is nullable: nil leaves the folder untouched, a pointer to "" sends JSON null
+// to move the site back to the workspace root, and a pointer to a value moves it to that folder.
+// Note: shortName and timeZone are read-only and cannot be updated via the API.
 // Returns the updated Site or an error if the request fails.
 func PatchSite(
 	ctx context.Context, client *http.Client,
-	siteID, displayName, parentFolderID string,
+	siteID, displayName string, parentFolderID *string,
 ) (*Site, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
-	}
-
-	baseURL := webflowAPIBaseURL
-	if patchSiteBaseURL != "" {
-		baseURL = patchSiteBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s", baseURL, siteID)
-
-	// Build request with provided fields (empty strings = not changed)
-	// Note: Webflow API accepts "name" (not "displayName") for PATCH
-	// Note: shortName is read-only and cannot be set via API
-	// Note: TimeZone is read-only and cannot be updated via API
 	requestBody := SiteUpdateRequest{
 		Name:           displayName,
 		ParentFolderID: parentFolderID,
 	}
 
-	bodyBytes, err := json.Marshal(requestBody)
+	var site Site
+	_, err := doRequest(ctx, client, http.MethodPatch, apiURL("/v2/sites/%s", siteID),
+		requestBody, &site, http.StatusOK)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+		return nil, err
 	}
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// Exponential backoff on retry
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "PATCH", url, bytes.NewReader(bodyBytes))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleSiteError(resp.StatusCode, body)
-		}
-
-		var site Site
-		if err := json.Unmarshal(body, &site); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &site, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &site, nil
 }
 
-// PublishSite publishes a site to production, making it live on configured domains.
-// This operation is asynchronous - the API returns immediately with job status.
-// The actual publish completion happens asynchronously and can be monitored via
-// subsequent Read operations that check the lastPublished timestamp.
-// Returns publish status or an error if the request fails.
+// PublishSite publishes a site (or a single page) via POST /v2/sites/{site_id}/publish.
+// The operation is asynchronous: the API answers 202 Accepted (200 is also accepted) and
+// completes the publish later. Progress can be observed through the lastPublished timestamp
+// on subsequent reads. Requires scope sites:write.
 func PublishSite(
-	ctx context.Context, client *http.Client, siteID string, domains []string,
+	ctx context.Context, client *http.Client, siteID string, request SitePublishRequest,
 ) (*SitePublishResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
-	}
-
-	baseURL := webflowAPIBaseURL
-	if publishSiteBaseURL != "" {
-		baseURL = publishSiteBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s/publish", baseURL, siteID)
-
-	// Build request with optional domains
-	requestBody := SitePublishRequest{
-		Domains: domains,
-	}
-
-	bodyBytes, err := json.Marshal(requestBody)
+	var publishResp SitePublishResponse
+	_, err := doRequest(ctx, client, http.MethodPost, apiURL("/v2/sites/%s/publish", siteID),
+		request, &publishResp, http.StatusAccepted, http.StatusOK)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+		return nil, err
 	}
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// Exponential backoff on retry
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyBytes))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		// Accept both 200 and 202 (Accepted) as success for async publish
-		if resp.StatusCode != 200 && resp.StatusCode != 202 {
-			return nil, handleSiteError(resp.StatusCode, body)
-		}
-
-		var publishResp SitePublishResponse
-		if err := json.Unmarshal(body, &publishResp); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &publishResp, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &publishResp, nil
 }
 
-// DeleteSite permanently deletes a site from Webflow.
+// DeleteSite permanently deletes a site from Webflow (scope sites:write).
 // This operation cannot be undone - the site and all its content will be permanently removed.
 // Returns nil on success (204 No Content), or an error if the request fails.
 // Note: 404 responses are treated as success (idempotent - site already deleted).
 func DeleteSite(ctx context.Context, client *http.Client, siteID string) error {
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("context cancelled: %w", err)
-	}
-
-	baseURL := webflowAPIBaseURL
-	if deleteSiteBaseURL != "" {
-		baseURL = deleteSiteBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s", baseURL, siteID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// Exponential backoff on retry
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "DELETE", url, http.NoBody)
-		if err != nil {
-			return fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle 404 as success (idempotent deletion)
-		if resp.StatusCode == 404 {
-			// Site doesn't exist - deletion already complete
-			return nil
-		}
-
-		// Handle error responses
-		// 204 No Content is the success status for deletion
-		if resp.StatusCode != 204 {
-			return handleSiteError(resp.StatusCode, body)
-		}
-
-		// Success - 204 No Content
-		return nil
-	}
-
-	return fmt.Errorf("max retries exceeded: %w", lastErr)
+	return doDelete(ctx, client, apiURL("/v2/sites/%s", siteID), nil)
 }
 
-// GetSite retrieves the current state of a site from Webflow.
+// GetSite retrieves the current state of a site from Webflow (scope sites:read).
 // Returns the site data if successful, or an error if the request fails.
-// Note: Returns nil, nil (not an error) when site is not found (404) - caller handles appropriately.
+// Note: Returns nil, nil (not an error) when the site is not found (404) - the caller handles that.
 func GetSite(ctx context.Context, client *http.Client, siteID string) (*Site, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
+	var site Site
+	_, err := doRequest(ctx, client, http.MethodGet, apiURL("/v2/sites/%s", siteID), nil, &site, http.StatusOK)
+	if err != nil {
+		if IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
 	}
-
-	baseURL := webflowAPIBaseURL
-	if getSiteBaseURL != "" {
-		baseURL = getSiteBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s", baseURL, siteID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// Exponential backoff on retry
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle 404 Not Found - site was deleted externally
-		// This is NOT an error in the context of Read - caller will handle appropriately
-		if resp.StatusCode == 404 {
-			return nil, nil // Return nil, nil to signal "site not found"
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleSiteError(resp.StatusCode, body)
-		}
-
-		// Parse successful response (200 OK)
-		var siteData Site
-		if err := json.Unmarshal(body, &siteData); err != nil {
-			return nil, fmt.Errorf("failed to parse site response: %w", err)
-		}
-
-		// Success - return site data
-		return &siteData, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
-}
-
-// handleSiteError provides actionable error messages for Site API operations.
-// Error messages explain what went wrong, why it happened, and how to fix it.
-func handleSiteError(statusCode int, body []byte) error {
-	switch statusCode {
-	case 400:
-		return fmt.Errorf("bad request: the site creation/update request was "+
-			"incorrectly formatted. Details: %s. "+
-			"Please check your site configuration and ensure all required fields "+
-			"(workspaceId, displayName) are provided with valid values. "+
-			"Verify that optional fields (shortName, timeZone, templateName) "+
-			"follow the correct format", string(body))
-	case 401:
-		return errors.New("unauthorized: authentication failed. " +
-			"Your Webflow API token is invalid or has expired. " +
-			"To fix this: 1) Verify your token in the Webflow dashboard " +
-			"(Settings > Integrations > API Access), " +
-			"2) Ensure the token has the required scopes for site management, " +
-			"3) Update your Pulumi config with: " +
-			"'pulumi config set webflow:apiToken <your-token> --secret'")
-	case 403:
-		return errors.New("forbidden: access denied. " +
-			"Your API token does not have permission to create/manage sites, " +
-			"OR your workspace is not an Enterprise workspace. " +
-			"To fix this: 1) Verify you have an Enterprise Webflow workspace " +
-			"(site creation via API requires Enterprise), " +
-			"2) Ensure your API token has the required scopes for site management, " +
-			"3) Check that the workspace ID is correct and belongs to your account")
-	case 404:
-		return errors.New("not found: the Webflow site, workspace, or template " +
-			"does not exist. " +
-			"To fix this: 1) Verify the workspace ID is correct " +
-			"(24-character lowercase hex string), " +
-			"2) If using templateName, verify the template name is valid in your " +
-			"Webflow account (check available templates in Webflow dashboard), " +
-			"3) Check that the workspace exists in your Webflow dashboard, " +
-			"4) Try creating without templateName to isolate the issue")
-	case 429:
-		return errors.New("rate limited: too many requests to Webflow API. " +
-			"The provider will automatically retry with exponential backoff. " +
-			"If this error persists, please wait a few minutes before trying again. " +
-			"Consider reducing the frequency of operations or contact Webflow support if rate limits are consistently exceeded")
-	case 500:
-		return fmt.Errorf("server error: Webflow API encountered an internal error. "+
-			"Details: %s. "+
-			"This is a temporary issue on Webflow's side. "+
-			"The provider will automatically retry. If the error persists, please contact Webflow support", string(body))
-	default:
-		return fmt.Errorf("unexpected error (HTTP %d): %s. "+
-			"This may indicate a temporary issue with the Webflow API or an unhandled error condition. "+
-			"Please check the Webflow API status and try again", statusCode, string(body))
-	}
+	return &site, nil
 }

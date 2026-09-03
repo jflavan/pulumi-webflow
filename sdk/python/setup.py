@@ -21,13 +21,14 @@ def readme():
 setup(name='pulumi_webflow',
       python_requires='>=3.9',
       version=VERSION,
-      description="Unofficial community-maintained Pulumi provider for managing Webflow sites, redirects, and robots.txt. Not affiliated with Pulumi Corporation or Webflow, Inc.",
+      description="Unofficial community-maintained Pulumi provider for managing Webflow sites, pages, CMS collections, assets, redirects, robots.txt, custom code, webhooks, Google Tags, schema markup, and ecommerce settings. Not affiliated with Pulumi Corporation or Webflow, Inc.",
       long_description=readme(),
       long_description_content_type='text/markdown',
       url='https://github.com/JDetmar/pulumi-webflow',
       project_urls={
           'Repository': 'https://github.com/JDetmar/pulumi-webflow'
       },
+      license='MIT',
       packages=find_packages(),
       package_data={
           'pulumi_webflow': [
@@ -37,7 +38,7 @@ setup(name='pulumi_webflow',
       },
       install_requires=[
           'parver>=0.2.1',
-          'pulumi>=3.165.0,<4.0.0',
+          'pulumi>=3.231.0,<4.0.0',
           'semver>=2.8.1',
           'typing-extensions>=4.11,<5; python_version < "3.11"'
       ],

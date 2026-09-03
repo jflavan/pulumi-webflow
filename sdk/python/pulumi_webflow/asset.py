@@ -19,44 +19,33 @@ __all__ = ['AssetArgs', 'Asset']
 @pulumi.input_type
 class AssetArgs:
     def __init__(__self__, *,
-                 file_hash: pulumi.Input[_builtins.str],
                  file_name: pulumi.Input[_builtins.str],
+                 file_source: pulumi.Input[_builtins.str],
                  site_id: pulumi.Input[_builtins.str],
-                 file_source: Optional[pulumi.Input[_builtins.str]] = None,
-                 parent_folder: Optional[pulumi.Input[_builtins.str]] = None):
+                 file_hash: pulumi.Input[Optional[_builtins.str]] = None,
+                 parent_folder: pulumi.Input[Optional[_builtins.str]] = None):
         """
         The set of arguments for constructing a Asset resource.
-        :param pulumi.Input[_builtins.str] file_hash: MD5 hash of the file content (required). Webflow uses this hash to identify and deduplicate assets. Generate using: md5sum <filename> (Linux) or md5 <filename> (macOS). Example: 'd41d8cd98f00b204e9800998ecf8427e'.
-        :param pulumi.Input[_builtins.str] file_name: The name of the file to upload, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. The file name must not exceed 255 characters and should not contain invalid characters (<, >, :, ", |, ?, *).
-        :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
-        :param pulumi.Input[_builtins.str] file_source: The source of the file to upload. For the current implementation, this is a reference field. In future versions, this may support URLs or local file paths for automatic upload. Examples: 'https://example.com/logo.png', '/path/to/local/file.png'.
-        :param pulumi.Input[_builtins.str] parent_folder: Optional folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset will be placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
+
+        :param pulumi.Input[_builtins.str] file_name: The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, ", |, ?, *.
+        :param pulumi.Input[_builtins.str] file_source: Where the file bytes come from: a local file path (resolved relative to the Pulumi program's working directory, e.g., './assets/logo.png') or an http(s) URL (e.g., 'https://example.com/logo.png'). The content is read at apply time, MD5-hashed and uploaded to Webflow.
+        :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings.
+        :param pulumi.Input[_builtins.str] file_hash: MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
+        :param pulumi.Input[_builtins.str] parent_folder: Optional asset folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset is placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
         """
-        pulumi.set(__self__, "file_hash", file_hash)
         pulumi.set(__self__, "file_name", file_name)
+        pulumi.set(__self__, "file_source", file_source)
         pulumi.set(__self__, "site_id", site_id)
-        if file_source is not None:
-            pulumi.set(__self__, "file_source", file_source)
+        if file_hash is not None:
+            pulumi.set(__self__, "file_hash", file_hash)
         if parent_folder is not None:
             pulumi.set(__self__, "parent_folder", parent_folder)
-
-    @_builtins.property
-    @pulumi.getter(name="fileHash")
-    def file_hash(self) -> pulumi.Input[_builtins.str]:
-        """
-        MD5 hash of the file content (required). Webflow uses this hash to identify and deduplicate assets. Generate using: md5sum <filename> (Linux) or md5 <filename> (macOS). Example: 'd41d8cd98f00b204e9800998ecf8427e'.
-        """
-        return pulumi.get(self, "file_hash")
-
-    @file_hash.setter
-    def file_hash(self, value: pulumi.Input[_builtins.str]):
-        pulumi.set(self, "file_hash", value)
 
     @_builtins.property
     @pulumi.getter(name="fileName")
     def file_name(self) -> pulumi.Input[_builtins.str]:
         """
-        The name of the file to upload, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. The file name must not exceed 255 characters and should not contain invalid characters (<, >, :, ", |, ?, *).
+        The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, ", |, ?, *.
         """
         return pulumi.get(self, "file_name")
 
@@ -65,10 +54,22 @@ class AssetArgs:
         pulumi.set(self, "file_name", value)
 
     @_builtins.property
+    @pulumi.getter(name="fileSource")
+    def file_source(self) -> pulumi.Input[_builtins.str]:
+        """
+        Where the file bytes come from: a local file path (resolved relative to the Pulumi program's working directory, e.g., './assets/logo.png') or an http(s) URL (e.g., 'https://example.com/logo.png'). The content is read at apply time, MD5-hashed and uploaded to Webflow.
+        """
+        return pulumi.get(self, "file_source")
+
+    @file_source.setter
+    def file_source(self, value: pulumi.Input[_builtins.str]):
+        pulumi.set(self, "file_source", value)
+
+    @_builtins.property
     @pulumi.getter(name="siteId")
     def site_id(self) -> pulumi.Input[_builtins.str]:
         """
-        The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
+        The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings.
         """
         return pulumi.get(self, "site_id")
 
@@ -77,27 +78,27 @@ class AssetArgs:
         pulumi.set(self, "site_id", value)
 
     @_builtins.property
-    @pulumi.getter(name="fileSource")
-    def file_source(self) -> Optional[pulumi.Input[_builtins.str]]:
+    @pulumi.getter(name="fileHash")
+    def file_hash(self) -> pulumi.Input[Optional[_builtins.str]]:
         """
-        The source of the file to upload. For the current implementation, this is a reference field. In future versions, this may support URLs or local file paths for automatic upload. Examples: 'https://example.com/logo.png', '/path/to/local/file.png'.
+        MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
         """
-        return pulumi.get(self, "file_source")
+        return pulumi.get(self, "file_hash")
 
-    @file_source.setter
-    def file_source(self, value: Optional[pulumi.Input[_builtins.str]]):
-        pulumi.set(self, "file_source", value)
+    @file_hash.setter
+    def file_hash(self, value: pulumi.Input[Optional[_builtins.str]]):
+        pulumi.set(self, "file_hash", value)
 
     @_builtins.property
     @pulumi.getter(name="parentFolder")
-    def parent_folder(self) -> Optional[pulumi.Input[_builtins.str]]:
+    def parent_folder(self) -> pulumi.Input[Optional[_builtins.str]]:
         """
-        Optional folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset will be placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
+        Optional asset folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset is placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
         """
         return pulumi.get(self, "parent_folder")
 
     @parent_folder.setter
-    def parent_folder(self, value: Optional[pulumi.Input[_builtins.str]]):
+    def parent_folder(self, value: pulumi.Input[Optional[_builtins.str]]):
         pulumi.set(self, "parent_folder", value)
 
 
@@ -107,22 +108,22 @@ class Asset(pulumi.CustomResource):
     def __init__(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 file_hash: Optional[pulumi.Input[_builtins.str]] = None,
-                 file_name: Optional[pulumi.Input[_builtins.str]] = None,
-                 file_source: Optional[pulumi.Input[_builtins.str]] = None,
-                 parent_folder: Optional[pulumi.Input[_builtins.str]] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
+                 file_hash: pulumi.Input[Optional[_builtins.str]] = None,
+                 file_name: pulumi.Input[Optional[_builtins.str]] = None,
+                 file_source: pulumi.Input[Optional[_builtins.str]] = None,
+                 parent_folder: pulumi.Input[Optional[_builtins.str]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         """
-        Manages assets (images, files, documents) for a Webflow site. This resource allows you to upload and manage files that can be used in your Webflow site. Note: Assets are immutable - changing any property will delete and recreate the asset.
+        Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow's storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset. After 'pulumi import' the fileSource and fileHash are unknown; set them in your program and the first refresh adopts them without replacing the asset.
 
         :param str resource_name: The name of the resource.
         :param pulumi.ResourceOptions opts: Options for the resource.
-        :param pulumi.Input[_builtins.str] file_hash: MD5 hash of the file content (required). Webflow uses this hash to identify and deduplicate assets. Generate using: md5sum <filename> (Linux) or md5 <filename> (macOS). Example: 'd41d8cd98f00b204e9800998ecf8427e'.
-        :param pulumi.Input[_builtins.str] file_name: The name of the file to upload, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. The file name must not exceed 255 characters and should not contain invalid characters (<, >, :, ", |, ?, *).
-        :param pulumi.Input[_builtins.str] file_source: The source of the file to upload. For the current implementation, this is a reference field. In future versions, this may support URLs or local file paths for automatic upload. Examples: 'https://example.com/logo.png', '/path/to/local/file.png'.
-        :param pulumi.Input[_builtins.str] parent_folder: Optional folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset will be placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
-        :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
+        :param pulumi.Input[_builtins.str] file_hash: MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
+        :param pulumi.Input[_builtins.str] file_name: The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, ", |, ?, *.
+        :param pulumi.Input[_builtins.str] file_source: Where the file bytes come from: a local file path (resolved relative to the Pulumi program's working directory, e.g., './assets/logo.png') or an http(s) URL (e.g., 'https://example.com/logo.png'). The content is read at apply time, MD5-hashed and uploaded to Webflow.
+        :param pulumi.Input[_builtins.str] parent_folder: Optional asset folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset is placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
+        :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings.
         """
         ...
     @overload
@@ -131,7 +132,7 @@ class Asset(pulumi.CustomResource):
                  args: AssetArgs,
                  opts: Optional[pulumi.ResourceOptions] = None):
         """
-        Manages assets (images, files, documents) for a Webflow site. This resource allows you to upload and manage files that can be used in your Webflow site. Note: Assets are immutable - changing any property will delete and recreate the asset.
+        Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow's storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset. After 'pulumi import' the fileSource and fileHash are unknown; set them in your program and the first refresh adopts them without replacing the asset.
 
         :param str resource_name: The name of the resource.
         :param AssetArgs args: The arguments to use to populate this resource's properties.
@@ -148,11 +149,11 @@ class Asset(pulumi.CustomResource):
     def _internal_init(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 file_hash: Optional[pulumi.Input[_builtins.str]] = None,
-                 file_name: Optional[pulumi.Input[_builtins.str]] = None,
-                 file_source: Optional[pulumi.Input[_builtins.str]] = None,
-                 parent_folder: Optional[pulumi.Input[_builtins.str]] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
+                 file_hash: pulumi.Input[Optional[_builtins.str]] = None,
+                 file_name: pulumi.Input[Optional[_builtins.str]] = None,
+                 file_source: pulumi.Input[Optional[_builtins.str]] = None,
+                 parent_folder: pulumi.Input[Optional[_builtins.str]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         opts = pulumi.ResourceOptions.merge(_utilities.get_resource_opts_defaults(), opts)
         if not isinstance(opts, pulumi.ResourceOptions):
@@ -162,12 +163,12 @@ class Asset(pulumi.CustomResource):
                 raise TypeError('__props__ is only valid when passed in combination with a valid opts.id to get an existing resource')
             __props__ = AssetArgs.__new__(AssetArgs)
 
-            if file_hash is None and not opts.urn:
-                raise TypeError("Missing required property 'file_hash'")
             __props__.__dict__["file_hash"] = file_hash
             if file_name is None and not opts.urn:
                 raise TypeError("Missing required property 'file_name'")
             __props__.__dict__["file_name"] = file_name
+            if file_source is None and not opts.urn:
+                raise TypeError("Missing required property 'file_source'")
             __props__.__dict__["file_source"] = file_source
             __props__.__dict__["parent_folder"] = parent_folder
             if site_id is None and not opts.urn:
@@ -177,11 +178,14 @@ class Asset(pulumi.CustomResource):
             __props__.__dict__["asset_url"] = None
             __props__.__dict__["content_type"] = None
             __props__.__dict__["created_on"] = None
+            __props__.__dict__["folder_id"] = None
             __props__.__dict__["hosted_url"] = None
             __props__.__dict__["last_updated"] = None
             __props__.__dict__["size"] = None
             __props__.__dict__["upload_details"] = None
             __props__.__dict__["upload_url"] = None
+        secret_opts = pulumi.ResourceOptions(additional_secret_outputs=["uploadDetails", "uploadUrl"])
+        opts = pulumi.ResourceOptions.merge(opts, secret_opts)
         super(Asset, __self__).__init__(
             'webflow:index:Asset',
             resource_name,
@@ -211,6 +215,7 @@ class Asset(pulumi.CustomResource):
         __props__.__dict__["file_hash"] = None
         __props__.__dict__["file_name"] = None
         __props__.__dict__["file_source"] = None
+        __props__.__dict__["folder_id"] = None
         __props__.__dict__["hosted_url"] = None
         __props__.__dict__["last_updated"] = None
         __props__.__dict__["parent_folder"] = None
@@ -224,7 +229,7 @@ class Asset(pulumi.CustomResource):
     @pulumi.getter(name="assetId")
     def asset_id(self) -> pulumi.Output[Optional[_builtins.str]]:
         """
-        The Webflow-assigned asset ID (read-only). This unique identifier can be used to reference the asset in API calls.
+        The Webflow-assigned asset ID (read-only).
         """
         return pulumi.get(self, "asset_id")
 
@@ -232,7 +237,7 @@ class Asset(pulumi.CustomResource):
     @pulumi.getter(name="assetUrl")
     def asset_url(self) -> pulumi.Output[Optional[_builtins.str]]:
         """
-        The direct S3 URL for the asset (read-only). This is the raw S3 location where the file is stored.
+        The direct S3 URL for the asset (read-only).
         """
         return pulumi.get(self, "asset_url")
 
@@ -240,7 +245,7 @@ class Asset(pulumi.CustomResource):
     @pulumi.getter(name="contentType")
     def content_type(self) -> pulumi.Output[Optional[_builtins.str]]:
         """
-        The MIME type of the asset (read-only). Examples: 'image/png', 'image/jpeg', 'application/pdf'. Determined by the fileName extension.
+        The MIME type of the asset (read-only), e.g., 'image/png', 'application/pdf'.
         """
         return pulumi.get(self, "content_type")
 
@@ -248,15 +253,15 @@ class Asset(pulumi.CustomResource):
     @pulumi.getter(name="createdOn")
     def created_on(self) -> pulumi.Output[Optional[_builtins.str]]:
         """
-        The timestamp when the asset metadata was created (RFC3339 format, read-only). This is set when the asset is registered with Webflow.
+        The timestamp when the asset metadata was created (RFC3339 format, read-only).
         """
         return pulumi.get(self, "created_on")
 
     @_builtins.property
     @pulumi.getter(name="fileHash")
-    def file_hash(self) -> pulumi.Output[_builtins.str]:
+    def file_hash(self) -> pulumi.Output[Optional[_builtins.str]]:
         """
-        MD5 hash of the file content (required). Webflow uses this hash to identify and deduplicate assets. Generate using: md5sum <filename> (Linux) or md5 <filename> (macOS). Example: 'd41d8cd98f00b204e9800998ecf8427e'.
+        MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
         """
         return pulumi.get(self, "file_hash")
 
@@ -264,23 +269,31 @@ class Asset(pulumi.CustomResource):
     @pulumi.getter(name="fileName")
     def file_name(self) -> pulumi.Output[_builtins.str]:
         """
-        The name of the file to upload, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. The file name must not exceed 255 characters and should not contain invalid characters (<, >, :, ", |, ?, *).
+        The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain <, >, :, ", |, ?, *.
         """
         return pulumi.get(self, "file_name")
 
     @_builtins.property
     @pulumi.getter(name="fileSource")
-    def file_source(self) -> pulumi.Output[Optional[_builtins.str]]:
+    def file_source(self) -> pulumi.Output[_builtins.str]:
         """
-        The source of the file to upload. For the current implementation, this is a reference field. In future versions, this may support URLs or local file paths for automatic upload. Examples: 'https://example.com/logo.png', '/path/to/local/file.png'.
+        Where the file bytes come from: a local file path (resolved relative to the Pulumi program's working directory, e.g., './assets/logo.png') or an http(s) URL (e.g., 'https://example.com/logo.png'). The content is read at apply time, MD5-hashed and uploaded to Webflow.
         """
         return pulumi.get(self, "file_source")
+
+    @_builtins.property
+    @pulumi.getter(name="folderId")
+    def folder_id(self) -> pulumi.Output[Optional[_builtins.str]]:
+        """
+        The ID of the asset folder the asset belongs to, or empty when it is at the site root (read-only).
+        """
+        return pulumi.get(self, "folder_id")
 
     @_builtins.property
     @pulumi.getter(name="hostedUrl")
     def hosted_url(self) -> pulumi.Output[Optional[_builtins.str]]:
         """
-        The Webflow CDN URL where the asset will be hosted (read-only). This URL becomes accessible after completing the S3 upload. Example: 'https://assets.website-files.com/.../logo.png'.
+        The Webflow CDN URL where the asset is hosted (read-only). Example: 'https://cdn.prod.website-files.com/.../logo.png'.
         """
         return pulumi.get(self, "hosted_url")
 
@@ -288,7 +301,7 @@ class Asset(pulumi.CustomResource):
     @pulumi.getter(name="lastUpdated")
     def last_updated(self) -> pulumi.Output[Optional[_builtins.str]]:
         """
-        The timestamp when the asset was last modified (RFC3339 format, read-only). For most assets, this will be the same as createdOn since assets are immutable.
+        The timestamp when the asset was last modified (RFC3339 format, read-only).
         """
         return pulumi.get(self, "last_updated")
 
@@ -296,7 +309,7 @@ class Asset(pulumi.CustomResource):
     @pulumi.getter(name="parentFolder")
     def parent_folder(self) -> pulumi.Output[Optional[_builtins.str]]:
         """
-        Optional folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset will be placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
+        Optional asset folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset is placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
         """
         return pulumi.get(self, "parent_folder")
 
@@ -304,7 +317,7 @@ class Asset(pulumi.CustomResource):
     @pulumi.getter(name="siteId")
     def site_id(self) -> pulumi.Output[_builtins.str]:
         """
-        The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
+        The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings.
         """
         return pulumi.get(self, "site_id")
 
@@ -312,7 +325,7 @@ class Asset(pulumi.CustomResource):
     @pulumi.getter
     def size(self) -> pulumi.Output[Optional[_builtins.int]]:
         """
-        The size of the asset in bytes (read-only). This is the actual size of the uploaded file.
+        The size of the uploaded file in bytes (read-only).
         """
         return pulumi.get(self, "size")
 
@@ -320,7 +333,7 @@ class Asset(pulumi.CustomResource):
     @pulumi.getter(name="uploadDetails")
     def upload_details(self) -> pulumi.Output[Optional[Mapping[str, _builtins.str]]]:
         """
-        AWS S3 POST form fields required to complete the upload (read-only). Include these as form fields when POSTing the file to uploadUrl. Keys: acl, bucket, key, Content-Type, X-Amz-Algorithm, X-Amz-Credential, X-Amz-Date, Policy, X-Amz-Signature, success_action_status, Cache-Control.
+        The signed AWS S3 POST form fields used for the upload (read-only, secret).
         """
         return pulumi.get(self, "upload_details")
 
@@ -328,7 +341,7 @@ class Asset(pulumi.CustomResource):
     @pulumi.getter(name="uploadUrl")
     def upload_url(self) -> pulumi.Output[Optional[_builtins.str]]:
         """
-        The presigned S3 URL for uploading the file content (read-only). Use this URL along with uploadDetails to complete the asset upload. See AWS S3 POST documentation: https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPOST.html
+        The presigned S3 URL the file was uploaded to (read-only, secret). The provider performs the upload; this is recorded for reference only.
         """
         return pulumi.get(self, "upload_url")
 

@@ -9,12 +9,18 @@ package provider
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"crypto/md5" //nolint:gosec // Webflow requires an MD5 digest as the asset fileHash; not used for security.
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -34,16 +40,20 @@ type AssetVariant struct {
 
 // AssetResponse represents a Webflow asset from the API.
 type AssetResponse struct {
-	ID               string         `json:"id"`
-	ContentType      string         `json:"contentType"`
-	Size             int            `json:"size"`
-	SiteID           string         `json:"siteId"`
-	HostedURL        string         `json:"hostedUrl"`
-	OriginalFileName string         `json:"originalFileName"`
-	DisplayName      string         `json:"displayName,omitempty"`
-	CreatedOn        string         `json:"createdOn"`
-	LastUpdated      string         `json:"lastUpdated"`
-	Variants         []AssetVariant `json:"variants,omitempty"`
+	ID               string `json:"id"`
+	ContentType      string `json:"contentType"`
+	Size             int    `json:"size"`
+	SiteID           string `json:"siteId"`
+	HostedURL        string `json:"hostedUrl"`
+	OriginalFileName string `json:"originalFileName"`
+	DisplayName      string `json:"displayName,omitempty"`
+	AltText          string `json:"altText,omitempty"`
+	// FolderID is the folder the asset belongs to, or empty at the site root.
+	// Returned by List Assets (May 2026 API change); may be absent from Get Asset.
+	FolderID    string         `json:"folderId,omitempty"`
+	CreatedOn   string         `json:"createdOn"`
+	LastUpdated string         `json:"lastUpdated"`
+	Variants    []AssetVariant `json:"variants,omitempty"`
 }
 
 // AssetListResponse represents the response from listing assets.
@@ -115,7 +125,12 @@ func ValidateAssetID(assetID string) error {
 	return nil
 }
 
-// ValidateFileName validates that a fileName is non-empty and has a reasonable format.
+// maxAssetFileNameLength is the exclusive upper bound Webflow documents for asset file names:
+// "File names must be less than 100 characters".
+const maxAssetFileNameLength = 100
+
+// ValidateFileName validates that a fileName is non-empty, shorter than 100 characters (the
+// documented Webflow limit) and free of characters most filesystems reject.
 // Returns actionable error messages that explain what's wrong and how to fix it.
 func ValidateFileName(fileName string) error {
 	if fileName == "" {
@@ -124,10 +139,11 @@ func ValidateFileName(fileName string) error {
 			"(e.g., 'logo.png', 'hero-image.jpg', 'document.pdf')")
 	}
 
-	// Check for reasonable length
-	if len(fileName) > 255 {
-		return fmt.Errorf("fileName is too long: '%s' exceeds maximum length of 255 characters. "+
-			"Please use a shorter file name", fileName)
+	// Webflow: "File names must be less than 100 characters".
+	if len(fileName) >= maxAssetFileNameLength {
+		return fmt.Errorf("fileName is too long: '%s' is %d characters but Webflow requires file names to be "+
+			"less than %d characters. Please use a shorter file name",
+			fileName, len(fileName), maxAssetFileNameLength)
 	}
 
 	// Check for common invalid characters (most filesystems disallow these)
@@ -186,372 +202,200 @@ func ExtractIDsFromAssetResourceID(resourceID string) (siteID, assetID string, e
 	return siteID, assetID, nil
 }
 
-// getAssetBaseURL is used internally for testing to override the API base URL.
-var getAssetBaseURL = ""
+// ComputeFileHash returns the lowercase hexadecimal MD5 digest of data, which is the
+// fileHash value the Webflow Create Asset Metadata endpoint expects.
+func ComputeFileHash(data []byte) string {
+	sum := md5.Sum(data) //nolint:gosec // Webflow mandates MD5 for asset deduplication.
+	return hex.EncodeToString(sum[:])
+}
+
+// assetSourceHTTPClient fetches remote fileSource URLs. It deliberately carries no Webflow
+// credentials because the URL is user-controlled and may point anywhere.
+var assetSourceHTTPClient = &http.Client{Timeout: 5 * time.Minute}
+
+// assetUploadHTTPClient performs the S3 multipart upload. Like assetSourceHTTPClient it is
+// unauthenticated: the presigned upload URL must never receive the Webflow bearer token.
+var assetUploadHTTPClient = &http.Client{Timeout: 10 * time.Minute}
+
+// maxAssetSourceBytes caps how much data is read from a fileSource (local or remote).
+const maxAssetSourceBytes = 512 << 20 // 512 MiB
+
+// IsRemoteAssetSource reports whether fileSource is an http(s) URL rather than a local path.
+func IsRemoteAssetSource(fileSource string) bool {
+	lower := strings.ToLower(fileSource)
+	return strings.HasPrefix(lower, "http://") || strings.HasPrefix(lower, "https://")
+}
+
+// ReadAssetSource returns the bytes of the file referenced by fileSource.
+// fileSource is either an http(s) URL, which is fetched with a plain (unauthenticated) client,
+// or a local file path, which is cleaned and read relative to the Pulumi program's working
+// directory. Empty sources are rejected.
+func ReadAssetSource(ctx context.Context, fileSource string) ([]byte, error) {
+	fileSource = strings.TrimSpace(fileSource)
+	if fileSource == "" {
+		return nil, errors.New("fileSource is required but was not provided. " +
+			"Provide a local file path (e.g., './assets/logo.png') or an http(s) URL " +
+			"(e.g., 'https://example.com/logo.png') for the file to upload")
+	}
+
+	if IsRemoteAssetSource(fileSource) {
+		return readRemoteAssetSource(ctx, fileSource)
+	}
+
+	path := filepath.Clean(fileSource)
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("fileSource '%s' cannot be read: %w. "+
+			"Paths are resolved relative to the Pulumi program's working directory", fileSource, err)
+	}
+	if info.IsDir() {
+		return nil, fmt.Errorf("fileSource '%s' is a directory; provide the path to a file", fileSource)
+	}
+	if info.Size() > maxAssetSourceBytes {
+		return nil, fmt.Errorf("fileSource '%s' is %d bytes, which exceeds the %d byte limit",
+			fileSource, info.Size(), maxAssetSourceBytes)
+	}
+	data, err := os.ReadFile(path) //nolint:gosec // The path is intentionally user-supplied.
+	if err != nil {
+		return nil, fmt.Errorf("fileSource '%s' cannot be read: %w", fileSource, err)
+	}
+	return data, nil
+}
+
+// readRemoteAssetSource downloads an http(s) fileSource.
+func readRemoteAssetSource(ctx context.Context, rawURL string) ([]byte, error) {
+	if _, err := url.ParseRequestURI(rawURL); err != nil {
+		return nil, fmt.Errorf("fileSource '%s' is not a valid URL: %w", rawURL, err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request for fileSource '%s': %w", rawURL, err)
+	}
+	resp, err := assetSourceHTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download fileSource '%s': %w", rawURL, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, fmt.Errorf("failed to download fileSource '%s': HTTP %d. "+
+			"Check that the URL is correct and publicly readable", rawURL, resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxAssetSourceBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read fileSource '%s': %w", rawURL, err)
+	}
+	if len(data) > maxAssetSourceBytes {
+		return nil, fmt.Errorf("fileSource '%s' exceeds the %d byte limit", rawURL, maxAssetSourceBytes)
+	}
+	return data, nil
+}
 
 // GetAsset retrieves a single asset by ID from Webflow.
 // It calls GET /v2/assets/{asset_id} endpoint.
-// Returns the parsed response or an error if the request fails.
 func GetAsset(ctx context.Context, client *http.Client, assetID string) (*AssetResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
+	var asset AssetResponse
+	if _, err := doRequest(ctx, client, http.MethodGet, apiURL("/v2/assets/%s", assetID), nil, &asset); err != nil {
+		return nil, err
 	}
-
-	baseURL := webflowAPIBaseURL
-	if getAssetBaseURL != "" {
-		baseURL = getAssetBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/assets/%s", baseURL, assetID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var asset AssetResponse
-		if err := json.Unmarshal(body, &asset); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &asset, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &asset, nil
 }
 
-// listAssetsBaseURL is used internally for testing to override the API base URL.
-var listAssetsBaseURL = ""
-
-// ListAssets retrieves all assets for a Webflow site.
-// It calls GET /v2/sites/{site_id}/assets endpoint.
-// Returns the parsed response or an error if the request fails.
-func ListAssets(ctx context.Context, client *http.Client, siteID string) (*AssetListResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
+// ListAssets retrieves assets for a Webflow site.
+// It calls GET /v2/sites/{site_id}/assets, adding ?folderId= when folderID is non-empty so only
+// assets in that folder (and its descendants) are returned.
+func ListAssets(ctx context.Context, client *http.Client, siteID, folderID string) (*AssetListResponse, error) {
+	u := apiURL("/v2/sites/%s/assets", siteID)
+	if folderID != "" {
+		u += "?folderId=" + url.QueryEscape(folderID)
 	}
-
-	baseURL := webflowAPIBaseURL
-	if listAssetsBaseURL != "" {
-		baseURL = listAssetsBaseURL
+	var response AssetListResponse
+	if _, err := doRequest(ctx, client, http.MethodGet, u, nil, &response); err != nil {
+		return nil, err
 	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s/assets", baseURL, siteID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var response AssetListResponse
-		if err := json.Unmarshal(body, &response); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &response, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &response, nil
 }
 
-// postAssetUploadURLBaseURL is used internally for testing to override the API base URL.
-var postAssetUploadURLBaseURL = ""
-
-// PostAssetUploadURL requests a presigned upload URL from Webflow for uploading an asset.
-// This is step 1 of the 2-step asset upload process.
-// It calls POST /v2/sites/{site_id}/assets endpoint.
-// Returns the upload URL and details for uploading to S3.
+// PostAssetUploadURL registers asset metadata with Webflow and returns the presigned S3 upload
+// URL and form fields. This is step 1 of the 2-step asset upload process
+// (POST /v2/sites/{site_id}/assets). Webflow answers 200, 201 or 202.
 func PostAssetUploadURL(
 	ctx context.Context, client *http.Client,
 	siteID, fileName, fileHash, parentFolder string,
 ) (*AssetUploadResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
-	}
-
-	baseURL := webflowAPIBaseURL
-	if postAssetUploadURLBaseURL != "" {
-		baseURL = postAssetUploadURLBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s/assets", baseURL, siteID)
-
-	requestBody := AssetUploadRequest{
-		FileName:     fileName,
-		FileHash:     fileHash,
-		ParentFolder: parentFolder,
-	}
-
-	bodyBytes, err := json.Marshal(requestBody)
+	body := AssetUploadRequest{FileName: fileName, FileHash: fileHash, ParentFolder: parentFolder}
+	var uploadResp AssetUploadResponse
+	_, err := doRequest(ctx, client, http.MethodPost, apiURL("/v2/sites/%s/assets", siteID), body, &uploadResp,
+		http.StatusOK, http.StatusCreated, http.StatusAccepted)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+		return nil, err
 	}
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyBytes))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses (accept 200, 201, and 202 as success)
-		// 202 Accepted is returned when asset is registered for async upload to S3
-		if resp.StatusCode != 200 && resp.StatusCode != 201 && resp.StatusCode != 202 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var uploadResp AssetUploadResponse
-		if err := json.Unmarshal(body, &uploadResp); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &uploadResp, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &uploadResp, nil
 }
 
-// deleteAssetBaseURL is used internally for testing to override the API base URL.
-var deleteAssetBaseURL = ""
+// UploadAssetFile performs step 2 of the asset upload: a multipart/form-data POST to the
+// presigned S3 uploadUrl. Every uploadDetails entry is written as a form field first (S3
+// ignores anything after the file part), then the file itself is sent as the "file" part.
+// S3 answers with the success_action_status from the policy (usually 201), 200 or 204.
+func UploadAssetFile(
+	ctx context.Context, uploadURL string, uploadDetails map[string]string, fileName string, data []byte,
+) error {
+	if uploadURL == "" {
+		return errors.New("webflow did not return an uploadUrl for the asset; cannot upload the file")
+	}
+	if len(uploadDetails) == 0 {
+		return errors.New("webflow did not return uploadDetails for the asset; cannot upload the file")
+	}
 
-// DeleteAsset deletes an asset from Webflow.
-// It calls DELETE /v2/assets/{asset_id} endpoint.
-// Returns nil on success (including 404 for idempotency) or an error if the request fails.
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+
+	keys := make([]string, 0, len(uploadDetails))
+	for k := range uploadDetails {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if err := writer.WriteField(k, uploadDetails[k]); err != nil {
+			return fmt.Errorf("failed to build upload form field %q: %w", k, err)
+		}
+	}
+	part, err := writer.CreateFormFile("file", fileName)
+	if err != nil {
+		return fmt.Errorf("failed to build upload file part: %w", err)
+	}
+	if _, err := part.Write(data); err != nil {
+		return fmt.Errorf("failed to write upload file part: %w", err)
+	}
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("failed to finalise upload form: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		return fmt.Errorf("failed to create upload request: %w", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := assetUploadHTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to upload asset file to storage: %w", err)
+	}
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyLength))
+	_ = resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK, http.StatusCreated, http.StatusNoContent:
+		return nil
+	default:
+		return fmt.Errorf("asset file upload rejected by storage (HTTP %d): %s. "+
+			"The presigned upload may have expired or the file may not match the registered fileHash; "+
+			"re-run the operation to request a fresh upload URL",
+			resp.StatusCode, TruncateForLogging(strings.TrimSpace(string(respBody)), maxErrorBodyLength))
+	}
+}
+
+// DeleteAsset deletes an asset from Webflow (DELETE /v2/assets/{asset_id}).
+// A 404 is treated as success so deletes are idempotent.
 func DeleteAsset(ctx context.Context, client *http.Client, assetID string) error {
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("context cancelled: %w", err)
-	}
-
-	baseURL := webflowAPIBaseURL
-	if deleteAssetBaseURL != "" {
-		baseURL = deleteAssetBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/assets/%s", baseURL, assetID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "DELETE", url, http.NoBody)
-		if err != nil {
-			return fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// 204 No Content is success
-		// 404 Not Found is also success (idempotent delete)
-		if resp.StatusCode == 204 || resp.StatusCode == 404 {
-			return nil
-		}
-
-		// Handle other error responses
-		return handleWebflowError(resp.StatusCode, body)
-	}
-
-	return fmt.Errorf("max retries exceeded: %w", lastErr)
+	return doDelete(ctx, client, apiURL("/v2/assets/%s", assetID), nil)
 }

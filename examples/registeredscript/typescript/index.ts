@@ -26,7 +26,7 @@ const analyticsScript = new webflow.RegisteredScript("analytics-script", {
   displayName: "AnalyticsTracker",
   hostedLocation: "https://cdn.example.com/analytics-tracker.js",
   integrityHash: "sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC",
-  version: "1.0.0",
+  scriptVersion: "1.0.0",
   canCopy: true, // Allow copying when site is duplicated
 });
 
@@ -36,7 +36,7 @@ const cmsSliderScript = new webflow.RegisteredScript("cms-slider", {
   displayName: "CmsSlider",
   hostedLocation: "https://cdn.example.com/cms-slider.min.js",
   integrityHash: "sha384-abc123def456ghi789jkl012mno345pqr678stu901vwx234yz567ABC890DEF123",
-  version: "2.1.5",
+  scriptVersion: "2.1.5",
   canCopy: false, // Don't copy when duplicating site
 });
 
@@ -46,7 +46,7 @@ const customWidget = new webflow.RegisteredScript("custom-widget", {
   displayName: "MyCustomWidget123",
   hostedLocation: "https://widgets.example.com/custom-widget-v3.js",
   integrityHash: "sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=",
-  version: "3.0.0",
+  scriptVersion: "3.0.0",
   canCopy: true,
 });
 
@@ -57,7 +57,7 @@ const marketingScriptV1 = new webflow.RegisteredScript("marketing-v1", {
   displayName: "MarketingPixel",
   hostedLocation: "https://cdn.example.com/marketing-v1.0.0.js",
   integrityHash: "sha384-v1hash000000000000000000000000000000000000000000000000000000000",
-  version: "1.0.0",
+  scriptVersion: "1.0.0",
   canCopy: true,
 });
 
@@ -66,7 +66,7 @@ const marketingScriptV2 = new webflow.RegisteredScript("marketing-v2", {
   displayName: "MarketingPixel",
   hostedLocation: "https://cdn.example.com/marketing-v2.0.0.js",
   integrityHash: "sha384-v2hash000000000000000000000000000000000000000000000000000000000",
-  version: "2.0.0",
+  scriptVersion: "2.0.0",
   canCopy: true,
 });
 

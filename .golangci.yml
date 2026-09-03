@@ -20,7 +20,6 @@ linters:
     - misspell
     - nakedret
     - nolintlint
-    - paralleltest
     - perfsprint
     - prealloc
     - revive
@@ -85,11 +84,9 @@ linters:
       - linters: [revive]
         text: "redefines-builtin-id: redefinition of the built-in function new"
 
-      # Exclude paralleltest for test files that use shared global state
-      # (mock URL variables, environment variables) which makes them unsafe
-      # to parallelize without significant refactoring.
-      - linters: [paralleltest]
-        path: "_test\\.go$"
+      # Note: paralleltest is intentionally not enabled. The test suite relies on
+      # package-level globals (mock URL variables, environment variables) which
+      # makes tests unsafe to parallelize without significant refactoring.
 
 formatters:
   enable:
@@ -102,5 +99,5 @@ formatters:
         - blank # Blank section: contains all blank imports.
         - default # Default section: contains all imports that could not be matched to another section type.
         - prefix(github.com/pulumi/) # Custom section: groups all imports with the github.com/pulumi/ prefix.
-        - prefix(github.com/pulumi/pulumi-dockerbuild/) # Custom section: local imports
+        - prefix(github.com/JDetmar/pulumi-webflow) # Custom section: local imports
       custom-order: true

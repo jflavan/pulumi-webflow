@@ -7,15 +7,12 @@
 package provider
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
+	"regexp"
 	"strings"
-	"time"
 )
 
 // Collection represents a Webflow CMS collection.
@@ -27,11 +24,8 @@ type Collection struct {
 	Slug         string `json:"slug,omitempty"`        // URL-friendly slug for the collection
 	CreatedOn    string `json:"createdOn,omitempty"`   // Creation timestamp (read-only)
 	LastUpdated  string `json:"lastUpdated,omitempty"` // Last update timestamp (read-only)
-}
-
-// CollectionListResponse represents the Webflow API response for listing collections.
-type CollectionListResponse struct {
-	Collections []Collection `json:"collections"` // List of collections
+	// Field definitions (GET /v2/collections/{id} only)
+	Fields []CollectionFieldResponse `json:"fields,omitempty"`
 }
 
 // CollectionRequest represents the request body for POST collection.
@@ -39,6 +33,54 @@ type CollectionRequest struct {
 	DisplayName  string `json:"displayName"`    // Human-readable name
 	SingularName string `json:"singularName"`   // Singular form
 	Slug         string `json:"slug,omitempty"` // Optional URL slug
+}
+
+// CollectionUpdateRequest represents the request body for PATCH /v2/collections/{collection_id}.
+// Every property is optional; only the ones set are changed.
+type CollectionUpdateRequest struct {
+	DisplayName  string `json:"displayName,omitempty"`
+	SingularName string `json:"singularName,omitempty"`
+	Slug         string `json:"slug,omitempty"`
+}
+
+// collectionSlugPattern matches URL-friendly collection slugs.
+var collectionSlugPattern = regexp.MustCompile(`^[a-z0-9_-]+$`)
+
+// ValidateCollectionSlug validates an explicit collection slug. An empty slug is valid and
+// lets Webflow generate one from displayName.
+func ValidateCollectionSlug(slug string) error {
+	if slug == "" {
+		return nil
+	}
+	if len(slug) > 255 {
+		return fmt.Errorf("slug is too long: '%s' exceeds maximum length of 255 characters", slug)
+	}
+	if !collectionSlugPattern.MatchString(slug) {
+		return fmt.Errorf("slug has invalid format: got '%s'. "+
+			"Expected a URL-friendly slug containing only lowercase letters, digits, hyphens and underscores "+
+			"(e.g., 'blog-posts'), or omit it to let Webflow generate one from displayName", slug)
+	}
+	return nil
+}
+
+// pathIDPattern matches identifiers that are safe to embed as a single URL path segment.
+// Webflow field and item IDs are 24-character hex strings, but the pattern is deliberately
+// a little looser so that imports of unusual IDs still work; it only guards against
+// separators and other characters that would change the meaning of the request path.
+var pathIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+// validatePathID validates an identifier that will be interpolated into an API path.
+func validatePathID(name, id string) error {
+	if id == "" {
+		return fmt.Errorf("%s is required but was not provided. "+
+			"Please provide a valid Webflow %s (e.g., '5f0c8c9e1c9d440000e8d8c3')", name, name)
+	}
+	if !pathIDPattern.MatchString(id) {
+		return fmt.Errorf("%s has invalid format: got '%s'. "+
+			"Expected an identifier containing only letters, digits, hyphens and underscores "+
+			"(Webflow IDs are 24-character lowercase hexadecimal strings, e.g., '5f0c8c9e1c9d440000e8d8c3')", name, id)
+	}
+	return nil
 }
 
 // ValidateCollectionID validates that a collectionID matches the Webflow collection ID format.
@@ -118,371 +160,56 @@ func ExtractIDsFromCollectionResourceID(resourceID string) (siteID, collectionID
 	return siteID, collectionID, nil
 }
 
-// getCollectionsBaseURL is used internally for testing to override the API base URL.
-var getCollectionsBaseURL = ""
-
-// GetCollections retrieves all collections for a Webflow site.
-// It calls GET /v2/sites/{site_id}/collections endpoint.
-// Returns the parsed response or an error if the request fails.
-func GetCollections(ctx context.Context, client *http.Client, siteID string) (*CollectionListResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
-	}
-
-	baseURL := webflowAPIBaseURL
-	if getCollectionsBaseURL != "" {
-		baseURL = getCollectionsBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s/collections", baseURL, siteID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			// Exponential backoff on retry
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var response CollectionListResponse
-		if err := json.Unmarshal(body, &response); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &response, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
-}
-
-// getCollectionBaseURL is used internally for testing to override the API base URL.
-var getCollectionBaseURL = ""
-
-// GetCollection retrieves a single collection by ID.
-// It calls GET /v2/collections/{collection_id} endpoint.
-// Returns the collection or an error if the request fails.
+// GetCollection retrieves a single collection by ID, including its field definitions.
+// It calls GET /v2/collections/{collection_id}.
+// A 404 is returned as an error satisfying IsNotFound.
 func GetCollection(ctx context.Context, client *http.Client, collectionID string) (*Collection, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
+	var collection Collection
+	if _, err := doRequest(ctx, client, http.MethodGet,
+		apiURL("/v2/collections/%s", collectionID), nil, &collection, http.StatusOK); err != nil {
+		return nil, err
 	}
-
-	baseURL := webflowAPIBaseURL
-	if getCollectionBaseURL != "" {
-		baseURL = getCollectionBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/collections/%s", baseURL, collectionID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var collection Collection
-		if err := json.Unmarshal(body, &collection); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &collection, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &collection, nil
 }
-
-// postCollectionBaseURL is used internally for testing to override the API base URL.
-var postCollectionBaseURL = ""
 
 // PostCollection creates a new collection for a Webflow site.
-// It calls POST /v2/sites/{site_id}/collections endpoint.
-// Returns the created collection or an error if the request fails.
+// It calls POST /v2/sites/{site_id}/collections.
+// An empty slug lets Webflow generate one from displayName.
 func PostCollection(
 	ctx context.Context, client *http.Client,
 	siteID, displayName, singularName, slug string,
 ) (*Collection, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
-	}
-
-	baseURL := webflowAPIBaseURL
-	if postCollectionBaseURL != "" {
-		baseURL = postCollectionBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s/collections", baseURL, siteID)
-
-	requestBody := CollectionRequest{
+	body := CollectionRequest{
 		DisplayName:  displayName,
 		SingularName: singularName,
-		Slug:         slug, // Optional, empty string OK
+		Slug:         slug,
 	}
-
-	bodyBytes, err := json.Marshal(requestBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+	var collection Collection
+	if _, err := doRequest(ctx, client, http.MethodPost,
+		apiURL("/v2/sites/%s/collections", siteID), body, &collection,
+		http.StatusOK, http.StatusCreated, http.StatusAccepted); err != nil {
+		return nil, err
 	}
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyBytes))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Accept both 200 and 201 as success
-		if resp.StatusCode != 200 && resp.StatusCode != 201 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var collection Collection
-		if err := json.Unmarshal(body, &collection); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &collection, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &collection, nil
 }
 
-// deleteCollectionBaseURL is used internally for testing to override the API base URL.
-var deleteCollectionBaseURL = ""
+// PatchCollection updates the display name, singular name and/or slug of a collection.
+// It calls PATCH /v2/collections/{collection_id} (scope cms:write); every body property is
+// optional and only the ones set are changed. The API answers 200 with the updated collection.
+func PatchCollection(
+	ctx context.Context, client *http.Client, collectionID string, body CollectionUpdateRequest,
+) (*Collection, error) {
+	var collection Collection
+	if _, err := doRequest(ctx, client, http.MethodPatch,
+		apiURL("/v2/collections/%s", collectionID), body, &collection,
+		http.StatusOK, http.StatusAccepted); err != nil {
+		return nil, err
+	}
+	return &collection, nil
+}
 
 // DeleteCollection removes a collection from a Webflow site.
-// It calls DELETE /v2/collections/{collection_id} endpoint.
-// Returns nil on success (including 404 for idempotency) or an error if the request fails.
+// It calls DELETE /v2/collections/{collection_id}; a 404 is treated as success.
 func DeleteCollection(ctx context.Context, client *http.Client, collectionID string) error {
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("context cancelled: %w", err)
-	}
-
-	baseURL := webflowAPIBaseURL
-	if deleteCollectionBaseURL != "" {
-		baseURL = deleteCollectionBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/collections/%s", baseURL, collectionID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "DELETE", url, http.NoBody)
-		if err != nil {
-			return fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// 204 No Content is success
-		// 404 Not Found is also success (idempotent delete)
-		if resp.StatusCode == 204 || resp.StatusCode == 404 {
-			return nil
-		}
-
-		// Handle other error responses
-		return handleWebflowError(resp.StatusCode, body)
-	}
-
-	return fmt.Errorf("max retries exceeded: %w", lastErr)
+	return doDelete(ctx, client, apiURL("/v2/collections/%s", collectionID), nil)
 }

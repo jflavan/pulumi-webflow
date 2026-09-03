@@ -1,0 +1,13 @@
+name: webflow-analytics-example
+runtime: nodejs
+description: Example of reading Webflow site analytics (Analyze API, beta) with Pulumi functions
+
+config:
+  siteId:
+    description: The Webflow site ID
+  startTime:
+    description: Optional - inclusive start of the reporting window (UTC, e.g. 2026-04-01T00:00:00Z); defaults to 30 days ago
+    default: ""
+  endTime:
+    description: Optional - exclusive end of the reporting window (UTC, e.g. 2026-05-01T00:00:00Z); defaults to today
+    default: ""

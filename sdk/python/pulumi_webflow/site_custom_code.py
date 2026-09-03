@@ -25,6 +25,7 @@ class SiteCustomCodeArgs:
                  site_id: pulumi.Input[_builtins.str]):
         """
         The set of arguments for constructing a SiteCustomCode resource.
+
         :param pulumi.Input[Sequence[pulumi.Input['CustomScriptArgsArgs']]] scripts: A list of custom scripts to apply to the site. Each script must be registered to the site first. To remove individual scripts, simply exclude them from this list on the next update. If you have multiple scripts your app manages, ensure they are always included in this list.
         :param pulumi.Input[_builtins.str] site_id: The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
         """
@@ -62,11 +63,13 @@ class SiteCustomCode(pulumi.CustomResource):
     def __init__(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 scripts: Optional[pulumi.Input[Sequence[pulumi.Input[Union['CustomScriptArgsArgs', 'CustomScriptArgsArgsDict']]]]] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
+                 scripts: pulumi.Input[Optional[Sequence[pulumi.Input[Union['CustomScriptArgsArgs', 'CustomScriptArgsArgsDict']]]]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         """
-        Manages custom JavaScript code applied to a Webflow site. This resource allows you to apply registered custom scripts to a site and control where they are placed (header or footer). Custom scripts must be registered to the site first via the RegisterScript resource.
+        Manages custom JavaScript code applied to a Webflow site (PUT /v2/sites/{site_id}/custom_code). This resource allows you to apply registered custom scripts to a site and control where they are placed (header or footer). Custom scripts must be registered to the site first via the RegisteredScript or InlineScript resource. The full list is sent on every update, so scripts omitted from the list are removed from the site; destroying the resource removes all applied code (DELETE /v2/sites/{site_id}/custom_code) but leaves the scripts registered.
+
+        **Authentication:** this resource calls Webflow custom code endpoints, which require an OAuth Data Client app token with the `custom_code:read` and `custom_code:write` scopes. Webflow documents that these scopes are available only to Data Client apps: site API tokens cannot access custom code endpoints. Removing applied code (Delete, or dropping scripts from the list) additionally requires the `sites:write` (site custom code) or `pages:write` (page custom code) scope.
 
         :param str resource_name: The name of the resource.
         :param pulumi.ResourceOptions opts: Options for the resource.
@@ -80,7 +83,9 @@ class SiteCustomCode(pulumi.CustomResource):
                  args: SiteCustomCodeArgs,
                  opts: Optional[pulumi.ResourceOptions] = None):
         """
-        Manages custom JavaScript code applied to a Webflow site. This resource allows you to apply registered custom scripts to a site and control where they are placed (header or footer). Custom scripts must be registered to the site first via the RegisterScript resource.
+        Manages custom JavaScript code applied to a Webflow site (PUT /v2/sites/{site_id}/custom_code). This resource allows you to apply registered custom scripts to a site and control where they are placed (header or footer). Custom scripts must be registered to the site first via the RegisteredScript or InlineScript resource. The full list is sent on every update, so scripts omitted from the list are removed from the site; destroying the resource removes all applied code (DELETE /v2/sites/{site_id}/custom_code) but leaves the scripts registered.
+
+        **Authentication:** this resource calls Webflow custom code endpoints, which require an OAuth Data Client app token with the `custom_code:read` and `custom_code:write` scopes. Webflow documents that these scopes are available only to Data Client apps: site API tokens cannot access custom code endpoints. Removing applied code (Delete, or dropping scripts from the list) additionally requires the `sites:write` (site custom code) or `pages:write` (page custom code) scope.
 
         :param str resource_name: The name of the resource.
         :param SiteCustomCodeArgs args: The arguments to use to populate this resource's properties.
@@ -97,8 +102,8 @@ class SiteCustomCode(pulumi.CustomResource):
     def _internal_init(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 scripts: Optional[pulumi.Input[Sequence[pulumi.Input[Union['CustomScriptArgsArgs', 'CustomScriptArgsArgsDict']]]]] = None,
-                 site_id: Optional[pulumi.Input[_builtins.str]] = None,
+                 scripts: pulumi.Input[Optional[Sequence[pulumi.Input[Union['CustomScriptArgsArgs', 'CustomScriptArgsArgsDict']]]]] = None,
+                 site_id: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         opts = pulumi.ResourceOptions.merge(_utilities.get_resource_opts_defaults(), opts)
         if not isinstance(opts, pulumi.ResourceOptions):

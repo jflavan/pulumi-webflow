@@ -33,14 +33,14 @@ public final class RegisteredScriptArgs extends com.pulumi.resources.ResourceArg
     }
 
     /**
-     * The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: &#39;CmsSlider&#39;, &#39;AnalyticsScript&#39;, &#39;MyCustomScript123&#39;.
+     * The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: &#39;CMS Slider&#39;, &#39;AnalyticsScript&#39;, &#39;MyCustomScript123&#39;.
      * 
      */
     @Import(name="displayName", required=true)
     private Output<String> displayName;
 
     /**
-     * @return The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: &#39;CmsSlider&#39;, &#39;AnalyticsScript&#39;, &#39;MyCustomScript123&#39;.
+     * @return The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: &#39;CMS Slider&#39;, &#39;AnalyticsScript&#39;, &#39;MyCustomScript123&#39;.
      * 
      */
     public Output<String> displayName() {
@@ -78,18 +78,18 @@ public final class RegisteredScriptArgs extends com.pulumi.resources.ResourceArg
     }
 
     /**
-     * The Semantic Version (SemVer) string for the script (e.g., &#39;1.0.0&#39;, &#39;2.3.1&#39;). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
+     * The Semantic Version (SemVer) string for the script (e.g., &#39;1.0.0&#39;, &#39;2.3.1&#39;). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning.
      * 
      */
-    @Import(name="scriptVersion")
-    private @Nullable Output<String> scriptVersion;
+    @Import(name="scriptVersion", required=true)
+    private Output<String> scriptVersion;
 
     /**
-     * @return The Semantic Version (SemVer) string for the script (e.g., &#39;1.0.0&#39;, &#39;2.3.1&#39;). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
+     * @return The Semantic Version (SemVer) string for the script (e.g., &#39;1.0.0&#39;, &#39;2.3.1&#39;). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning.
      * 
      */
-    public Optional<Output<String>> scriptVersion() {
-        return Optional.ofNullable(this.scriptVersion);
+    public Output<String> scriptVersion() {
+        return this.scriptVersion;
     }
 
     /**
@@ -158,7 +158,7 @@ public final class RegisteredScriptArgs extends com.pulumi.resources.ResourceArg
         }
 
         /**
-         * @param displayName The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: &#39;CmsSlider&#39;, &#39;AnalyticsScript&#39;, &#39;MyCustomScript123&#39;.
+         * @param displayName The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: &#39;CMS Slider&#39;, &#39;AnalyticsScript&#39;, &#39;MyCustomScript123&#39;.
          * 
          * @return builder
          * 
@@ -169,7 +169,7 @@ public final class RegisteredScriptArgs extends com.pulumi.resources.ResourceArg
         }
 
         /**
-         * @param displayName The user-facing name for the script (1-50 alphanumeric characters). This name is used to identify the script in the Webflow interface. Only letters (A-Z, a-z) and numbers (0-9) are allowed. Example valid names: &#39;CmsSlider&#39;, &#39;AnalyticsScript&#39;, &#39;MyCustomScript123&#39;.
+         * @param displayName The user-facing name for the script (1-50 characters: letters, digits and spaces). This name is used to identify the script in the Webflow interface and derives the scriptId. Changing it registers a new script; the previous registration remains. Example valid names: &#39;CMS Slider&#39;, &#39;AnalyticsScript&#39;, &#39;MyCustomScript123&#39;.
          * 
          * @return builder
          * 
@@ -221,18 +221,18 @@ public final class RegisteredScriptArgs extends com.pulumi.resources.ResourceArg
         }
 
         /**
-         * @param scriptVersion The Semantic Version (SemVer) string for the script (e.g., &#39;1.0.0&#39;, &#39;2.3.1&#39;). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
+         * @param scriptVersion The Semantic Version (SemVer) string for the script (e.g., &#39;1.0.0&#39;, &#39;2.3.1&#39;). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning.
          * 
          * @return builder
          * 
          */
-        public Builder scriptVersion(@Nullable Output<String> scriptVersion) {
+        public Builder scriptVersion(Output<String> scriptVersion) {
             $.scriptVersion = scriptVersion;
             return this;
         }
 
         /**
-         * @param scriptVersion The Semantic Version (SemVer) string for the script (e.g., &#39;1.0.0&#39;, &#39;2.3.1&#39;). This helps track different versions of your script. See https://semver.org/ for more information on semantic versioning.
+         * @param scriptVersion The Semantic Version (SemVer) string for the script (e.g., &#39;1.0.0&#39;, &#39;2.3.1&#39;). Required by the Webflow register endpoint. Registered scripts are versioned: changing this value registers a new version of the script and the previous version remains registered. See https://semver.org/ for more information on semantic versioning.
          * 
          * @return builder
          * 
@@ -271,6 +271,9 @@ public final class RegisteredScriptArgs extends com.pulumi.resources.ResourceArg
             }
             if ($.integrityHash == null) {
                 throw new MissingRequiredPropertyException("RegisteredScriptArgs", "integrityHash");
+            }
+            if ($.scriptVersion == null) {
+                throw new MissingRequiredPropertyException("RegisteredScriptArgs", "scriptVersion");
             }
             if ($.siteId == null) {
                 throw new MissingRequiredPropertyException("RegisteredScriptArgs", "siteId");

@@ -19,7 +19,7 @@ type EcommerceSettings struct {
 	// The timestamp when ecommerce was enabled on the site (ISO 8601 format). This is automatically set when ecommerce is enabled and is read-only.
 	CreatedOn pulumi.StringPtrOutput `pulumi:"createdOn"`
 	// The three-letter ISO 4217 currency code for the site (e.g., 'USD', 'EUR', 'GBP'). This is the default currency used for ecommerce transactions on this site. This value is set in the Webflow dashboard and is read-only.
-	DefaultCurrency pulumi.StringOutput `pulumi:"defaultCurrency"`
+	DefaultCurrency pulumi.StringPtrOutput `pulumi:"defaultCurrency"`
 	// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). The site must have ecommerce enabled through the Webflow dashboard. You can find your site ID in the Webflow dashboard under Site Settings.
 	SiteId pulumi.StringOutput `pulumi:"siteId"`
 }
@@ -120,8 +120,8 @@ func (o EcommerceSettingsOutput) CreatedOn() pulumi.StringPtrOutput {
 }
 
 // The three-letter ISO 4217 currency code for the site (e.g., 'USD', 'EUR', 'GBP'). This is the default currency used for ecommerce transactions on this site. This value is set in the Webflow dashboard and is read-only.
-func (o EcommerceSettingsOutput) DefaultCurrency() pulumi.StringOutput {
-	return o.ApplyT(func(v *EcommerceSettings) pulumi.StringOutput { return v.DefaultCurrency }).(pulumi.StringOutput)
+func (o EcommerceSettingsOutput) DefaultCurrency() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v *EcommerceSettings) pulumi.StringPtrOutput { return v.DefaultCurrency }).(pulumi.StringPtrOutput)
 }
 
 // The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). The site must have ecommerce enabled through the Webflow dashboard. You can find your site ID in the Webflow dashboard under Site Settings.

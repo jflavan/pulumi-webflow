@@ -17,11 +17,15 @@ const siteId = config.requireSecret("siteId");
  * - Page updates
  * - E-commerce orders
  * - Collection item changes
- * - Membership account events
+ * - Comments
+ *
+ * Webhooks require a Data Client (OAuth) token with sites:write plus the read
+ * scope of each event family you subscribe to (forms:read, cms:read, pages:read,
+ * ecommerce:read, comments:read). Site API tokens cannot manage webhooks.
  */
 
 // Example 1: Form Submission Webhook
-// Receive notifications when users submit forms on your site
+// Receive notifications when users submit any form on your site
 const formWebhook = new webflow.Webhook("form-submission-webhook", {
   siteId: siteId,
   triggerType: "form_submission",
@@ -44,16 +48,13 @@ const ecommWebhook = new webflow.Webhook("ecomm-order-webhook", {
   url: "https://your-api.example.com/webhooks/webflow/orders",
 });
 
-// Example 4: Collection Item Webhook with Filter
-// Monitor changes to specific collection items
-// Note: Replace "your-collection-id-here" with an actual collection ID
+// Example 4: Collection Item Webhook
+// Monitor newly created CMS items. Webflow fires collection item events for
+// every collection of the site; the API has no per-collection filter.
 const collectionWebhook = new webflow.Webhook("collection-item-webhook", {
   siteId: siteId,
   triggerType: "collection_item_created",
   url: "https://your-api.example.com/webhooks/webflow/collection",
-  filter: {
-    collectionIds: ["your-collection-id-here"],
-  },
 });
 
 // Example 5: Page Metadata Update Webhook
@@ -64,12 +65,16 @@ const pageMetadataWebhook = new webflow.Webhook("page-metadata-webhook", {
   url: "https://your-api.example.com/webhooks/webflow/pages",
 });
 
-// Example 6: Membership User Account Webhook
-// Monitor user account creation in Webflow Memberships
-const membershipWebhook = new webflow.Webhook("membership-webhook", {
+// Example 6: Filtered Form Submission Webhook
+// `filter` is only valid for form_submission and has a single field, `name`:
+// the webhook fires only for submissions of the form with that name.
+const contactFormWebhook = new webflow.Webhook("contact-form-webhook", {
   siteId: siteId,
-  triggerType: "memberships_user_account_added",
-  url: "https://your-api.example.com/webhooks/webflow/members",
+  triggerType: "form_submission",
+  url: "https://your-api.example.com/webhooks/webflow/contact",
+  filter: {
+    name: "Contact Form",
+  },
 });
 
 // Export webhook IDs and timestamps for reference
@@ -80,7 +85,7 @@ export const publishWebhookId = publishWebhook.id;
 export const ecommWebhookId = ecommWebhook.id;
 export const collectionWebhookId = collectionWebhook.id;
 export const pageMetadataWebhookId = pageMetadataWebhook.id;
-export const membershipWebhookId = membershipWebhook.id;
+export const contactFormWebhookId = contactFormWebhook.id;
 
 // Print deployment success message
 const webhookCount = 6;

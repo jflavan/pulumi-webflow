@@ -8,7 +8,9 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/pulumi/pulumi-go-provider/infer"
 )
@@ -17,34 +19,45 @@ import (
 // The apiToken field is marked as a secret and will be automatically handled by Pulumi.
 type Config struct {
 	// APIToken is the Webflow API v2 bearer token for authentication.
-	// Can be set via `pulumi config set webflow:apiToken <value> --secret` or WEBFLOW_API_TOKEN env var.
+	// Explicit provider configuration (`pulumi config set webflow:apiToken <value> --secret`)
+	// takes precedence; the WEBFLOW_API_TOKEN environment variable is the fallback.
 	APIToken string `pulumi:"apiToken,optional" provider:"secret"`
 }
 
-// Annotate adds descriptions to the Config fields for schema generation.
+// Annotate adds descriptions and defaults to the Config fields for schema generation.
 func (c *Config) Annotate(a infer.Annotator) {
 	a.Describe(&c.APIToken, "Webflow API v2 bearer token for authentication. "+
-		"Can also be set via WEBFLOW_API_TOKEN environment variable.")
+		"Explicit configuration takes precedence over the WEBFLOW_API_TOKEN environment variable, "+
+		"which is used as a fallback when no token is configured.")
+	a.SetDefault(&c.APIToken, nil, "WEBFLOW_API_TOKEN")
 }
 
-// Configure validates the configuration and sets up the HTTP client.
-// This is called after the configuration is loaded and before any resource operations.
+// Configure validates the configuration once, before any resource operation runs.
+// A missing token is not an error here so that previews of stacks that only use
+// unrelated resources still work; resources report ErrTokenNotConfigured when they need it.
 func (c *Config) Configure(ctx context.Context) error {
-	// Token validation and HTTP client creation will happen when resources need it
-	// The infer package automatically handles environment variable fallback
+	if c.APIToken == "" {
+		return nil
+	}
+	if err := ValidateToken(c.APIToken); err != nil {
+		return fmt.Errorf("invalid webflow:apiToken: %w", err)
+	}
 	return nil
 }
 
-// safeGetConfigToken safely retrieves the API token from provider config.
-// It uses recover() to handle the case where infer.GetConfig panics
-// (which happens when config is not available in the context, e.g., during
-// invoke function calls before Configure() completes).
+// safeGetConfigToken retrieves the API token from provider config.
+// infer.GetConfig panics when no config is attached to the context, which happens in
+// unit tests that call resource methods directly; treat that as "no config".
 func safeGetConfigToken(ctx context.Context) (token string) {
 	defer func() {
 		if r := recover(); r != nil {
-			// GetConfig panicked - config not available in context
-			// This can happen for invoke functions called before Configure()
-			token = ""
+			// Only the "no config attached" panic is expected (unit tests calling resource
+			// methods directly). A config type mismatch is a programming error: re-panic.
+			if msg, ok := r.(string); ok && strings.Contains(msg, "without a config") {
+				token = ""
+				return
+			}
+			panic(r)
 		}
 	}()
 
@@ -55,29 +68,24 @@ func safeGetConfigToken(ctx context.Context) (token string) {
 	return ""
 }
 
-// GetHTTPClient retrieves or creates the HTTP client for Webflow API calls.
-// It checks for the API token in this order:
-// 1. WEBFLOW_API_TOKEN environment variable (preferred for CI/CD and invoke functions)
-// 2. Provider config (pulumi config set webflow:apiToken)
-func GetHTTPClient(ctx context.Context, version string) (*http.Client, error) {
-	// Try environment variable first - this is safe and never panics
-	// This also handles invoke functions where config may not be available
-	token := getEnvToken()
-
-	// If no env var, safely try to get from provider config
-	if token == "" {
-		token = safeGetConfigToken(ctx)
+// resolveToken returns the token to use, preferring explicit provider config.
+func resolveToken(ctx context.Context) string {
+	if token := safeGetConfigToken(ctx); token != "" {
+		return token
 	}
+	return getEnvToken()
+}
 
+// GetHTTPClient returns an HTTP client for Webflow API calls.
+// Token precedence: 1) provider config (webflow:apiToken), 2) WEBFLOW_API_TOKEN environment variable.
+// Clients share one connection pool, so calling this per operation is cheap.
+func GetHTTPClient(ctx context.Context, version string) (*http.Client, error) {
+	token := resolveToken(ctx)
 	if token == "" {
 		return nil, ErrTokenNotConfigured
 	}
-
-	// Validate token
 	if err := ValidateToken(token); err != nil {
 		return nil, err
 	}
-
-	// Create HTTP client with authentication
 	return CreateHTTPClient(token, version)
 }

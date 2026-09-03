@@ -11,10 +11,10 @@ public final class Config {
 
     private static final com.pulumi.Config config = com.pulumi.Config.of("webflow");
 /**
- * Webflow API v2 bearer token for authentication. Can also be set via WEBFLOW_API_TOKEN environment variable.
+ * Webflow API v2 bearer token for authentication. Explicit configuration takes precedence over the WEBFLOW_API_TOKEN environment variable, which is used as a fallback when no token is configured.
  * 
  */
     public Optional<String> apiToken() {
-        return Codegen.stringProp("apiToken").config(config).get();
+        return Codegen.stringProp("apiToken").config(config).env("WEBFLOW_API_TOKEN").get();
     }
 }

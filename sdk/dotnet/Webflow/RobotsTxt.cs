@@ -17,13 +17,13 @@ namespace Community.Pulumi.Webflow
     public partial class RobotsTxt : global::Pulumi.CustomResource
     {
         /// <summary>
-        /// The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives.
+        /// The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives. Comments and other directives are not stored by Webflow and are dropped with a warning. Formatting differences (blank lines, spacing, directive casing) do not cause a diff.
         /// </summary>
         [Output("content")]
         public Output<string> Content { get; private set; } = null!;
 
         /// <summary>
-        /// RFC3339 timestamp of the last modification.
+        /// RFC3339 timestamp of the last modification made through this provider. The Webflow API does not report one, so the provider records the time of its last successful write.
         /// </summary>
         [Output("lastModified")]
         public Output<string> LastModified { get; private set; } = null!;
@@ -81,7 +81,7 @@ namespace Community.Pulumi.Webflow
     public sealed class RobotsTxtArgs : global::Pulumi.ResourceArgs
     {
         /// <summary>
-        /// The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives.
+        /// The robots.txt content in traditional format. Supports User-agent, Allow, Disallow, and Sitemap directives. Comments and other directives are not stored by Webflow and are dropped with a warning. Formatting differences (blank lines, spacing, directive casing) do not cause a diff.
         /// </summary>
         [Input("content", required: true)]
         public Input<string> Content { get; set; } = null!;

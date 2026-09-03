@@ -7,299 +7,264 @@
 package provider
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"time"
+	"net/url"
+	"strconv"
+	"strings"
 )
 
-// DOMNode represents a node in the page DOM structure.
-// This struct matches the Webflow API v2 response format for page DOM nodes.
-type DOMNode struct {
-	// NodeID is the unique identifier for this DOM node (required for updates).
-	NodeID string `json:"nodeId,omitempty"`
-	// Type is the node type (e.g., "text", "element", "image").
-	Type string `json:"type,omitempty"`
-	// Text is the text content for text nodes (updatable).
+// maxPageContentNodes is the documented maximum number of nodes one
+// POST /v2/pages/{page_id}/dom request may update.
+const maxPageContentNodes = 1000
+
+// pageDOMPageSize is the page size used when reading the DOM (GET /v2/pages/{page_id}/dom
+// accepts limit up to 100).
+const pageDOMPageSize = 100
+
+// domNodeTypeText is the DOM node type whose content the Update Page Content endpoint edits.
+const domNodeTypeText = "text"
+
+// DOMText is the text of a text node as returned by GET /v2/pages/{page_id}/dom.
+// The API returns an object {"html": ..., "text": ...}; older payloads used a plain string,
+// which is accepted too and stored in both fields.
+type DOMText struct {
+	HTML string `json:"html,omitempty"`
 	Text string `json:"text,omitempty"`
-	// Tag is the HTML tag name for element nodes (e.g., "div", "p", "h1").
-	Tag string `json:"tag,omitempty"`
-	// Attributes contains the node's HTML attributes (updatable for some node types).
-	Attributes map[string]interface{} `json:"attributes,omitempty"`
-	// Children contains child nodes (nested structure).
-	Children []DOMNode `json:"children,omitempty"`
-	// V is the version field used by Webflow for tracking changes.
-	V string `json:"v,omitempty"`
 }
 
-// PageContentResponse represents the Webflow API response for GET /pages/{page_id}/dom.
-// It contains the full DOM structure of the page.
+// UnmarshalJSON accepts either a JSON object or a bare string.
+func (t *DOMText) UnmarshalJSON(data []byte) error {
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed == "null" {
+		*t = DOMText{}
+		return nil
+	}
+	if strings.HasPrefix(trimmed, "\"") {
+		var s string
+		if err := json.Unmarshal(data, &s); err != nil {
+			return err
+		}
+		*t = DOMText{HTML: s, Text: s}
+		return nil
+	}
+	type raw DOMText
+	var r raw
+	if err := json.Unmarshal(data, &r); err != nil {
+		return err
+	}
+	*t = DOMText(r)
+	return nil
+}
+
+// DOMNode represents a node in the page DOM structure as returned by the Webflow API.
+type DOMNode struct {
+	// ID is the unique identifier for this DOM node (used as nodeId in updates).
+	ID string `json:"id,omitempty"`
+	// Type is the node type ("text", "image", "component-instance", "text-input", "select", ...).
+	Type string `json:"type,omitempty"`
+	// Text is the content of text nodes.
+	Text *DOMText `json:"text,omitempty"`
+	// Attributes contains the node's HTML attributes.
+	Attributes map[string]interface{} `json:"attributes,omitempty"`
+	// ComponentID is set for component-instance nodes.
+	ComponentID string `json:"componentId,omitempty"`
+}
+
+// PageContentResponse represents the Webflow API response for GET /v2/pages/{page_id}/dom.
 type PageContentResponse struct {
 	// PageID is the unique identifier for the page.
 	PageID string `json:"pageId,omitempty"`
-	// Nodes is the array of root-level DOM nodes for the page.
+	// BranchID is the branch the DOM belongs to, if any.
+	BranchID string `json:"branchId,omitempty"`
+	// Nodes is the array of DOM nodes for the page.
 	Nodes []DOMNode `json:"nodes,omitempty"`
+	// Pagination describes the page of nodes returned.
+	Pagination struct {
+		Limit  int `json:"limit"`
+		Offset int `json:"offset"`
+		Total  int `json:"total"`
+	} `json:"pagination,omitempty"`
+	// LastUpdated is when the DOM was last updated (nullable).
+	LastUpdated string `json:"lastUpdated,omitempty"`
 }
 
-// PageContentRequest represents the request body for PUT /pages/{page_id}/dom.
-// Used for updating static content (text and simple attributes) in the page.
+// PageContentRequest represents the request body for POST /v2/pages/{page_id}/dom.
 type PageContentRequest struct {
 	// Nodes is the array of node updates to apply.
-	// Each node must have a NodeID and the fields to update (e.g., Text).
-	Nodes []DOMNodeUpdate `json:"nodes,omitempty"`
+	Nodes []DOMNodeUpdate `json:"nodes"`
 }
 
-// DOMNodeUpdate represents a single node update in the page content request.
-// Only includes fields that can be updated via the API.
+// DOMNodeUpdate represents a single text-node update in the page content request.
 type DOMNodeUpdate struct {
 	// NodeID is the unique identifier for the node to update (required).
 	NodeID string `json:"nodeId"`
-	// Text is the new text content for text nodes (optional).
+	// Text is the new HTML content for text nodes (required by the API; its tags must match the
+	// node's current content as returned by GET /v2/pages/{page_id}/dom).
 	Text *string `json:"text,omitempty"`
 }
 
+// PageContentUpdateResponse is the response of POST /v2/pages/{page_id}/dom.
+// A 200 with a non-empty errors list still means some nodes were not updated.
+type PageContentUpdateResponse struct {
+	Errors []string `json:"errors"`
+}
+
 // ValidateNodeID validates that a nodeID is non-empty.
-// Node IDs are required for updating page content.
-// Returns actionable error messages that explain what's wrong and how to fix it.
 func ValidateNodeID(nodeID string) error {
 	if nodeID == "" {
 		return errors.New("nodeId is required but was not provided. " +
 			"Please provide a valid node ID from the page's DOM structure. " +
 			"You can retrieve node IDs by fetching the page content first using the Webflow API " +
-			"GET /pages/{page_id}/dom endpoint")
+			"GET /v2/pages/{page_id}/dom endpoint")
 	}
 	return nil
 }
 
+// ValidateNodeText validates the replacement text of a node. Webflow requires the text (HTML)
+// to be present; an empty string does not clear a node, it is rejected.
+func ValidateNodeText(text string) error {
+	if strings.TrimSpace(text) == "" {
+		return errors.New("text is required but was empty. " +
+			"Webflow does not clear a node when text is empty; provide the node's new HTML content, " +
+			"using the same tags the node currently has (see GET /v2/pages/{page_id}/dom)")
+	}
+	return nil
+}
+
+// ValidatePageContentLocaleID validates the locale ID of a PageContent resource, which is
+// required: the Update Page Content endpoint only edits secondary locales.
+func ValidatePageContentLocaleID(localeID string) error {
+	if localeID == "" {
+		return errors.New("localeId is required but was not provided. " +
+			"Webflow's Update Page Content endpoint only edits static content in a secondary locale; " +
+			"the primary locale's content cannot be changed via the API. " +
+			"Provide the ID of a secondary locale (24-character lowercase hexadecimal string, listed under " +
+			"Site Settings > Localization or via the Get Site endpoint)")
+	}
+	return ValidateLocaleID(localeID)
+}
+
 // GeneratePageContentResourceID generates a Pulumi resource ID for a PageContent resource.
-// Format: {pageID}/content
-// Note: PageContent is a 1:1 relationship with a page, so we use a simple suffix.
-func GeneratePageContentResourceID(pageID string) string {
-	return pageID + "/content"
+// Format: {pageID}/content/{localeID}
+func GeneratePageContentResourceID(pageID, localeID string) string {
+	return pageID + "/content/" + localeID
 }
 
-// ExtractPageIDFromPageContentResourceID extracts the pageID from a PageContent resource ID.
-// Expected format: {pageID}/content
-func ExtractPageIDFromPageContentResourceID(resourceID string) (string, error) {
+// ExtractIDsFromPageContentResourceID extracts the pageID and localeID from a PageContent
+// resource ID. The current format is {pageID}/content/{localeID}; the legacy {pageID}/content
+// form (from before localeId was required) is accepted and returns an empty localeID, which
+// callers fill from state.
+func ExtractIDsFromPageContentResourceID(resourceID string) (pageID, localeID string, err error) {
 	if resourceID == "" {
-		return "", errors.New("resourceId cannot be empty")
+		return "", "", errors.New("resourceId cannot be empty")
 	}
-
-	// Simple suffix removal
-	suffix := "/content"
-	if len(resourceID) <= len(suffix) {
-		return "", fmt.Errorf("invalid resource ID format: expected {pageId}/content, got: %s", resourceID)
+	parts := strings.Split(resourceID, "/")
+	if (len(parts) != 2 && len(parts) != 3) || parts[1] != "content" || parts[0] == "" {
+		return "", "", fmt.Errorf(
+			"invalid resource ID format: expected {pageId}/content/{localeId}, got: %s", resourceID)
 	}
-
-	if resourceID[len(resourceID)-len(suffix):] != suffix {
-		return "", fmt.Errorf("invalid resource ID format: expected {pageId}/content, got: %s", resourceID)
+	if len(parts) == 3 {
+		if parts[2] == "" {
+			return "", "", fmt.Errorf(
+				"invalid resource ID format: expected {pageId}/content/{localeId}, got: %s", resourceID)
+		}
+		localeID = parts[2]
 	}
-
-	pageID := resourceID[:len(resourceID)-len(suffix)]
-	if pageID == "" {
-		return "", fmt.Errorf("invalid resource ID format: expected {pageId}/content, got: %s", resourceID)
-	}
-
-	return pageID, nil
+	return parts[0], localeID, nil
 }
 
-// getPageContentBaseURL is used internally for testing to override the API base URL.
-var getPageContentBaseURL = ""
-
-// GetPageContent retrieves the DOM structure of a page from Webflow.
-// It calls GET /v2/pages/{page_id}/dom endpoint.
-// Returns the parsed response or an error if the request fails.
-func GetPageContent(ctx context.Context, client *http.Client, pageID string) (*PageContentResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
+// pageDOMQuery builds the query string for the DOM endpoints. localeID is added when set;
+// limit and offset are added when limit is positive.
+func pageDOMQuery(localeID string, limit, offset int) string {
+	q := url.Values{}
+	if localeID != "" {
+		q.Set("localeId", localeID)
 	}
-
-	baseURL := webflowAPIBaseURL
-	if getPageContentBaseURL != "" {
-		baseURL = getPageContentBaseURL
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+		q.Set("offset", strconv.Itoa(offset))
 	}
-
-	url := fmt.Sprintf("%s/v2/pages/%s/dom", baseURL, pageID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			// Exponential backoff
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			// Enhanced rate limiting error message with clear delay information
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			// Wait before next retry if we haven't exhausted retries
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var response PageContentResponse
-		if err := json.Unmarshal(body, &response); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &response, nil
+	if len(q) == 0 {
+		return ""
 	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return "?" + q.Encode()
 }
 
-// putPageContentBaseURL is used internally for testing to override the API base URL.
-var putPageContentBaseURL = ""
+// GetPageContent retrieves one page of the DOM structure of a page (GET /v2/pages/{page_id}/dom).
+// localeID is optional; when empty Webflow returns the primary locale. No pagination
+// parameters are sent, so Webflow applies its defaults; use ListPageTextNodes to read every node.
+func GetPageContent(ctx context.Context, client *http.Client, pageID, localeID string) (*PageContentResponse, error) {
+	return getPageContentPage(ctx, client, pageID, localeID, 0, 0)
+}
 
-// PutPageContent updates the static content of a page in Webflow.
-// It calls PUT /v2/pages/{page_id}/dom endpoint.
-// Returns the updated response or an error if the request fails.
-func PutPageContent(
-	ctx context.Context, client *http.Client,
-	pageID string, nodes []DOMNodeUpdate,
+// getPageContentPage retrieves one page of DOM nodes with explicit pagination.
+func getPageContentPage(
+	ctx context.Context, client *http.Client, pageID, localeID string, limit, offset int,
 ) (*PageContentResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
+	var response PageContentResponse
+	u := apiURL("/v2/pages/%s/dom", pageID) + pageDOMQuery(localeID, limit, offset)
+	if _, err := doRequest(ctx, client, http.MethodGet, u, nil, &response); err != nil {
+		return nil, err
 	}
+	return &response, nil
+}
 
-	baseURL := webflowAPIBaseURL
-	if putPageContentBaseURL != "" {
-		baseURL = putPageContentBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/pages/%s/dom", baseURL, pageID)
-
-	requestBody := PageContentRequest{
-		Nodes: nodes,
-	}
-
-	bodyBytes, err := json.Marshal(requestBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request body: %w", err)
-	}
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			// Exponential backoff
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
+// ListPageTextNodes retrieves every text node of a page's DOM, following pagination with
+// limit 100. Text nodes are the only nodes the Update Page Content endpoint can edit.
+func ListPageTextNodes(ctx context.Context, client *http.Client, pageID, localeID string) ([]DOMNode, error) {
+	nodes := []DOMNode{}
+	offset := 0
+	for {
+		page, err := getPageContentPage(ctx, client, pageID, localeID, pageDOMPageSize, offset)
+		if err != nil {
+			return nil, err
+		}
+		for _, node := range page.Nodes {
+			if node.Type == domNodeTypeText {
+				nodes = append(nodes, node)
 			}
 		}
-
-		req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewReader(bodyBytes))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
+		// Stop when the server returned fewer than a full page, or we have reached the total.
+		if len(page.Nodes) < pageDOMPageSize {
+			break
 		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
+		offset += len(page.Nodes)
+		if page.Pagination.Total > 0 && offset >= page.Pagination.Total {
+			break
 		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			// Enhanced rate limiting error message with clear delay information
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			// Wait before next retry if we haven't exhausted retries
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var response PageContentResponse
-		if err := json.Unmarshal(body, &response); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &response, nil
 	}
+	return nodes, nil
+}
 
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+// PostPageContent updates static text content of a page in a secondary locale
+// (POST /v2/pages/{page_id}/dom?localeId=...). localeId is required by Webflow and must be a
+// secondary locale of the site; the primary locale cannot be edited via the API. The operation
+// fails when the response lists any errors.
+func PostPageContent(
+	ctx context.Context, client *http.Client, pageID, localeID string, nodes []DOMNodeUpdate,
+) (*PageContentUpdateResponse, error) {
+	if err := ValidatePageContentLocaleID(localeID); err != nil {
+		return nil, err
+	}
+	if len(nodes) > maxPageContentNodes {
+		return nil, fmt.Errorf("cannot update %d nodes in one request: Webflow accepts at most %d nodes "+
+			"per Update Page Content request. Split the nodes across several PageContent resources",
+			len(nodes), maxPageContentNodes)
+	}
+	u := apiURL("/v2/pages/%s/dom", pageID) + pageDOMQuery(localeID, 0, 0)
+	var response PageContentUpdateResponse
+	if _, err := doRequest(ctx, client, http.MethodPost, u, PageContentRequest{Nodes: nodes}, &response); err != nil {
+		return nil, err
+	}
+	if len(response.Errors) > 0 {
+		return &response, fmt.Errorf("webflow rejected %d node update(s): %s. "+
+			"Verify the node IDs exist on the page (GET /v2/pages/{page_id}/dom), are text nodes, and that "+
+			"the new text uses the same HTML tags as the current content",
+			len(response.Errors), strings.Join(response.Errors, "; "))
+	}
+	return &response, nil
 }

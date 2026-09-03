@@ -11,640 +11,707 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/blang/semver"
+
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
+	"github.com/pulumi/pulumi-go-provider/integration"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/tokens"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
 )
 
-// TestAssetRead_NotFound tests that Read() returns empty ID when asset is not found.
-// This test verifies the bug fix for the error comparison at line 320 in asset_resource.go.
-func TestAssetRead_NotFound(t *testing.T) {
-	// Setup: Set environment variable for authentication
-	t.Setenv("WEBFLOW_API_TOKEN", "test-token-12345678901234567890")
+const (
+	testAssetSiteID  = "5f0c8c9e1c9d440000e8d8c3"
+	testAssetID      = "6789abcdef1234567890abcd"
+	testAssetFolder  = "5f0c8c9e1c9d440000e8d8c9"
+	testAssetToken   = "test-token-12345678901234567890"
+	testAssetContent = "png-bytes-for-upload"
+)
 
-	// Setup: Mock HTTP server that returns 404 Not Found
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify we're calling the GET /v2/assets/{asset_id} endpoint
-		if r.Method != "GET" || !strings.Contains(r.URL.Path, "/v2/assets/") {
-			t.Errorf("Expected GET request to /v2/assets/{asset_id}, got %s %s", r.Method, r.URL.Path)
-		}
+// assetMock stands in for both the Webflow API and S3 during an asset Create.
+type assetMock struct {
+	server        *httptest.Server
+	createCalls   int
+	uploadCalls   int
+	deleteCalls   int
+	createBody    AssetUploadRequest
+	uploadFields  map[string]string
+	uploadOrder   []string
+	uploadFile    string
+	uploadData    []byte
+	uploadAuth    string
+	uploadStatus  int
+	createStatus  int
+	uploadDetails map[string]string
+	// onUpload, when set, runs when the S3 upload request arrives, before it is answered.
+	onUpload func()
+}
 
-		// Return 404 Not Found (asset was deleted in Webflow)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		response := map[string]string{
-			"message": "Asset not found",
-		}
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
-
-	// Override the API base URL to use our test server
-	oldURL := getAssetBaseURL
-	getAssetBaseURL = server.URL
-	defer func() { getAssetBaseURL = oldURL }()
-
-	// Setup: Create the Asset resource controller
-	asset := &Asset{}
-
-	// Setup: Create context
-	ctx := context.Background()
-
-	// Setup: Build a read request with existing state
-	resourceID := "5f0c8c9e1c9d440000e8d8c3/assets/6789abcdef1234567890abcd"
-	req := infer.ReadRequest[AssetArgs, AssetState]{
-		ID: resourceID,
-		State: AssetState{
-			AssetArgs: AssetArgs{
-				SiteID:   "5f0c8c9e1c9d440000e8d8c3",
-				FileName: "logo.png",
-				FileHash: "d41d8cd98f00b204e9800998ecf8427e",
-			},
-			AssetID: "6789abcdef1234567890abcd",
+func newAssetMock(t *testing.T) *assetMock {
+	t.Helper()
+	m := &assetMock{
+		uploadStatus: http.StatusCreated,
+		createStatus: http.StatusAccepted,
+		uploadDetails: map[string]string{
+			"acl": "public-read", "bucket": "webflow-prod-assets", "key": "assets/logo.png",
+			"Content-Type": "image/png", "Policy": "policy", "X-Amz-Signature": "sig", "success_action_status": "201",
 		},
 	}
+	m.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v2/sites/"+testAssetSiteID+"/assets":
+			m.createCalls++
+			_ = json.NewDecoder(r.Body).Decode(&m.createBody)
+			w.WriteHeader(m.createStatus)
+			_ = json.NewEncoder(w).Encode(AssetUploadResponse{
+				ID: testAssetID, UploadURL: m.server.URL + "/s3-upload", UploadDetails: m.uploadDetails,
+				AssetURL:    "https://s3.amazonaws.com/webflow-prod-assets/assets/logo.png",
+				HostedURL:   "https://cdn.prod.website-files.com/" + testAssetSiteID + "/logo.png",
+				ContentType: "image/png", OriginalFileName: "logo.png", ParentFolder: testAssetFolder,
+				CreatedOn: "2025-01-12T10:00:00Z", LastUpdated: "2025-01-12T10:00:00Z",
+			})
+		case r.Method == http.MethodPost && r.URL.Path == "/s3-upload":
+			m.uploadCalls++
+			if m.onUpload != nil {
+				m.onUpload()
+			}
+			m.uploadAuth = r.Header.Get("Authorization")
+			m.uploadFields, m.uploadOrder, m.uploadFile, m.uploadData = readMultipartParts(t, r)
+			w.WriteHeader(m.uploadStatus)
+		case r.Method == http.MethodDelete && r.URL.Path == "/v2/assets/"+testAssetID:
+			m.deleteCalls++
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	}))
+	t.Cleanup(m.server.Close)
+	useMockAPI(t, m.server)
+	t.Setenv("WEBFLOW_API_TOKEN", testAssetToken)
+	return m
+}
 
-	// Execute: Call Read()
-	resp, err := asset.Read(ctx, req)
-	// Verify: No error should be returned
+func writeTempAsset(t *testing.T, content string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "logo.png")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestAssetCreate_UploadsFile(t *testing.T) {
+	m := newAssetMock(t)
+	path := writeTempAsset(t, testAssetContent)
+	wantHash := ComputeFileHash([]byte(testAssetContent))
+
+	resp, err := (&Asset{}).Create(context.Background(), infer.CreateRequest[AssetArgs]{
+		Inputs: AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png", FileSource: path, ParentFolder: testAssetFolder},
+	})
 	if err != nil {
-		t.Errorf("Read() should not return error for 404, got: %v", err)
+		t.Fatalf("Create: %v", err)
 	}
 
-	// Verify: Empty ID signals deletion to Pulumi
-	if resp.ID != "" {
-		t.Errorf("Read() should return empty ID for 404 (not found), got: %s", resp.ID)
+	if m.createCalls != 1 || m.uploadCalls != 1 || m.deleteCalls != 0 {
+		t.Fatalf("calls create=%d upload=%d delete=%d", m.createCalls, m.uploadCalls, m.deleteCalls)
+	}
+	if m.createBody.FileName != "logo.png" || m.createBody.FileHash != wantHash ||
+		m.createBody.ParentFolder != testAssetFolder {
+		t.Errorf("metadata request = %+v (want hash %s)", m.createBody, wantHash)
+	}
+	for k, v := range m.uploadDetails {
+		if m.uploadFields[k] != v {
+			t.Errorf("upload form field %s = %q, want %q", k, m.uploadFields[k], v)
+		}
+	}
+	if len(m.uploadOrder) != len(m.uploadDetails)+1 || m.uploadOrder[len(m.uploadOrder)-1] != "file" {
+		t.Errorf("upload part order = %v", m.uploadOrder)
+	}
+	if m.uploadFile != "logo.png" || string(m.uploadData) != testAssetContent {
+		t.Errorf("upload file part = %q %q", m.uploadFile, m.uploadData)
+	}
+	if m.uploadAuth != "" {
+		t.Errorf("S3 upload must not receive the bearer token, got %q", m.uploadAuth)
+	}
+
+	if resp.ID != GenerateAssetResourceID(testAssetSiteID, testAssetID) {
+		t.Errorf("ID = %q", resp.ID)
+	}
+	out := resp.Output
+	if out.AssetID != testAssetID || out.FileHash != wantHash || out.Size != len(testAssetContent) ||
+		out.FolderID != testAssetFolder || out.ContentType != "image/png" ||
+		out.HostedURL == "" || out.AssetURL == "" || out.UploadURL != m.server.URL+"/s3-upload" ||
+		out.UploadDetails["Policy"] != "policy" || out.CreatedOn == "" {
+		t.Errorf("unexpected output state %+v", out)
 	}
 }
 
-// TestAssetRead_Success tests that Read() correctly retrieves and returns asset state.
-func TestAssetRead_Success(t *testing.T) {
-	// Setup: Set environment variable for authentication
-	t.Setenv("WEBFLOW_API_TOKEN", "test-token-12345678901234567890")
-
-	// Setup: Mock HTTP server that returns asset details
-	expectedAsset := AssetResponse{
-		ID:               "6789abcdef1234567890abcd",
-		ContentType:      "image/png",
-		Size:             12345,
-		SiteID:           "5f0c8c9e1c9d440000e8d8c3",
-		HostedURL:        "https://assets.website-files.com/.../logo.png",
-		OriginalFileName: "logo.png",
-		DisplayName:      "logo.png",
-		CreatedOn:        "2025-01-12T10:00:00Z",
-		LastUpdated:      "2025-01-12T10:00:00Z",
-	}
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify we're calling the GET /v2/assets/{asset_id} endpoint
-		if r.Method != "GET" || !strings.Contains(r.URL.Path, "/v2/assets/") {
-			t.Errorf("Expected GET request to /v2/assets/{asset_id}, got %s %s", r.Method, r.URL.Path)
-		}
-
-		// Return 200 OK with asset details
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(expectedAsset)
+func TestAssetCreate_RemoteSource(t *testing.T) {
+	m := newAssetMock(t)
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(testAssetContent))
 	}))
-	defer server.Close()
+	defer source.Close()
 
-	// Override the API base URL to use our test server
-	oldURL := getAssetBaseURL
-	getAssetBaseURL = server.URL
-	defer func() { getAssetBaseURL = oldURL }()
-
-	// Setup: Create the Asset resource controller
-	asset := &Asset{}
-
-	// Setup: Create context
-	ctx := context.Background()
-
-	// Setup: Build a read request with existing state
-	resourceID := "5f0c8c9e1c9d440000e8d8c3/assets/6789abcdef1234567890abcd"
-	req := infer.ReadRequest[AssetArgs, AssetState]{
-		ID: resourceID,
-		State: AssetState{
-			AssetArgs: AssetArgs{
-				SiteID:   "5f0c8c9e1c9d440000e8d8c3",
-				FileName: "logo.png",
-				FileHash: "d41d8cd98f00b204e9800998ecf8427e",
-			},
-			AssetID: "6789abcdef1234567890abcd",
-		},
-	}
-
-	// Execute: Call Read()
-	resp, err := asset.Read(ctx, req)
-	// Verify: No error should be returned
+	resp, err := (&Asset{}).Create(context.Background(), infer.CreateRequest[AssetArgs]{
+		Inputs: AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png", FileSource: source.URL + "/logo.png"},
+	})
 	if err != nil {
-		t.Errorf("Read() should not return error for successful read, got: %v", err)
+		t.Fatalf("Create: %v", err)
 	}
-
-	// Verify: Resource ID should be preserved
-	if resp.ID != resourceID {
-		t.Errorf("Read() should preserve resource ID, expected: %s, got: %s", resourceID, resp.ID)
+	if string(m.uploadData) != testAssetContent || resp.Output.FileHash != ComputeFileHash([]byte(testAssetContent)) {
+		t.Errorf("remote content was not uploaded: %q / %s", m.uploadData, resp.Output.FileHash)
 	}
-
-	// Verify: State should match API response
-	if resp.State.AssetID != expectedAsset.ID {
-		t.Errorf("Expected AssetID=%s, got %s", expectedAsset.ID, resp.State.AssetID)
-	}
-	if resp.State.HostedURL != expectedAsset.HostedURL {
-		t.Errorf("Expected HostedURL=%s, got %s", expectedAsset.HostedURL, resp.State.HostedURL)
-	}
-	if resp.State.ContentType != expectedAsset.ContentType {
-		t.Errorf("Expected ContentType=%s, got %s", expectedAsset.ContentType, resp.State.ContentType)
-	}
-	if resp.State.Size != expectedAsset.Size {
-		t.Errorf("Expected Size=%d, got %d", expectedAsset.Size, resp.State.Size)
+	if m.createBody.ParentFolder != "" {
+		t.Errorf("parentFolder should be omitted, got %q", m.createBody.ParentFolder)
 	}
 }
 
-// =============================================================================
-// Create Operation Tests
-// =============================================================================
+func TestAssetCreate_ExplicitHashMustMatch(t *testing.T) {
+	m := newAssetMock(t)
+	path := writeTempAsset(t, testAssetContent)
 
-// TestAssetCreate_Success tests successful asset creation with mocked API
-func TestAssetCreate_Success(t *testing.T) {
-	// Setup: Set environment variable for authentication
-	t.Setenv("WEBFLOW_API_TOKEN", "test-token-12345678901234567890")
-
-	// Setup: Mock HTTP server that returns asset upload response
-	expectedResponse := AssetUploadResponse{
-		ID:               "6789abcdef1234567890abcd",
-		UploadURL:        "https://s3.amazonaws.com/test-bucket/upload",
-		AssetURL:         "https://s3.amazonaws.com/test-bucket/logo.png",
-		HostedURL:        "https://assets.website-files.com/.../logo.png",
-		ContentType:      "image/png",
-		OriginalFileName: "logo.png",
-		CreatedOn:        "2025-01-12T10:00:00Z",
-		LastUpdated:      "2025-01-12T10:00:00Z",
-		UploadDetails: map[string]string{
-			"acl":    "public-read",
-			"bucket": "test-bucket",
-			"key":    "logo.png",
-		},
-	}
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify correct endpoint and method
-		if r.Method != "POST" || !strings.Contains(r.URL.Path, "/v2/sites/") || !strings.Contains(r.URL.Path, "/assets") {
-			t.Errorf("Expected POST to /v2/sites/{site_id}/assets, got %s %s", r.Method, r.URL.Path)
-		}
-
-		// Return successful response
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		_ = json.NewEncoder(w).Encode(expectedResponse)
-	}))
-	defer server.Close()
-
-	// Override the API base URL
-	oldURL := postAssetUploadURLBaseURL
-	postAssetUploadURLBaseURL = server.URL
-	defer func() { postAssetUploadURLBaseURL = oldURL }()
-
-	// Setup: Create the Asset resource controller
-	asset := &Asset{}
-
-	// Setup: Create context
-	ctx := context.Background()
-
-	// Execute: Call Create()
-	req := infer.CreateRequest[AssetArgs]{
+	_, err := (&Asset{}).Create(context.Background(), infer.CreateRequest[AssetArgs]{
 		Inputs: AssetArgs{
-			SiteID:   "5f0c8c9e1c9d440000e8d8c3",
-			FileName: "logo.png",
-			FileHash: "d41d8cd98f00b204e9800998ecf8427e",
+			SiteID:     testAssetSiteID,
+			FileName:   "logo.png",
+			FileSource: path,
+			FileHash:   "d41d8cd98f00b204e9800998ecf8427e",
 		},
-		DryRun: false,
+	})
+	if err == nil || !strings.Contains(err.Error(), "does not match") {
+		t.Fatalf("expected hash mismatch error, got %v", err)
+	}
+	if m.createCalls != 0 {
+		t.Error("no API call should be made when the hash mismatches")
 	}
 
-	resp, err := asset.Create(ctx, req)
-	// Verify: No error
+	// A matching explicit hash (any case) is accepted.
+	resp, err := (&Asset{}).Create(context.Background(), infer.CreateRequest[AssetArgs]{
+		Inputs: AssetArgs{
+			SiteID: testAssetSiteID, FileName: "logo.png", FileSource: path,
+			FileHash: strings.ToUpper(ComputeFileHash([]byte(testAssetContent))),
+		},
+	})
 	if err != nil {
-		t.Fatalf("Create() should not return error, got: %v", err)
+		t.Fatalf("Create with matching hash: %v", err)
 	}
-
-	// Verify: Resource ID is properly formatted
-	expectedID := "5f0c8c9e1c9d440000e8d8c3/assets/6789abcdef1234567890abcd"
-	if resp.ID != expectedID {
-		t.Errorf("Expected ID=%s, got %s", expectedID, resp.ID)
-	}
-
-	// Verify: Output state contains API response data
-	if resp.Output.AssetID != expectedResponse.ID {
-		t.Errorf("Expected AssetID=%s, got %s", expectedResponse.ID, resp.Output.AssetID)
-	}
-	if resp.Output.HostedURL != expectedResponse.HostedURL {
-		t.Errorf("Expected HostedURL=%s, got %s", expectedResponse.HostedURL, resp.Output.HostedURL)
-	}
-	if resp.Output.ContentType != expectedResponse.ContentType {
-		t.Errorf("Expected ContentType=%s, got %s", expectedResponse.ContentType, resp.Output.ContentType)
+	if resp.Output.FileHash != ComputeFileHash([]byte(testAssetContent)) {
+		t.Errorf("state hash should be normalised lowercase, got %s", resp.Output.FileHash)
 	}
 }
 
-// TestAssetCreate_ValidationFailure tests validation errors in Create
-func TestAssetCreate_ValidationFailure(t *testing.T) {
-	asset := &Asset{}
-	ctx := context.Background()
+func TestAssetCreate_UploadFailureCleansUpMetadata(t *testing.T) {
+	m := newAssetMock(t)
+	m.uploadStatus = http.StatusForbidden
+	path := writeTempAsset(t, testAssetContent)
+
+	_, err := (&Asset{}).Create(context.Background(), infer.CreateRequest[AssetArgs]{
+		Inputs: AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png", FileSource: path},
+	})
+	if err == nil || !strings.Contains(err.Error(), "failed to upload asset file") {
+		t.Fatalf("expected upload failure, got %v", err)
+	}
+	if m.deleteCalls != 1 {
+		t.Errorf("expected orphaned metadata to be deleted, delete calls = %d", m.deleteCalls)
+	}
+}
+
+// TestAssetCreate_CancelledApplyStillCleansUp verifies that when the apply context is cancelled
+// while the file is being uploaded (the metadata already exists), the orphaned metadata is
+// still deleted on a context detached from the cancellation.
+func TestAssetCreate_CancelledApplyStillCleansUp(t *testing.T) {
+	m := newAssetMock(t)
+	path := writeTempAsset(t, testAssetContent)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	m.uploadStatus = http.StatusForbidden
+	m.onUpload = cancel // the apply is cancelled mid-upload
+
+	_, err := (&Asset{}).Create(ctx, infer.CreateRequest[AssetArgs]{
+		Inputs: AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png", FileSource: path},
+	})
+	if err == nil || !strings.Contains(err.Error(), "failed to upload asset file") {
+		t.Fatalf("expected the upload to fail, got %v", err)
+	}
+	if ctx.Err() == nil {
+		t.Fatal("test setup: the apply context should have been cancelled during the upload")
+	}
+	if m.deleteCalls != 1 {
+		t.Errorf("orphaned metadata must be deleted despite the cancelled apply, delete calls = %d", m.deleteCalls)
+	}
+}
+
+func TestAssetCreate_APIError(t *testing.T) {
+	m := newAssetMock(t)
+	m.createStatus = http.StatusBadRequest
+	path := writeTempAsset(t, testAssetContent)
+
+	_, err := (&Asset{}).Create(context.Background(), infer.CreateRequest[AssetArgs]{
+		Inputs: AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png", FileSource: path},
+	})
+	if err == nil || !strings.Contains(err.Error(), "failed to create asset") ||
+		!strings.Contains(err.Error(), "bad request") {
+		t.Fatalf("expected bad request error, got %v", err)
+	}
+	if m.uploadCalls != 0 {
+		t.Error("upload must not happen when metadata creation fails")
+	}
+}
+
+func TestAssetCreate_DryRunSkipsValidationAndAPI(t *testing.T) {
+	m := newAssetMock(t)
+
+	// Unknown inputs arrive as zero values during preview; nothing may be validated or called.
+	resp, err := (&Asset{}).Create(context.Background(), infer.CreateRequest[AssetArgs]{
+		Inputs: AssetArgs{SiteID: "", FileName: "", FileSource: ""},
+		DryRun: true,
+	})
+	if err != nil {
+		t.Fatalf("dry run should not fail: %v", err)
+	}
+	if resp.ID != "" {
+		t.Errorf("dry run must not fabricate an ID, got %q", resp.ID)
+	}
+	if resp.Output.AssetID != "" || resp.Output.HostedURL != "" || resp.Output.CreatedOn != "" ||
+		resp.Output.FileHash != "" {
+		t.Errorf("dry run must not fabricate outputs: %+v", resp.Output)
+	}
+	if m.createCalls != 0 || m.uploadCalls != 0 {
+		t.Error("dry run must not call the API")
+	}
+}
+
+func TestAssetCreate_ValidationAfterDryRun(t *testing.T) {
+	m := newAssetMock(t)
+	path := writeTempAsset(t, testAssetContent)
 
 	tests := []struct {
 		name   string
 		inputs AssetArgs
 		want   string
 	}{
+		{"invalid siteId", AssetArgs{SiteID: "invalid", FileName: "logo.png", FileSource: path}, "siteId has invalid format"},
+		{"missing fileName", AssetArgs{SiteID: testAssetSiteID, FileName: "", FileSource: path}, "fileName is required"},
 		{
-			name: "invalid siteId",
-			inputs: AssetArgs{
-				SiteID:   "invalid",
-				FileName: "logo.png",
-				FileHash: "d41d8cd98f00b204e9800998ecf8427e",
-			},
-			want: "validation failed",
+			"invalid fileName",
+			AssetArgs{SiteID: testAssetSiteID, FileName: "logo<>.png", FileSource: path},
+			"invalid character",
+		},
+		{"missing fileSource", AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png"}, "fileSource is required"},
+		{
+			"invalid parentFolder",
+			AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png", FileSource: path, ParentFolder: "nope"},
+			"assetFolderId has invalid format",
 		},
 		{
-			name: "missing fileName",
-			inputs: AssetArgs{
-				SiteID:   "5f0c8c9e1c9d440000e8d8c3",
-				FileName: "",
-				FileHash: "d41d8cd98f00b204e9800998ecf8427e",
-			},
-			want: "fileName is required",
-		},
-		{
-			name: "fileName too long",
-			inputs: AssetArgs{
-				SiteID:   "5f0c8c9e1c9d440000e8d8c3",
-				FileName: strings.Repeat("a", 256) + ".png",
-				FileHash: "d41d8cd98f00b204e9800998ecf8427e",
-			},
-			want: "too long",
-		},
-		{
-			name: "fileName with invalid characters",
-			inputs: AssetArgs{
-				SiteID:   "5f0c8c9e1c9d440000e8d8c3",
-				FileName: "logo<>.png",
-				FileHash: "d41d8cd98f00b204e9800998ecf8427e",
-			},
-			want: "invalid character",
-		},
-		{
-			name: "missing fileHash",
-			inputs: AssetArgs{
-				SiteID:   "5f0c8c9e1c9d440000e8d8c3",
-				FileName: "logo.png",
-				FileHash: "",
-			},
-			want: "fileHash is required",
-		},
-		{
-			name: "invalid fileHash format",
-			inputs: AssetArgs{
-				SiteID:   "5f0c8c9e1c9d440000e8d8c3",
-				FileName: "logo.png",
-				FileHash: "invalid",
-			},
-			want: "invalid format",
+			"invalid fileHash",
+			AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png", FileSource: path, FileHash: "xyz"},
+			"fileHash has invalid format",
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := infer.CreateRequest[AssetArgs]{
-				Inputs: tt.inputs,
-				DryRun: false,
-			}
-
-			_, err := asset.Create(ctx, req)
-			if err == nil {
-				t.Fatal("Expected validation error, got nil")
-			}
-			if !strings.Contains(strings.ToLower(err.Error()), strings.ToLower(tt.want)) {
-				t.Errorf("Expected error containing '%s', got '%s'", tt.want, err.Error())
+			_, err := (&Asset{}).Create(context.Background(), infer.CreateRequest[AssetArgs]{Inputs: tt.inputs})
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("expected error containing %q, got %v", tt.want, err)
 			}
 		})
 	}
+	if m.createCalls != 0 {
+		t.Error("validation failures must not reach the API")
+	}
 }
 
-// TestAssetCreate_APIError tests handling of API errors during creation
-func TestAssetCreate_APIError(t *testing.T) {
-	// Setup: Set environment variable for authentication
-	t.Setenv("WEBFLOW_API_TOKEN", "test-token-12345678901234567890")
-
-	// Setup: Mock HTTP server that returns an error
+func TestAssetRead_Success(t *testing.T) {
+	t.Setenv("WEBFLOW_API_TOKEN", testAssetToken)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"message": "Invalid file hash",
-		})
-	}))
-	defer server.Close()
-
-	// Override the API base URL
-	oldURL := postAssetUploadURLBaseURL
-	postAssetUploadURLBaseURL = server.URL
-	defer func() { postAssetUploadURLBaseURL = oldURL }()
-
-	// Setup: Create the Asset resource controller
-	asset := &Asset{}
-	ctx := context.Background()
-
-	// Execute: Call Create()
-	req := infer.CreateRequest[AssetArgs]{
-		Inputs: AssetArgs{
-			SiteID:   "5f0c8c9e1c9d440000e8d8c3",
-			FileName: "logo.png",
-			FileHash: "d41d8cd98f00b204e9800998ecf8427e",
-		},
-		DryRun: false,
-	}
-
-	_, err := asset.Create(ctx, req)
-
-	// Verify: Error is returned
-	if err == nil {
-		t.Fatal("Expected error from API, got nil")
-	}
-	if !strings.Contains(err.Error(), "failed to create asset") {
-		t.Errorf("Expected error message about creation failure, got: %v", err)
-	}
-}
-
-// TestAssetCreate_DryRun tests preview mode (dry-run) for asset creation
-func TestAssetCreate_DryRun(t *testing.T) {
-	asset := &Asset{}
-	ctx := context.Background()
-
-	req := infer.CreateRequest[AssetArgs]{
-		Inputs: AssetArgs{
-			SiteID:   "5f0c8c9e1c9d440000e8d8c3",
-			FileName: "logo.png",
-			FileHash: "d41d8cd98f00b204e9800998ecf8427e",
-		},
-		DryRun: true,
-	}
-
-	// Execute: Call Create() in dry-run mode
-	resp, err := asset.Create(ctx, req)
-	// Verify: No error
-	if err != nil {
-		t.Fatalf("Create() dry-run failed: %v", err)
-	}
-
-	// Verify: Preview ID is generated
-	if resp.ID == "" {
-		t.Error("Expected non-empty ID in dry-run mode")
-	}
-	if !strings.Contains(resp.ID, "5f0c8c9e1c9d440000e8d8c3/assets/") {
-		t.Errorf("Expected preview ID to contain site ID and assets path, got: %s", resp.ID)
-	}
-
-	// Verify: Preview state is populated
-	if resp.Output.HostedURL == "" {
-		t.Error("Expected preview HostedURL to be set")
-	}
-	if resp.Output.CreatedOn == "" {
-		t.Error("Expected preview CreatedOn timestamp to be set")
-	}
-}
-
-// =============================================================================
-// Delete Operation Tests
-// =============================================================================
-
-// TestAssetDelete_Success tests successful asset deletion
-func TestAssetDelete_Success(t *testing.T) {
-	// Setup: Set environment variable for authentication
-	t.Setenv("WEBFLOW_API_TOKEN", "test-token-12345678901234567890")
-
-	// Setup: Mock HTTP server that confirms deletion
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify correct endpoint and method
-		if r.Method != "DELETE" || !strings.Contains(r.URL.Path, "/v2/assets/") {
-			t.Errorf("Expected DELETE to /v2/assets/{asset_id}, got %s %s", r.Method, r.URL.Path)
+		if r.Method != http.MethodGet || r.URL.Path != "/v2/assets/"+testAssetID {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
-
-		// Return successful deletion
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer server.Close()
-
-	// Override the API base URL
-	oldURL := deleteAssetBaseURL
-	deleteAssetBaseURL = server.URL
-	defer func() { deleteAssetBaseURL = oldURL }()
-
-	// Setup: Create the Asset resource controller
-	asset := &Asset{}
-	ctx := context.Background()
-
-	// Execute: Call Delete()
-	resourceID := "5f0c8c9e1c9d440000e8d8c3/assets/6789abcdef1234567890abcd"
-	req := infer.DeleteRequest[AssetState]{
-		ID: resourceID,
-		State: AssetState{
-			AssetArgs: AssetArgs{
-				SiteID:   "5f0c8c9e1c9d440000e8d8c3",
-				FileName: "logo.png",
-				FileHash: "d41d8cd98f00b204e9800998ecf8427e",
-			},
-			AssetID: "6789abcdef1234567890abcd",
-		},
-	}
-
-	_, err := asset.Delete(ctx, req)
-	// Verify: No error
-	if err != nil {
-		t.Fatalf("Delete() should not return error, got: %v", err)
-	}
-}
-
-// TestAssetDelete_NotFound tests idempotent deletion (404 handling)
-func TestAssetDelete_NotFound(t *testing.T) {
-	// Setup: Set environment variable for authentication
-	t.Setenv("WEBFLOW_API_TOKEN", "test-token-12345678901234567890")
-
-	// Setup: Mock HTTP server that returns 404
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"message": "Asset not found",
+		_ = json.NewEncoder(w).Encode(AssetResponse{
+			ID: testAssetID, ContentType: "image/png", Size: 12345, SiteID: testAssetSiteID,
+			HostedURL: "https://cdn.prod.website-files.com/x/logo.png", OriginalFileName: "logo.png",
+			CreatedOn: "2025-01-12T10:00:00Z", LastUpdated: "2025-01-13T10:00:00Z",
 		})
 	}))
 	defer server.Close()
+	useMockAPI(t, server)
 
-	// Override the API base URL
-	oldURL := deleteAssetBaseURL
-	deleteAssetBaseURL = server.URL
-	defer func() { deleteAssetBaseURL = oldURL }()
-
-	// Setup: Create the Asset resource controller
-	asset := &Asset{}
-	ctx := context.Background()
-
-	// Execute: Call Delete()
-	resourceID := "5f0c8c9e1c9d440000e8d8c3/assets/6789abcdef1234567890abcd"
-	req := infer.DeleteRequest[AssetState]{
-		ID: resourceID,
-		State: AssetState{
-			AssetArgs: AssetArgs{
-				SiteID:   "5f0c8c9e1c9d440000e8d8c3",
-				FileName: "logo.png",
-				FileHash: "d41d8cd98f00b204e9800998ecf8427e",
-			},
-			AssetID: "6789abcdef1234567890abcd",
+	id := GenerateAssetResourceID(testAssetSiteID, testAssetID)
+	prev := AssetState{
+		AssetArgs: AssetArgs{
+			SiteID:       testAssetSiteID,
+			FileName:     "logo.png",
+			FileSource:   "./logo.png",
+			FileHash:     "abc",
+			ParentFolder: testAssetFolder,
 		},
+		AssetID:       testAssetID,
+		UploadURL:     "https://s3/upload",
+		UploadDetails: map[string]string{"key": "k"},
+		AssetURL:      "https://s3/asset",
+		FolderID:      testAssetFolder,
 	}
-
-	_, err := asset.Delete(ctx, req)
-	// Verify: No error (404 should be handled gracefully for idempotency)
+	resp, err := (&Asset{}).Read(context.Background(), infer.ReadRequest[AssetArgs, AssetState]{ID: id, State: prev})
 	if err != nil {
-		t.Fatalf("Delete() should handle 404 gracefully, got: %v", err)
+		t.Fatalf("Read: %v", err)
+	}
+	if resp.ID != id {
+		t.Errorf("ID = %q", resp.ID)
+	}
+	s := resp.State
+	if s.Size != 12345 || s.HostedURL != "https://cdn.prod.website-files.com/x/logo.png" ||
+		s.LastUpdated != "2025-01-13T10:00:00Z" {
+		t.Errorf("API values not applied: %+v", s)
+	}
+	if s.FileHash != "abc" || s.FileSource != "./logo.png" || s.ParentFolder != testAssetFolder ||
+		s.UploadURL != "https://s3/upload" || s.UploadDetails["key"] != "k" || s.AssetURL != "https://s3/asset" ||
+		s.FolderID != testAssetFolder {
+		t.Errorf("state values not carried through: %+v", s)
+	}
+	if resp.Inputs.FileName != "logo.png" {
+		t.Errorf("inputs = %+v", resp.Inputs)
 	}
 }
 
-// =============================================================================
-// Diff Detection Tests
-// =============================================================================
+// TestAssetRead_ImportPopulatesFromAPI verifies that an import (empty state) captures the
+// identity fields from the API and leaves fileSource/fileHash empty for Diff to adopt later.
+func TestAssetRead_ImportPopulatesFromAPI(t *testing.T) {
+	t.Setenv("WEBFLOW_API_TOKEN", testAssetToken)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(AssetResponse{
+			ID: testAssetID, ContentType: "image/png", Size: 42, SiteID: testAssetSiteID,
+			HostedURL: "https://cdn.prod.website-files.com/x/logo.png", OriginalFileName: "logo.png",
+			FolderID: testAssetFolder,
+		})
+	}))
+	defer server.Close()
+	useMockAPI(t, server)
 
-// TestAssetDiff_NoChanges tests that Diff correctly reports no changes
-// when inputs match state
-func TestAssetDiff_NoChanges(t *testing.T) {
-	asset := &Asset{}
-	ctx := context.Background()
-
-	args := AssetArgs{
-		SiteID:       "5f0c8c9e1c9d440000e8d8c3",
-		FileName:     "logo.png",
-		FileHash:     "d41d8cd98f00b204e9800998ecf8427e",
-		ParentFolder: "folder123",
-		FileSource:   "https://example.com/logo.png",
-	}
-
-	req := infer.DiffRequest[AssetArgs, AssetState]{
-		Inputs: args,
-		State: AssetState{
-			AssetArgs: args,
-			AssetID:   "6789abcdef1234567890abcd",
-		},
-	}
-
-	// Execute: Call Diff()
-	resp, err := asset.Diff(ctx, req)
-	// Verify: No error
+	id := GenerateAssetResourceID(testAssetSiteID, testAssetID)
+	resp, err := (&Asset{}).Read(context.Background(), infer.ReadRequest[AssetArgs, AssetState]{ID: id})
 	if err != nil {
-		t.Fatalf("Diff() should not return error, got: %v", err)
+		t.Fatalf("Read: %v", err)
 	}
-
-	// Verify: No changes detected
-	if resp.HasChanges {
-		t.Error("Diff() should not detect changes when inputs match state")
+	in := resp.Inputs
+	if in.SiteID != testAssetSiteID || in.FileName != "logo.png" || in.ParentFolder != testAssetFolder {
+		t.Errorf("import should capture identity fields from the API: %+v", in)
+	}
+	if in.FileSource != "" || in.FileHash != "" {
+		t.Errorf("import cannot know fileSource/fileHash, got %+v", in)
+	}
+	if resp.State.AssetID != testAssetID || resp.State.FolderID != testAssetFolder || resp.State.Size != 42 {
+		t.Errorf("unexpected state %+v", resp.State)
 	}
 }
 
-// TestAssetDiff_RequiresReplacement tests that any property change
-// requires replacement (assets are immutable)
-func TestAssetDiff_RequiresReplacement(t *testing.T) {
-	asset := &Asset{}
-	ctx := context.Background()
-
-	baseArgs := AssetArgs{
-		SiteID:       "5f0c8c9e1c9d440000e8d8c3",
-		FileName:     "logo.png",
-		FileHash:     "d41d8cd98f00b204e9800998ecf8427e",
-		ParentFolder: "folder123",
-		FileSource:   "https://example.com/logo.png",
+func TestAssetCheck(t *testing.T) {
+	inputs := property.NewMap(map[string]property.Value{
+		"siteId":       property.New("bad"),
+		"fileName":     property.New(strings.Repeat("a", 100)),
+		"fileSource":   property.New("  "),
+		"parentFolder": property.New("nope"),
+		"fileHash":     property.New("xyz"),
+	})
+	resp, err := (&Asset{}).Check(context.Background(), infer.CheckRequest{NewInputs: inputs})
+	if err != nil {
+		t.Fatalf("Check: %v", err)
+	}
+	got := map[string]bool{}
+	for _, f := range resp.Failures {
+		got[f.Property] = true
+	}
+	for _, want := range []string{"siteId", "fileName", "fileSource", "parentFolder", "fileHash"} {
+		if !got[want] {
+			t.Errorf("expected a failure on %q, got %+v", want, resp.Failures)
+		}
+	}
+	if len(resp.Failures) != 5 {
+		t.Errorf("expected 5 failures, got %+v", resp.Failures)
 	}
 
-	baseState := AssetState{
-		AssetArgs: baseArgs,
-		AssetID:   "6789abcdef1234567890abcd",
+	unknown := property.NewMap(map[string]property.Value{
+		"siteId":       property.New(property.Computed),
+		"fileName":     property.New(property.Computed),
+		"fileSource":   property.New(property.Computed),
+		"parentFolder": property.New(property.Computed),
+	})
+	resp, err = (&Asset{}).Check(context.Background(), infer.CheckRequest{NewInputs: unknown})
+	if err != nil || len(resp.Failures) != 0 {
+		t.Errorf("unknown inputs must not fail Check: %+v %v", resp.Failures, err)
 	}
 
-	tests := []struct {
-		name      string
-		modifyFn  func(args *AssetArgs)
-		fieldName string
+	valid := property.NewMap(map[string]property.Value{
+		"siteId":       property.New(testAssetSiteID),
+		"fileName":     property.New("logo.png"),
+		"fileSource":   property.New("./logo.png"),
+		"parentFolder": property.New(testAssetFolder),
+	})
+	resp, err = (&Asset{}).Check(context.Background(), infer.CheckRequest{NewInputs: valid})
+	if err != nil || len(resp.Failures) != 0 {
+		t.Errorf("valid inputs must pass Check: %+v %v", resp.Failures, err)
+	}
+	if resp.Inputs.SiteID != testAssetSiteID || resp.Inputs.FileSource != "./logo.png" {
+		t.Errorf("inputs not decoded: %+v", resp.Inputs)
+	}
+}
+
+// TestAssetCreate_UploadOutputsAreSecret drives a real Create through the infer server and
+// checks that the presigned upload URL and form fields come back marked secret, regardless of
+// how the calling SDK flags them.
+func TestAssetCreate_UploadOutputsAreSecret(t *testing.T) {
+	newAssetMock(t)
+	path := writeTempAsset(t, testAssetContent)
+
+	srv, err := integration.NewServer(context.Background(), Name, semver.MustParse("0.0.1"),
+		integration.WithProvider(Provider()))
+	if err != nil {
+		t.Fatalf("NewServer: %v", err)
+	}
+	if err := srv.Configure(p.ConfigureRequest{Args: property.NewMap(map[string]property.Value{
+		"apiToken": property.New(testAssetToken),
+	})}); err != nil {
+		t.Fatalf("Configure: %v", err)
+	}
+	resp, err := srv.Create(p.CreateRequest{
+		Urn: resource.NewURN("stack", "proj", "", tokens.Type(Name+":index:Asset"), "logo"),
+		Properties: property.NewMap(map[string]property.Value{
+			"siteId":     property.New(testAssetSiteID),
+			"fileName":   property.New("logo.png"),
+			"fileSource": property.New(path),
+		}),
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	for _, key := range []string{"uploadUrl", "uploadDetails"} {
+		v, ok := resp.Properties.GetOk(key)
+		if !ok {
+			t.Errorf("output %q missing: %v", key, resp.Properties)
+			continue
+		}
+		if !v.Secret() {
+			t.Errorf("output %q must be secret, got %#v", key, v)
+		}
+	}
+	for _, key := range []string{"hostedUrl", "assetId", "fileHash"} {
+		if v, ok := resp.Properties.GetOk(key); !ok || v.Secret() {
+			t.Errorf("output %q should be present and public, got %#v (ok=%v)", key, v, ok)
+		}
+	}
+}
+
+func TestAssetRead_NotFoundAndErrors(t *testing.T) {
+	t.Setenv("WEBFLOW_API_TOKEN", testAssetToken)
+	status := http.StatusNotFound
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(`{"message":"not found"}`))
+	}))
+	defer server.Close()
+	useMockAPI(t, server)
+
+	req := infer.ReadRequest[AssetArgs, AssetState]{ID: GenerateAssetResourceID(testAssetSiteID, testAssetID)}
+	resp, err := (&Asset{}).Read(context.Background(), req)
+	if err != nil || resp.ID != "" {
+		t.Fatalf("404 should clear the resource: id=%q err=%v", resp.ID, err)
+	}
+
+	// A 500 whose body says "not found" must be an error, not a deletion.
+	status = http.StatusInternalServerError
+	if _, err := (&Asset{}).Read(context.Background(), req); err == nil {
+		t.Fatal("500 must propagate as an error")
+	}
+}
+
+func TestAssetRead_InvalidIDsRejectedBeforeAPI(t *testing.T) {
+	t.Setenv("WEBFLOW_API_TOKEN", testAssetToken)
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Errorf("no API call expected, got %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+	useMockAPI(t, server)
+
+	for _, id := range []string{"", "bad", "site/assets/../x", testAssetSiteID + "/assets/not-hex"} {
+		if _, err := (&Asset{}).Read(context.Background(), infer.ReadRequest[AssetArgs, AssetState]{ID: id}); err == nil {
+			t.Errorf("expected error for id %q", id)
+		}
+	}
+	if _, err := (&Asset{}).Delete(
+		context.Background(), infer.DeleteRequest[AssetState]{ID: testAssetSiteID + "/assets/nope"},
+	); err == nil {
+		t.Error("Delete should reject an invalid asset ID")
+	}
+}
+
+func TestAssetDelete(t *testing.T) {
+	t.Setenv("WEBFLOW_API_TOKEN", testAssetToken)
+	for _, status := range []int{http.StatusNoContent, http.StatusNotFound} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodDelete || r.URL.Path != "/v2/assets/"+testAssetID {
+				t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			}
+			w.WriteHeader(status)
+		}))
+		useMockAPI(t, server)
+		_, err := (&Asset{}).Delete(context.Background(), infer.DeleteRequest[AssetState]{
+			ID: GenerateAssetResourceID(testAssetSiteID, testAssetID),
+		})
+		server.Close()
+		if err != nil {
+			t.Errorf("Delete with %d: %v", status, err)
+		}
+	}
+}
+
+func TestAssetUpdate_Unsupported(t *testing.T) {
+	if _, err := (&Asset{}).Update(context.Background(), infer.UpdateRequest[AssetArgs, AssetState]{}); err == nil {
+		t.Fatal("Update must return an error")
+	}
+}
+
+func TestAssetDiff(t *testing.T) {
+	path := writeTempAsset(t, testAssetContent)
+	hash := ComputeFileHash([]byte(testAssetContent))
+	base := AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png", FileSource: path, ParentFolder: testAssetFolder}
+	state := AssetState{AssetArgs: base, AssetID: testAssetID}
+	state.FileHash = hash
+
+	t.Run("no changes", func(t *testing.T) {
+		resp, err := (&Asset{}).Diff(
+			context.Background(),
+			infer.DiffRequest[AssetArgs, AssetState]{Inputs: base, State: state},
+		)
+		if err != nil || resp.HasChanges {
+			t.Fatalf("expected no changes: %+v %v", resp, err)
+		}
+	})
+
+	t.Run("explicit matching hash is not a change", func(t *testing.T) {
+		in := base
+		in.FileHash = strings.ToUpper(hash)
+		resp, err := (&Asset{}).Diff(context.Background(), infer.DiffRequest[AssetArgs, AssetState]{Inputs: in, State: state})
+		if err != nil || resp.HasChanges {
+			t.Fatalf("expected no changes: %+v %v", resp, err)
+		}
+	})
+
+	replacements := []struct {
+		field  string
+		modify func(a *AssetArgs)
 	}{
-		{
-			name: "siteId change",
-			modifyFn: func(args *AssetArgs) {
-				args.SiteID = "6f1d9d0f2d0e551111f9e9d4"
-			},
-			fieldName: "siteId",
-		},
-		{
-			name: "fileName change",
-			modifyFn: func(args *AssetArgs) {
-				args.FileName = "hero.jpg"
-			},
-			fieldName: "fileName",
-		},
-		{
-			name: "fileHash change",
-			modifyFn: func(args *AssetArgs) {
-				args.FileHash = "e9800998ecf8427ed41d8cd98f00b204"
-			},
-			fieldName: "fileHash",
-		},
-		{
-			name: "parentFolder change",
-			modifyFn: func(args *AssetArgs) {
-				args.ParentFolder = "folder456"
-			},
-			fieldName: "parentFolder",
-		},
-		{
-			name: "fileSource change",
-			modifyFn: func(args *AssetArgs) {
-				args.FileSource = "https://example.com/hero.png"
-			},
-			fieldName: "fileSource",
-		},
+		{"siteId", func(a *AssetArgs) { a.SiteID = "6f1d9d0f2d0e551111f9e9d4" }},
+		{"fileName", func(a *AssetArgs) { a.FileName = "hero.jpg" }},
+		{"parentFolder", func(a *AssetArgs) { a.ParentFolder = "" }},
+		{"fileSource", func(a *AssetArgs) { a.FileSource = "https://example.com/logo.png" }},
+		{"fileHash", func(a *AssetArgs) { a.FileHash = "e9800998ecf8427ed41d8cd98f00b204" }},
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create modified inputs
-			modifiedArgs := baseArgs
-			tt.modifyFn(&modifiedArgs)
-
-			req := infer.DiffRequest[AssetArgs, AssetState]{
-				Inputs: modifiedArgs,
-				State:  baseState,
-			}
-
-			// Execute: Call Diff()
-			resp, err := asset.Diff(ctx, req)
-			// Verify: No error
+	for _, tt := range replacements {
+		t.Run(tt.field+" replaces", func(t *testing.T) {
+			in := base
+			tt.modify(&in)
+			resp, err := (&Asset{}).Diff(
+				context.Background(),
+				infer.DiffRequest[AssetArgs, AssetState]{Inputs: in, State: state},
+			)
 			if err != nil {
-				t.Fatalf("Diff() should not return error, got: %v", err)
+				t.Fatal(err)
 			}
-
-			// Verify: Changes detected
-			if !resp.HasChanges {
-				t.Errorf("Diff() should detect changes for %s", tt.fieldName)
-			}
-
-			// Verify: DeleteBeforeReplace is true (assets are immutable)
-			if !resp.DeleteBeforeReplace {
-				t.Errorf("Diff() DeleteBeforeReplace should be true for %s (assets are immutable)", tt.fieldName)
-			}
-
-			// Verify: Field is marked as UpdateReplace
-			if diff, ok := resp.DetailedDiff[tt.fieldName]; ok {
-				if diff.Kind != p.UpdateReplace {
-					t.Errorf("Diff() %s should be UpdateReplace, got %v", tt.fieldName, diff.Kind)
-				}
-			} else {
-				t.Errorf("Diff() DetailedDiff should contain %s", tt.fieldName)
+			if !resp.HasChanges || resp.DetailedDiff[tt.field].Kind != p.UpdateReplace {
+				t.Errorf("expected %s UpdateReplace, got %+v", tt.field, resp)
 			}
 		})
 	}
+
+	t.Run("local file content change replaces", func(t *testing.T) {
+		if err := os.WriteFile(path, []byte("new-content"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		resp, err := (&Asset{}).Diff(
+			context.Background(),
+			infer.DiffRequest[AssetArgs, AssetState]{Inputs: base, State: state},
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !resp.HasChanges || resp.DetailedDiff["fileHash"].Kind != p.UpdateReplace {
+			t.Errorf("expected fileHash UpdateReplace, got %+v", resp)
+		}
+	})
+
+	t.Run("missing local file skips the content comparison", func(t *testing.T) {
+		in := base
+		in.FileSource = filepath.Join(t.TempDir(), "missing.png")
+		st := state
+		st.FileSource = in.FileSource
+		resp, err := (&Asset{}).Diff(
+			context.Background(), infer.DiffRequest[AssetArgs, AssetState]{Inputs: in, State: st},
+		)
+		if err != nil {
+			t.Fatalf("a missing file must not fail the preview: %v", err)
+		}
+		if resp.HasChanges {
+			t.Errorf("a missing file must not be reported as a change: %+v", resp)
+		}
+	})
+
+	t.Run("unreadable local file is still an error", func(t *testing.T) {
+		in := base
+		in.FileSource = t.TempDir() // a directory exists but cannot be hashed
+		st := state
+		st.FileSource = in.FileSource
+		if _, err := (&Asset{}).Diff(
+			context.Background(), infer.DiffRequest[AssetArgs, AssetState]{Inputs: in, State: st},
+		); err == nil || !strings.Contains(err.Error(), "directory") {
+			t.Errorf("expected directory error, got %v", err)
+		}
+	})
+
+	t.Run("imported state without fileSource and fileHash is not a change", func(t *testing.T) {
+		// After 'pulumi import' the state carries only what GET /v2/assets returns.
+		imported := AssetState{
+			AssetArgs: AssetArgs{SiteID: testAssetSiteID, FileName: "logo.png", ParentFolder: testAssetFolder},
+			AssetID:   testAssetID,
+		}
+		remote := base
+		remote.FileSource = "https://example.invalid/logo.png"
+		explicit := base
+		explicit.FileHash = "e9800998ecf8427ed41d8cd98f00b204"
+		for name, in := range map[string]AssetArgs{"local source": base, "remote source": remote, "explicit hash": explicit} {
+			resp, err := (&Asset{}).Diff(
+				context.Background(), infer.DiffRequest[AssetArgs, AssetState]{Inputs: in, State: imported},
+			)
+			if err != nil || resp.HasChanges {
+				t.Errorf("%s: imported asset must not be replaced: %+v %v", name, resp, err)
+			}
+		}
+		// Identity fields are still compared after an import.
+		other := base
+		other.FileName = "other.png"
+		resp, err := (&Asset{}).Diff(
+			context.Background(), infer.DiffRequest[AssetArgs, AssetState]{Inputs: other, State: imported},
+		)
+		if err != nil || !resp.HasChanges || resp.DetailedDiff["fileName"].Kind != p.UpdateReplace {
+			t.Errorf("fileName change after import must still replace: %+v %v", resp, err)
+		}
+	})
+
+	t.Run("remote source without explicit hash is not fetched", func(t *testing.T) {
+		in := base
+		in.FileSource = "https://example.invalid/logo.png"
+		st := state
+		st.FileSource = in.FileSource
+		resp, err := (&Asset{}).Diff(context.Background(), infer.DiffRequest[AssetArgs, AssetState]{Inputs: in, State: st})
+		if err != nil || resp.HasChanges {
+			t.Fatalf("expected no network and no changes: %+v %v", resp, err)
+		}
+	})
 }

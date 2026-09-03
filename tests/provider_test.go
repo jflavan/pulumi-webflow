@@ -32,14 +32,14 @@ func TestSitePreviewCreate(t *testing.T) {
 		Properties: property.NewMap(map[string]property.Value{
 			"workspaceId": property.New("5f0c8c9e1c9d440000e8d8c3"),
 			"displayName": property.New("My Pulumi Site"),
-			"shortName":   property.New("my-pulumi-site"),
-			"timeZone":    property.New("UTC"),
 		}),
 		DryRun: true, // Avoid network calls; preview path exercises validation and state wiring
 	})
 
 	require.NoError(t, err)
-	assert.Len(t, response.ID, 24)
+	// Preview cannot know the real Webflow ID. An empty ID tells the engine the ID is unknown,
+	// so dependents see an unknown value instead of a fabricated placeholder.
+	assert.Empty(t, response.ID)
 	assert.Equal(t, "My Pulumi Site", response.Properties.Get("displayName").AsString())
 }
 

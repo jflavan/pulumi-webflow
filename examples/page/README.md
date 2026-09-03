@@ -1,17 +1,25 @@
-# Page Data Source Examples
+# Page Functions Examples
 
-This directory contains examples demonstrating how to read page information from Webflow sites using Pulumi in all supported languages.
+This directory contains examples demonstrating how to read page information from Webflow sites
+with the `getPages` and `getPage` functions using Pulumi in TypeScript, Python and Go.
 
 ## What You'll Learn
 
-- Retrieve all pages from a Webflow site
-- Get metadata for a specific page by ID
-- Access page properties (title, slug, creation date, etc.)
-- Use page data in your infrastructure code
+- List all pages of a Webflow site with `getPages`
+- Read the metadata of a single page with `getPage`
+- Access page properties (title, slug, published path, SEO, Open Graph, timestamps, flags)
+- Filter pages by their properties and use page IDs in other resources
 
 ## Important Note
 
-**Pages are READ-ONLY via the Webflow API.** Pages must be created in the Webflow Designer. This data source allows you to query existing pages and use their metadata in your infrastructure code.
+**Pages cannot be created through the Webflow API.** They are built in the Webflow Designer. The
+functions in this example read existing pages; to change a page's title, slug, SEO or Open Graph
+settings, use the [`PageMetadata` resource](../pagemetadata/).
+
+> The `PageData` resource that earlier versions used for this was removed. Replace
+> `new webflow.PageData(...)` with `webflow.getPagesOutput({ siteId })` (all pages) or
+> `webflow.getPageOutput({ pageId })` (one page) and run `pulumi state delete <URN>` for any
+> `PageData` resources still in state.
 
 ## Available Languages
 
@@ -20,6 +28,13 @@ This directory contains examples demonstrating how to read page information from
 | TypeScript | `typescript/`| `index.ts`     | `package.json`      |
 | Python     | `python/`    | `__main__.py`  | `requirements.txt`  |
 | Go         | `go/`        | `main.go`      | `go.mod`            |
+
+## Prerequisites
+
+- Pulumi CLI installed
+- A Webflow API token with the **`pages:read`** scope, set as `WEBFLOW_API_TOKEN` or via
+  `pulumi config set webflow:apiToken --secret`
+- Your Webflow site ID
 
 ## Quick Start
 
@@ -34,7 +49,7 @@ pulumi config set siteId your-site-id --secret
 # List all pages in the site
 pulumi up
 
-# Or get a specific page by ID
+# Also read a specific page by ID
 pulumi config set pageId your-page-id
 pulumi up
 ```
@@ -52,7 +67,7 @@ pulumi config set siteId your-site-id --secret
 # List all pages in the site
 pulumi up
 
-# Or get a specific page by ID
+# Also read a specific page by ID
 pulumi config set pageId your-page-id
 pulumi up
 ```
@@ -68,158 +83,171 @@ pulumi config set siteId your-site-id --secret
 # List all pages in the site
 pulumi up
 
-# Or get a specific page by ID
+# Also read a specific page by ID
 pulumi config set pageId your-page-id
 pulumi up
 ```
+
+> The Go example's `go.mod` contains a `replace` directive pointing at the SDK in this repository
+> (`../../../sdk/go/webflow`) because the page functions are newer than the published `v0.10.1`
+> Go module. Once the next release is published you can drop the directive and depend on that
+> version instead.
 
 ## Use Cases
 
 ### 1. List All Pages
 
-Query all pages in a site to understand your site structure, generate documentation, or reference in other resources.
+Query all pages in a site to understand your site structure, generate documentation, or find
+page IDs for other resources.
 
 ```typescript
-const allPages = new webflow.PageData("all-pages", {
-  siteId: siteId,
-  // pageId is omitted - retrieves all pages
-});
+const allPages = webflow.getPagesOutput({ siteId: siteId });
 
-export const pageList = allPages.pages;
+export const pageIds = allPages.pages.apply((pages) => pages.map((p) => p.pageId));
 ```
 
-### 2. Get Specific Page Details
+### 2. Get a Specific Page
 
 Retrieve detailed metadata for a single page when you know its ID.
 
 ```typescript
-const specificPage = new webflow.PageData("home-page", {
-  siteId: siteId,
-  pageId: "5f0c8c9e1c9d440000e8d8c4",
-});
+const homePage = webflow.getPageOutput({ pageId: "5f0c8c9e1c9d440000e8d8c4" });
 
-export const homePageTitle = specificPage.title;
-export const homePageSlug = specificPage.slug;
+export const homePageTitle = homePage.title;
+export const homePageSeoTitle = homePage.seo.title;
 ```
+
+Both functions accept an optional `localeId`. `getPage` also accepts `translatable`, a **secondary
+locale ID** (string): when set, the function reads that locale's own translation instead of content
+inherited from the primary locale.
+
+```typescript
+const frenchAbout = webflow.getPageOutput({
+  pageId: "5f0c8c9e1c9d440000e8d8c4",
+  translatable: "653fd9af6a07fc9cfd7a5e57", // secondary locale ID
+});
+```
+
+Webflow returns `400` when `translatable` names the primary locale and `403` when translation
+exclusions are disabled for the site.
 
 ### 3. Reference Pages in Other Resources
 
-Use page information when configuring custom code, webhooks, or other resources.
+Use page IDs when configuring page settings, custom code or content.
 
 ```typescript
-const homePage = new webflow.PageData("home-page", {
-  siteId: siteId,
-  pageId: homePageId,
+const aboutPage = allPages.pages.apply((pages) => pages.find((p) => p.slug === "about")!);
+
+const aboutSettings = new webflow.PageMetadata("about-settings", {
+  pageId: aboutPage.pageId,
+  seo: { title: "About Us | Example Co" },
 });
 
-// Use page data in custom code injection
-const customCode = new webflow.PageCustomCode("analytics", {
-  siteId: siteId,
-  pageId: homePage.webflowPageId,
-  headCode: `<!-- Analytics for ${homePage.title} -->`,
+const aboutScripts = new webflow.PageCustomCode("about-scripts", {
+  pageId: aboutPage.pageId,
+  scripts: [/* ... */],
 });
 ```
 
 ### 4. Filter Pages by Properties
 
-Query all pages and filter based on their properties.
-
 ```typescript
-export const draftPages = allPages.pages.apply(pages =>
-  pages.filter(page => page.draft)
-);
-
-export const archivedPages = allPages.pages.apply(pages =>
-  pages.filter(page => page.archived)
+export const draftPages = allPages.pages.apply((pages) => pages.filter((page) => page.draft));
+export const collectionTemplates = allPages.pages.apply((pages) =>
+  pages.filter((page) => page.collectionId !== "")
 );
 ```
 
 ## Configuration
 
-Each example requires the following configuration:
+Each example reads the following configuration:
 
-| Config Key  | Required | Description                                           |
-|-------------|----------|-------------------------------------------------------|
-| `siteId`    | Yes      | Your Webflow site ID (stored as secret)               |
-| `pageId`    | No       | Specific page ID to retrieve (omit to list all pages) |
+| Config Key  | Required | Description                                             |
+|-------------|----------|---------------------------------------------------------|
+| `siteId`    | Yes      | Your Webflow site ID (stored as secret)                 |
+| `pageId`    | No       | A page ID to read with `getPage` in addition to listing |
 
 ## Getting Your Site and Page IDs
 
 1. **Site ID**:
    - Log in to Webflow
-   - Go to Project Settings → General
+   - Go to Site Settings -> General
    - Find your site ID (24-character hexadecimal string)
 
 2. **Page ID**:
-   - You can get page IDs by first running the example without `pageId` configured
-   - The output will list all pages with their IDs
+   - Run the example without `pageId` configured; the `sitePages` output lists every page with its ID
    - Or use the Webflow API to list pages
 
 ## Expected Output
 
-### When Listing All Pages (pageId not set)
+### Listing all pages (pageId not set)
 
 ```
 Outputs:
-    pageCount   : 12
-    pageIds     : ["5f0c...", "5f0d...", "5f0e...", ...]
-    sitePages   : [
+    collectionTemplateSlugs : ["detail_post"]
+    draftPageSlugs          : ["coming-soon"]
+    pageCount               : 12
+    pageIds                 : ["5f0c...", "5f0d...", "5f0e...", ...]
+    sitePages               : [
         {
-            id       : "5f0c8c9e1c9d440000e8d8c4"
-            title    : "Home"
-            slug     : "home"
-            draft    : false
-            archived : false
-        },
-        {
-            id       : "5f0c8c9e1c9d440000e8d8c5"
-            title    : "About"
-            slug     : "about"
-            draft    : false
-            archived : false
+            id            : "5f0c8c9e1c9d440000e8d8c4"
+            title         : "Home"
+            slug          : "home"
+            publishedPath : "/"
+            draft         : false
+            archived      : false
         },
         ...
     ]
 ```
 
-### When Getting a Specific Page (pageId set)
+### Also reading a specific page (pageId set)
 
 ```
 Outputs:
-    pageCollectionId : null
-    pageCreatedOn    : "2024-01-15T10:30:00Z"
-    pageIsArchived   : false
-    pageIsDraft      : false
-    pageLastUpdated  : "2024-03-20T14:22:00Z"
-    pageParentId     : null
-    pageSlug         : "home"
-    pageTitle        : "Home"
-    pageWebflowId    : "5f0c8c9e1c9d440000e8d8c4"
+    pageCollectionId    : ""
+    pageCreatedOn       : "2024-01-15T10:30:00Z"
+    pageIsArchived      : false
+    pageIsDraft         : false
+    pageLastUpdated     : "2024-03-20T14:22:00Z"
+    pageOpenGraphTitle  : "Home"
+    pageParentId        : ""
+    pagePublishedPath   : "/"
+    pageSeoDescription  : "Welcome to Example Co"
+    pageSeoTitle        : "Home | Example Co"
+    pageSlug            : "home"
+    pageTitle           : "Home"
 ```
 
 ## Page Properties
 
-Each page includes the following properties:
+`getPage` and each entry of `getPages().pages` expose:
 
-| Property       | Type    | Description                                        |
-|----------------|---------|----------------------------------------------------|
-| `pageId`       | string  | The Webflow page ID                                |
-| `siteId`       | string  | The site ID this page belongs to                   |
-| `title`        | string  | Page title (shown in browser tabs)                 |
-| `slug`         | string  | URL slug (e.g., "about" for "/about")              |
-| `parentId`     | string  | Parent page ID for nested pages (optional)         |
-| `collectionId` | string  | CMS collection ID for collection pages (optional)  |
-| `createdOn`    | string  | Creation timestamp (RFC3339 format)                |
-| `lastUpdated`  | string  | Last update timestamp (RFC3339 format)             |
-| `archived`     | boolean | Whether the page is archived                       |
-| `draft`        | boolean | Whether the page is in draft mode                  |
+| Property        | Type    | Description                                                     |
+|-----------------|---------|-----------------------------------------------------------------|
+| `pageId`        | string  | The Webflow page ID                                             |
+| `siteId`        | string  | The site the page belongs to                                    |
+| `title`         | string  | Page title (shown in browser tabs)                              |
+| `slug`          | string  | URL slug (e.g., "about" for "/about")                           |
+| `publishedPath` | string  | Relative URL of the published page                              |
+| `parentId`      | string  | Parent folder ID (empty at the root)                            |
+| `collectionId`  | string  | CMS collection ID for collection template pages (empty otherwise)|
+| `seo`           | object  | `title` and `description`                                       |
+| `openGraph`     | object  | `title`, `description`, `titleCopied`, `descriptionCopied`      |
+| `createdOn`     | string  | Creation timestamp (RFC3339)                                    |
+| `lastUpdated`   | string  | Last update timestamp (RFC3339)                                 |
+| `archived`      | boolean | Whether the page is archived                                    |
+| `draft`         | boolean | Whether the page is a draft                                     |
+| `canBranch`     | boolean | Whether the page can be branched                                |
+| `isBranch`      | boolean | Whether the page is a branch of another page                    |
+| `branchId`      | string  | Parent branch ID (empty otherwise)                              |
+| `localeId`      | string  | Locale of the returned data (empty for the primary locale)      |
 
 ## Cleanup
 
-Data sources don't create resources in Webflow, so there's nothing to clean up:
+Functions don't create resources in Webflow, so there's nothing to clean up:
 
 ```bash
-pulumi destroy  # Removes from Pulumi state only
 pulumi stack rm dev
 ```
 
@@ -227,26 +255,28 @@ pulumi stack rm dev
 
 ### "Site not found" Error
 
-1. Verify your site ID in Webflow: Settings → General
+1. Verify your site ID in Webflow: Settings -> General
 2. Ensure correct format: 24-character lowercase hexadecimal
-3. Check API token has access to the site
+3. Check the API token has access to the site
 
 ### "Page not found" Error
 
 1. Verify the page exists in your Webflow site
 2. Check the page ID is correct (24-character hexadecimal)
-3. Try listing all pages first (omit pageId) to see available pages
+3. List all pages first (omit `pageId`) to see the available IDs
 
 ### Empty Pages Array
 
-If the pages array is empty:
-1. Verify your site has published pages
-2. Check that your API token has the correct scopes
+1. Verify the site has pages in the Designer
+2. Check that the API token has the `pages:read` scope
 3. Ensure you're using the correct site ID
 
 ## Related Resources
 
-- [PageCustomCode Resource](../page-custom-code/)
+- [PageMetadata Resource](../pagemetadata/) - manage title, slug, SEO and Open Graph settings
+- [PageContent Resource](../pagecontent/)
+- [PageCustomCode Resource](../pagecustomcode/)
+- [PageSchemaMarkup Resource](../pageschemamarkup/)
 - [Main Examples Index](../README.md)
 - [Webflow Pages Documentation](https://university.webflow.com/lesson/intro-to-pages)
-- [Webflow Pages API](https://developers.webflow.com/reference/pages)
+- [Webflow Pages API](https://developers.webflow.com/data/reference/pages-and-components/pages)

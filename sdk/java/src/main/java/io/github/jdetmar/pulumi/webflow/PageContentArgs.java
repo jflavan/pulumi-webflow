@@ -17,14 +17,29 @@ public final class PageContentArgs extends com.pulumi.resources.ResourceArgs {
     public static final PageContentArgs Empty = new PageContentArgs();
 
     /**
-     * List of node content updates to apply. Each update specifies the nodeId (from the page&#39;s DOM structure) and the new text content. Node IDs can be retrieved by fetching the page DOM using GET /pages/{page_id}/dom. Only text content in existing nodes can be updated via this resource.
+     * The ID of the secondary locale to update (24-character lowercase hexadecimal string). Required: the Update Page Content endpoint only edits secondary locales, and Webflow rejects the request when the locale is the primary locale or not a locale of the site. Locale IDs are listed under Site Settings &gt; Localization or via the Get Site endpoint. Changing it replaces the resource.
+     * 
+     */
+    @Import(name="localeId", required=true)
+    private Output<String> localeId;
+
+    /**
+     * @return The ID of the secondary locale to update (24-character lowercase hexadecimal string). Required: the Update Page Content endpoint only edits secondary locales, and Webflow rejects the request when the locale is the primary locale or not a locale of the site. Locale IDs are listed under Site Settings &gt; Localization or via the Get Site endpoint. Changing it replaces the resource.
+     * 
+     */
+    public Output<String> localeId() {
+        return this.localeId;
+    }
+
+    /**
+     * List of node content updates to apply (1 to 1000 entries). Each entry names a nodeId from the page&#39;s DOM and the node&#39;s new HTML text. Node IDs must be unique within the list.
      * 
      */
     @Import(name="nodes", required=true)
     private Output<List<NodeContentUpdateArgs>> nodes;
 
     /**
-     * @return List of node content updates to apply. Each update specifies the nodeId (from the page&#39;s DOM structure) and the new text content. Node IDs can be retrieved by fetching the page DOM using GET /pages/{page_id}/dom. Only text content in existing nodes can be updated via this resource.
+     * @return List of node content updates to apply (1 to 1000 entries). Each entry names a nodeId from the page&#39;s DOM and the node&#39;s new HTML text. Node IDs must be unique within the list.
      * 
      */
     public Output<List<NodeContentUpdateArgs>> nodes() {
@@ -32,14 +47,14 @@ public final class PageContentArgs extends com.pulumi.resources.ResourceArgs {
     }
 
     /**
-     * The Webflow page ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c4&#39;). You can find page IDs using the Pages API list endpoint or in the Webflow designer. This field will be validated before making any API calls.
+     * The Webflow page ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c4&#39;). Use the getPages function to find page IDs. Changing it replaces the resource.
      * 
      */
     @Import(name="pageId", required=true)
     private Output<String> pageId;
 
     /**
-     * @return The Webflow page ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c4&#39;). You can find page IDs using the Pages API list endpoint or in the Webflow designer. This field will be validated before making any API calls.
+     * @return The Webflow page ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c4&#39;). Use the getPages function to find page IDs. Changing it replaces the resource.
      * 
      */
     public Output<String> pageId() {
@@ -49,6 +64,7 @@ public final class PageContentArgs extends com.pulumi.resources.ResourceArgs {
     private PageContentArgs() {}
 
     private PageContentArgs(PageContentArgs $) {
+        this.localeId = $.localeId;
         this.nodes = $.nodes;
         this.pageId = $.pageId;
     }
@@ -72,7 +88,28 @@ public final class PageContentArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param nodes List of node content updates to apply. Each update specifies the nodeId (from the page&#39;s DOM structure) and the new text content. Node IDs can be retrieved by fetching the page DOM using GET /pages/{page_id}/dom. Only text content in existing nodes can be updated via this resource.
+         * @param localeId The ID of the secondary locale to update (24-character lowercase hexadecimal string). Required: the Update Page Content endpoint only edits secondary locales, and Webflow rejects the request when the locale is the primary locale or not a locale of the site. Locale IDs are listed under Site Settings &gt; Localization or via the Get Site endpoint. Changing it replaces the resource.
+         * 
+         * @return builder
+         * 
+         */
+        public Builder localeId(Output<String> localeId) {
+            $.localeId = localeId;
+            return this;
+        }
+
+        /**
+         * @param localeId The ID of the secondary locale to update (24-character lowercase hexadecimal string). Required: the Update Page Content endpoint only edits secondary locales, and Webflow rejects the request when the locale is the primary locale or not a locale of the site. Locale IDs are listed under Site Settings &gt; Localization or via the Get Site endpoint. Changing it replaces the resource.
+         * 
+         * @return builder
+         * 
+         */
+        public Builder localeId(String localeId) {
+            return localeId(Output.of(localeId));
+        }
+
+        /**
+         * @param nodes List of node content updates to apply (1 to 1000 entries). Each entry names a nodeId from the page&#39;s DOM and the node&#39;s new HTML text. Node IDs must be unique within the list.
          * 
          * @return builder
          * 
@@ -83,7 +120,7 @@ public final class PageContentArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param nodes List of node content updates to apply. Each update specifies the nodeId (from the page&#39;s DOM structure) and the new text content. Node IDs can be retrieved by fetching the page DOM using GET /pages/{page_id}/dom. Only text content in existing nodes can be updated via this resource.
+         * @param nodes List of node content updates to apply (1 to 1000 entries). Each entry names a nodeId from the page&#39;s DOM and the node&#39;s new HTML text. Node IDs must be unique within the list.
          * 
          * @return builder
          * 
@@ -93,7 +130,7 @@ public final class PageContentArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param nodes List of node content updates to apply. Each update specifies the nodeId (from the page&#39;s DOM structure) and the new text content. Node IDs can be retrieved by fetching the page DOM using GET /pages/{page_id}/dom. Only text content in existing nodes can be updated via this resource.
+         * @param nodes List of node content updates to apply (1 to 1000 entries). Each entry names a nodeId from the page&#39;s DOM and the node&#39;s new HTML text. Node IDs must be unique within the list.
          * 
          * @return builder
          * 
@@ -103,7 +140,7 @@ public final class PageContentArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param pageId The Webflow page ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c4&#39;). You can find page IDs using the Pages API list endpoint or in the Webflow designer. This field will be validated before making any API calls.
+         * @param pageId The Webflow page ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c4&#39;). Use the getPages function to find page IDs. Changing it replaces the resource.
          * 
          * @return builder
          * 
@@ -114,7 +151,7 @@ public final class PageContentArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param pageId The Webflow page ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c4&#39;). You can find page IDs using the Pages API list endpoint or in the Webflow designer. This field will be validated before making any API calls.
+         * @param pageId The Webflow page ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c4&#39;). Use the getPages function to find page IDs. Changing it replaces the resource.
          * 
          * @return builder
          * 
@@ -124,6 +161,9 @@ public final class PageContentArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         public PageContentArgs build() {
+            if ($.localeId == null) {
+                throw new MissingRequiredPropertyException("PageContentArgs", "localeId");
+            }
             if ($.nodes == null) {
                 throw new MissingRequiredPropertyException("PageContentArgs", "nodes");
             }

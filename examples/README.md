@@ -32,7 +32,7 @@ npm install
 pulumi stack init dev
 
 # 4. Configure your Webflow site ID
-pulumi config set webflow:siteId your-site-id --secret
+pulumi config set siteId your-site-id --secret
 
 # 5. Preview and deploy
 pulumi preview
@@ -164,11 +164,11 @@ examples/robotstxt/
 - Directory restrictions
 - Crawler-specific rules
 
-**See:** [RobotsTxt README](robotstxt/typescript/README.md)
+**See:** [RobotsTxt README](robotstxt/README.md)
 
 ### Redirect Resource
 
-Manage URL redirects (301 permanent, 302 temporary, external).
+Manage URL redirects (permanent 301 redirects, including to external domains; Webflow has no 302 redirects).
 
 ```
 examples/redirect/
@@ -180,13 +180,13 @@ examples/redirect/
 ```
 
 **What's Included:**
-- Permanent redirects (301)
-- Temporary redirects (302)
+- Permanent redirects (301 - the only kind Webflow supports)
+- Campaign redirects whose destination is updated in place
 - External domain redirects
 - Bulk redirect patterns
 - Redirect management
 
-**See:** [Redirect examples documentation](redirect/typescript/README.md)
+**See:** [Redirect README](redirect/README.md)
 
 ### Site Resource
 
@@ -202,14 +202,39 @@ examples/site/
 ```
 
 **What's Included:**
-- Site creation and configuration
-- Custom domain setup
-- Timezone configuration
-- Site publishing
-- Site state management
-- Import existing sites
+- Site creation with `workspaceId` and `displayName`
+- Multi-environment site configuration
+- Optional `parentFolderId`, `templateName` and `publish` inputs
+- Reading Webflow-generated outputs (`shortName`, `timeZone`)
 
-**See:** [Site management documentation](site/typescript/README.md)
+**See:** [Site README](site/README.md) and [Importing existing sites](../docs/IMPORTING.md)
+
+### All Resource Examples
+
+| Directory | Resource(s) | Languages |
+|-----------|-------------|-----------|
+| `analytics/` | `getAnalyticsTraffic`, `getAnalyticsTopPages`, `getAnalyticsTopDimensions`, `getAnalyticsTopEvents`, `getAnalyticsTimeOnPage` functions (beta API) | TS |
+| `asset/` | Asset | TS, Python, Go, C#, Java |
+| `assetfolder/` | AssetFolder | TS |
+| `collection/` | Collection | TS, Python, Go, C#, Java |
+| `collectionfield/` | CollectionField | TS |
+| `collectionitem/` | CollectionItem | TS, Python, Go, C#, Java |
+| `ecommerce-settings/` | EcommerceSettings | TS |
+| `googletag/` | GoogleTag | TS |
+| `inlinescript/` | InlineScript | TS |
+| `page/` | `getPages`, `getPage` functions | TS, Python, Go |
+| `pagecontent/` | PageContent | TS |
+| `pagecustomcode/` | PageCustomCode | TS |
+| `pagemetadata/` | PageMetadata, `getPages`, `getPage` | TS |
+| `pageschemamarkup/` | PageSchemaMarkup, `getPageSchemaMarkup` (beta API) | TS |
+| `redirect/` | Redirect | TS, Python, Go, C#, Java |
+| `registeredscript/` | RegisteredScript | TS |
+| `robotstxt/` | RobotsTxt | TS, Python, Go, C#, Java |
+| `site/` | Site | TS, Python, Go, C#, Java |
+| `sitecustomcode/` | SiteCustomCode | TS |
+| `token/` | `getTokenInfo`, `getAuthorizedUser` functions | TS |
+| `webhook/` | Webhook | TS, Python, Go |
+| `yaml/` | Pulumi YAML program | YAML |
 
 ## Complex Scenarios
 
@@ -256,7 +281,9 @@ Integrate Pulumi deployments with CI/CD pipelines.
 
 ```
 examples/ci-cd/
-├── github-actions/
+├── README.md             - Setup guides for both platforms
+├── github-actions.yaml   - GitHub Actions workflow template
+└── gitlab-ci.yaml        - GitLab CI pipeline template
 ```
 
 **Features:**
@@ -284,54 +311,23 @@ examples/troubleshooting-logs/
 
 ## Testing
 
-### Running Example Tests
-
-Tests validate that examples work correctly with the Webflow provider.
+There is no automated test harness for the examples. The provider itself is covered by unit
+tests (`make test_provider`, mocked HTTP); examples are verified manually against a real
+Webflow site:
 
 ```bash
-# Run all example tests
-cd /path/to/pulumi-webflow
-go test -v ./examples
-
-# Run specific test
-go test -v ./examples -run TestTypeScriptRobotsTxt
-
-# Run with coverage
-go test -v -cover ./examples
+cd examples/robotstxt/typescript
+npm install
+pulumi stack init dev
+pulumi config set webflow:apiToken --secret
+pulumi config set siteId your-site-id --secret
+pulumi preview   # validate
+pulumi up        # apply
+pulumi destroy   # clean up
 ```
 
-### Example Test Structure
-
-```go
-// examples/robotstxt_test.go
-package examples
-
-import (
-  "path/filepath"
-  "testing"
-  "github.com/pulumi/providertest/pulumitest"
-)
-
-func TestTypeScriptRobotsTxtExample(t *testing.T) {
-  test := pulumitest.NewPulumiTest(t,
-    filepath.Join("robotstxt", "typescript"),
-    opttest.YarnLink("pulumi-webflow"),
-    opttest.AttachProviderServer("webflow", providerFactory),
-  )
-
-  test.Preview(t)
-  test.Up(t)
-  test.Destroy(t)
-}
-```
-
-### Testing Coverage
-
-- ✅ TypeScript examples tested with Yarn
-- ✅ Python examples tested with pip
-- ✅ Go examples tested with go mod
-- ✅ C# examples tested with dotnet
-- ✅ Java examples tested with Maven
+The same flow applies to the other languages (`pip install -r requirements.txt`,
+`go mod download`, `dotnet restore`, `mvn install`).
 
 ## Best Practices
 
@@ -339,8 +335,10 @@ func TestTypeScriptRobotsTxtExample(t *testing.T) {
 
 **Secret Values:**
 ```bash
-# Store secrets securely
-pulumi config set webflow:siteId your-site-id --secret
+# API token goes in the provider namespace; the examples read the site ID
+# from the project namespace (`config.requireSecret("siteId")`)
+pulumi config set webflow:apiToken --secret
+pulumi config set siteId your-site-id --secret
 ```
 
 **Configuration Files:**
@@ -350,7 +348,10 @@ name: my-project
 runtime: nodejs
 
 config:
-  webflow:siteId:
+  webflow:apiToken:
+    description: Webflow API token
+    secret: true
+  siteId:
     description: Webflow site ID
     secret: true
   environment:
@@ -443,24 +444,24 @@ Error: webflow::RobotsTxt creation failed: site not found
 ### Import Errors
 
 ```
-Error: Cannot find module 'pulumi-webflow'
+Error: Cannot find module '@jdetmar/pulumi-webflow'
 ```
 
 **Solution:**
 ```bash
 # TypeScript/JavaScript
 npm install
-npm install --save pulumi-webflow
+npm install --save @jdetmar/pulumi-webflow
 
 # Python
 pip install -r requirements.txt
 pip install pulumi-webflow
 
 # Go
-go get github.com/jdetmar/pulumi-webflow/sdk/go/webflow
+go get github.com/JDetmar/pulumi-webflow/sdk/go/webflow
 
 # C#
-dotnet add package Pulumi.Webflow
+dotnet add package Community.Pulumi.Webflow
 
 # Java
 # Add to pom.xml or build.gradle
@@ -489,11 +490,11 @@ Have an example you'd like to share? We'd love to include it!
 
 1. Create your example in the appropriate directory
 2. Include README with setup instructions
-3. Add tests using pulumitest
-4. Submit a pull request
+3. Verify it with `pulumi preview` and `pulumi up` against a real site
+4. Submit a pull request (see [EXAMPLES.md](../EXAMPLES.md) for the requirements)
 
 ## Support
 
-- [GitHub Issues](https://github.com/jdetmar/pulumi-webflow/issues)
-- [Discussions](https://github.com/jdetmar/pulumi-webflow/discussions)
+- [GitHub Issues](https://github.com/JDetmar/pulumi-webflow/issues)
+- [Discussions](https://github.com/JDetmar/pulumi-webflow/discussions)
 - [Webflow Slack](https://webflow.com/slack)

@@ -9,9 +9,7 @@
     "sourceMap": true,
     "experimentalDecorators": true,
     "pretty": true,
-    "charset": "utf8",
-    "noImplicitAny": true,
-    "noImplicitReferences": true
+    "noImplicitAny": true
   },
   "files": ["index.ts"]
 }

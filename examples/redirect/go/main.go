@@ -3,39 +3,41 @@ package main
 import (
 	"fmt"
 
+	"github.com/JDetmar/pulumi-webflow/sdk/go/webflow"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
-	"github.com/jdetmar/pulumi-webflow/sdk/go/webflow"
+	"github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
 
+// Webflow redirects are always permanent (HTTP 301). The deprecated StatusCode
+// input is ignored by the provider, so it is simply omitted here.
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
-		cfg := pulumi.NewConfig(ctx, "")
+		cfg := config.New(ctx, "")
 		siteID := cfg.RequireSecret("siteId")
 		environment := cfg.Get("environment")
 		if environment == "" {
 			environment = "development"
 		}
 
-		// Example 1: Permanent Redirect (301)
+		// Example 1: Content Move Redirect
 		permanentRedirect, err := webflow.NewRedirect(ctx, "old-blog-to-new-blog", &webflow.RedirectArgs{
 			SiteId:          siteID,
 			SourcePath:      pulumi.String("/blog/old-article"),
 			DestinationPath: pulumi.String("/blog/articles/updated-article"),
-			StatusCode:      pulumi.Int(301),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create permanent redirect: %w", err)
 		}
 
-		// Example 2: Temporary Redirect (302)
-		temporaryRedirect, err := webflow.NewRedirect(ctx, "temporary-landing-page", &webflow.RedirectArgs{
+		// Example 2: Campaign Redirect
+		// Point a short, memorable path at the current campaign landing page.
+		campaignRedirect, err := webflow.NewRedirect(ctx, "campaign-landing-page", &webflow.RedirectArgs{
 			SiteId:          siteID,
 			SourcePath:      pulumi.String("/old-campaign"),
 			DestinationPath: pulumi.String("/new-campaign-2025"),
-			StatusCode:      pulumi.Int(302),
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create temporary redirect: %w", err)
+			return fmt.Errorf("failed to create campaign redirect: %w", err)
 		}
 
 		// Example 3: External Redirect
@@ -43,7 +45,6 @@ func main() {
 			SiteId:          siteID,
 			SourcePath:      pulumi.String("/partner"),
 			DestinationPath: pulumi.String("https://partner-site.com"),
-			StatusCode:      pulumi.Int(301),
 		})
 		if err != nil {
 			return fmt.Errorf("failed to create external redirect: %w", err)
@@ -59,13 +60,12 @@ func main() {
 			{"/product-c", "/products/product-c"},
 		}
 
-		bulkRedirectIds := []pulumi.StringOutput{}
+		bulkRedirectIds := pulumi.StringArray{}
 		for i, mapping := range redirectMappings {
 			redirect, err := webflow.NewRedirect(ctx, fmt.Sprintf("bulk-redirect-%d", i), &webflow.RedirectArgs{
 				SiteId:          siteID,
 				SourcePath:      pulumi.String(mapping.old),
 				DestinationPath: pulumi.String(mapping.new),
-				StatusCode:      pulumi.Int(301),
 			})
 			if err != nil {
 				return fmt.Errorf("failed to create bulk redirect %d: %w", i, err)
@@ -76,13 +76,13 @@ func main() {
 		// Export values
 		ctx.Export("deployedSiteId", siteID)
 		ctx.Export("permanentRedirectId", permanentRedirect.ID())
-		ctx.Export("temporaryRedirectId", temporaryRedirect.ID())
+		ctx.Export("campaignRedirectId", campaignRedirect.ID())
 		ctx.Export("externalRedirectId", externalRedirect.ID())
-		ctx.Export("bulkRedirectIds", pulumi.StringArray(bulkRedirectIds))
+		ctx.Export("bulkRedirectIds", bulkRedirectIds)
 
 		ctx.Log.Info(
 			fmt.Sprintf("✅ Successfully deployed %d redirects in %s environment", len(redirectMappings)+3, environment),
-			&pulumi.LogOptions{},
+			nil,
 		)
 
 		return nil

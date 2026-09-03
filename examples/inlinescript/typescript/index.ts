@@ -31,7 +31,7 @@ const analyticsSnippet = new webflow.InlineScript("analytics-snippet", {
   gtag('js', new Date());
   gtag('config', 'G-XXXXXXXXXX');
 })();`,
-  version: "1.0.0",
+  scriptVersion: "1.0.0",
   canCopy: true, // Allow copying when site is duplicated
 });
 
@@ -51,7 +51,7 @@ const cookieConsent = new webflow.InlineScript("cookie-consent", {
     });
   }
 });`,
-  version: "1.2.0",
+  scriptVersion: "1.2.0",
   canCopy: true,
 });
 
@@ -72,7 +72,7 @@ const scrollToTop = new webflow.InlineScript("scroll-to-top", {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 });`,
-  version: "2.0.0",
+  scriptVersion: "2.0.0",
   canCopy: false, // Don't copy when duplicating site
 });
 

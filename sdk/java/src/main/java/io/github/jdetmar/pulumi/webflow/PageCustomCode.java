@@ -16,7 +16,9 @@ import java.util.Optional;
 import javax.annotation.Nullable;
 
 /**
- * Manages custom code (JavaScript) scripts applied to a Webflow page. This resource allows you to apply registered custom code scripts to specific pages. Scripts must first be registered using the RegisteredScript resource before they can be applied. All scripts in the configuration will be applied to the page; scripts not listed will be removed.
+ * Manages custom code (JavaScript) scripts applied to a Webflow page (PUT /v2/pages/{page_id}/custom_code). This resource allows you to apply registered custom code scripts to specific pages. Scripts must first be registered using the RegisteredScript or InlineScript resource before they can be applied. All scripts in the configuration will be applied to the page; scripts not listed will be removed. Destroying the resource removes all applied code (DELETE /v2/pages/{page_id}/custom_code) but leaves the scripts registered.
+ * 
+ * **Authentication:** this resource calls Webflow custom code endpoints, which require an OAuth Data Client app token with the `custom_code:read` and `custom_code:write` scopes. Webflow documents that these scopes are available only to Data Client apps: site API tokens cannot access custom code endpoints. Removing applied code (Delete, or dropping scripts from the list) additionally requires the `sites:write` (site custom code) or `pages:write` (page custom code) scope.
  * 
  */
 @ResourceType(type="webflow:index:PageCustomCode")

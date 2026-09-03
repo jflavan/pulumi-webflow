@@ -1,47 +1,48 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Pulumi;
-using Pulumi.Webflow;
+using Community.Pulumi.Webflow;
 
 class Program
 {
     static Task<int> Main() => Deployment.RunAsync(() =>
     {
         // Create a Pulumi config object
-        var config = new Config();
+        var config = new Pulumi.Config();
 
         // Get configuration values
         var siteId = config.RequireSecret("siteId");
 
-        // Example 1: Permanent Redirect (301) - Best for content moves
-        // Use 301 redirects when content has permanently moved to preserve SEO value
+        // Webflow redirects are always permanent (HTTP 301). The deprecated
+        // StatusCode input is ignored by the provider, so it is simply omitted here.
+
+        // Example 1: Content Move Redirect - Best for content moves
+        // Permanent redirects preserve SEO value when content has moved
         var permanentRedirect = new Redirect("old-blog-to-new-blog", new RedirectArgs
         {
             SiteId = siteId,
             SourcePath = "/blog/old-article",
             DestinationPath = "/blog/articles/updated-article",
-            StatusCode = 301,
         });
 
-        // Example 2: Temporary Redirect (302) - Use for temporary changes
-        // Use 302 redirects for seasonal content or A/B testing
-        var temporaryRedirect = new Redirect("temporary-landing-page", new RedirectArgs
+        // Example 2: Campaign Redirect - Point a short path at the current campaign page
+        // Changing DestinationPath later updates the redirect in place
+        var campaignRedirect = new Redirect("campaign-landing-page", new RedirectArgs
         {
             SiteId = siteId,
             SourcePath = "/old-campaign",
             DestinationPath = "/new-campaign-2025",
-            StatusCode = 302,
         });
 
-        // Example 3: External Redirect (301) - Redirect to another domain
+        // Example 3: External Redirect - Redirect to another domain
         // Useful for partner links or moved subdomains
         var externalRedirect = new Redirect("external-partner-link", new RedirectArgs
         {
             SiteId = siteId,
             SourcePath = "/partner",
             DestinationPath = "https://partner-site.com",
-            StatusCode = 301,
         });
 
         // Example 4: Bulk Redirects using Loop
@@ -62,7 +63,6 @@ class Program
                 SiteId = siteId,
                 SourcePath = mapping.Old,
                 DestinationPath = mapping.New,
-                StatusCode = 301,
             });
             bulkRedirects.Add(redirect);
         }
@@ -72,7 +72,7 @@ class Program
         {
             ["deployedSiteId"] = siteId,
             ["permanentRedirectId"] = permanentRedirect.Id,
-            ["temporaryRedirectId"] = temporaryRedirect.Id,
+            ["campaignRedirectId"] = campaignRedirect.Id,
             ["externalRedirectId"] = externalRedirect.Id,
             ["bulkRedirectIds"] = Output.All(bulkRedirects.Select(r => r.Id).ToArray()),
         };

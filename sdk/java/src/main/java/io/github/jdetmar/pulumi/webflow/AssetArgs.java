@@ -17,29 +17,29 @@ public final class AssetArgs extends com.pulumi.resources.ResourceArgs {
     public static final AssetArgs Empty = new AssetArgs();
 
     /**
-     * MD5 hash of the file content (required). Webflow uses this hash to identify and deduplicate assets. Generate using: md5sum &lt;filename&gt; (Linux) or md5 &lt;filename&gt; (macOS). Example: &#39;d41d8cd98f00b204e9800998ecf8427e&#39;.
+     * MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
      * 
      */
-    @Import(name="fileHash", required=true)
-    private Output<String> fileHash;
+    @Import(name="fileHash")
+    private @Nullable Output<String> fileHash;
 
     /**
-     * @return MD5 hash of the file content (required). Webflow uses this hash to identify and deduplicate assets. Generate using: md5sum &lt;filename&gt; (Linux) or md5 &lt;filename&gt; (macOS). Example: &#39;d41d8cd98f00b204e9800998ecf8427e&#39;.
+     * @return MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
      * 
      */
-    public Output<String> fileHash() {
-        return this.fileHash;
+    public Optional<Output<String>> fileHash() {
+        return Optional.ofNullable(this.fileHash);
     }
 
     /**
-     * The name of the file to upload, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. The file name must not exceed 255 characters and should not contain invalid characters (&lt;, &gt;, :, &#34;, |, ?, *).
+     * The name of the file as it will appear in Webflow, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. Webflow requires file names to be less than 100 characters; the name must not contain &lt;, &gt;, :, &#34;, |, ?, *.
      * 
      */
     @Import(name="fileName", required=true)
     private Output<String> fileName;
 
     /**
-     * @return The name of the file to upload, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. The file name must not exceed 255 characters and should not contain invalid characters (&lt;, &gt;, :, &#34;, |, ?, *).
+     * @return The name of the file as it will appear in Webflow, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. Webflow requires file names to be less than 100 characters; the name must not contain &lt;, &gt;, :, &#34;, |, ?, *.
      * 
      */
     public Output<String> fileName() {
@@ -47,29 +47,29 @@ public final class AssetArgs extends com.pulumi.resources.ResourceArgs {
     }
 
     /**
-     * The source of the file to upload. For the current implementation, this is a reference field. In future versions, this may support URLs or local file paths for automatic upload. Examples: &#39;https://example.com/logo.png&#39;, &#39;/path/to/local/file.png&#39;.
+     * Where the file bytes come from: a local file path (resolved relative to the Pulumi program&#39;s working directory, e.g., &#39;./assets/logo.png&#39;) or an http(s) URL (e.g., &#39;https://example.com/logo.png&#39;). The content is read at apply time, MD5-hashed and uploaded to Webflow.
      * 
      */
-    @Import(name="fileSource")
-    private @Nullable Output<String> fileSource;
+    @Import(name="fileSource", required=true)
+    private Output<String> fileSource;
 
     /**
-     * @return The source of the file to upload. For the current implementation, this is a reference field. In future versions, this may support URLs or local file paths for automatic upload. Examples: &#39;https://example.com/logo.png&#39;, &#39;/path/to/local/file.png&#39;.
+     * @return Where the file bytes come from: a local file path (resolved relative to the Pulumi program&#39;s working directory, e.g., &#39;./assets/logo.png&#39;) or an http(s) URL (e.g., &#39;https://example.com/logo.png&#39;). The content is read at apply time, MD5-hashed and uploaded to Webflow.
      * 
      */
-    public Optional<Output<String>> fileSource() {
-        return Optional.ofNullable(this.fileSource);
+    public Output<String> fileSource() {
+        return this.fileSource;
     }
 
     /**
-     * Optional folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset will be placed at the root level. Example: &#39;5f0c8c9e1c9d440000e8d8c4&#39;.
+     * Optional asset folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset is placed at the root level. Example: &#39;5f0c8c9e1c9d440000e8d8c4&#39;.
      * 
      */
     @Import(name="parentFolder")
     private @Nullable Output<String> parentFolder;
 
     /**
-     * @return Optional folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset will be placed at the root level. Example: &#39;5f0c8c9e1c9d440000e8d8c4&#39;.
+     * @return Optional asset folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset is placed at the root level. Example: &#39;5f0c8c9e1c9d440000e8d8c4&#39;.
      * 
      */
     public Optional<Output<String>> parentFolder() {
@@ -77,14 +77,14 @@ public final class AssetArgs extends com.pulumi.resources.ResourceArgs {
     }
 
     /**
-     * The Webflow site ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c3&#39;). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
+     * The Webflow site ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c3&#39;). You can find your site ID in the Webflow dashboard under Site Settings.
      * 
      */
     @Import(name="siteId", required=true)
     private Output<String> siteId;
 
     /**
-     * @return The Webflow site ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c3&#39;). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
+     * @return The Webflow site ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c3&#39;). You can find your site ID in the Webflow dashboard under Site Settings.
      * 
      */
     public Output<String> siteId() {
@@ -120,18 +120,18 @@ public final class AssetArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param fileHash MD5 hash of the file content (required). Webflow uses this hash to identify and deduplicate assets. Generate using: md5sum &lt;filename&gt; (Linux) or md5 &lt;filename&gt; (macOS). Example: &#39;d41d8cd98f00b204e9800998ecf8427e&#39;.
+         * @param fileHash MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
          * 
          * @return builder
          * 
          */
-        public Builder fileHash(Output<String> fileHash) {
+        public Builder fileHash(@Nullable Output<String> fileHash) {
             $.fileHash = fileHash;
             return this;
         }
 
         /**
-         * @param fileHash MD5 hash of the file content (required). Webflow uses this hash to identify and deduplicate assets. Generate using: md5sum &lt;filename&gt; (Linux) or md5 &lt;filename&gt; (macOS). Example: &#39;d41d8cd98f00b204e9800998ecf8427e&#39;.
+         * @param fileHash MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
          * 
          * @return builder
          * 
@@ -141,7 +141,7 @@ public final class AssetArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param fileName The name of the file to upload, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. The file name must not exceed 255 characters and should not contain invalid characters (&lt;, &gt;, :, &#34;, |, ?, *).
+         * @param fileName The name of the file as it will appear in Webflow, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. Webflow requires file names to be less than 100 characters; the name must not contain &lt;, &gt;, :, &#34;, |, ?, *.
          * 
          * @return builder
          * 
@@ -152,7 +152,7 @@ public final class AssetArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param fileName The name of the file to upload, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. The file name must not exceed 255 characters and should not contain invalid characters (&lt;, &gt;, :, &#34;, |, ?, *).
+         * @param fileName The name of the file as it will appear in Webflow, including the extension. Examples: &#39;logo.png&#39;, &#39;hero-image.jpg&#39;, &#39;document.pdf&#39;. Webflow requires file names to be less than 100 characters; the name must not contain &lt;, &gt;, :, &#34;, |, ?, *.
          * 
          * @return builder
          * 
@@ -162,18 +162,18 @@ public final class AssetArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param fileSource The source of the file to upload. For the current implementation, this is a reference field. In future versions, this may support URLs or local file paths for automatic upload. Examples: &#39;https://example.com/logo.png&#39;, &#39;/path/to/local/file.png&#39;.
+         * @param fileSource Where the file bytes come from: a local file path (resolved relative to the Pulumi program&#39;s working directory, e.g., &#39;./assets/logo.png&#39;) or an http(s) URL (e.g., &#39;https://example.com/logo.png&#39;). The content is read at apply time, MD5-hashed and uploaded to Webflow.
          * 
          * @return builder
          * 
          */
-        public Builder fileSource(@Nullable Output<String> fileSource) {
+        public Builder fileSource(Output<String> fileSource) {
             $.fileSource = fileSource;
             return this;
         }
 
         /**
-         * @param fileSource The source of the file to upload. For the current implementation, this is a reference field. In future versions, this may support URLs or local file paths for automatic upload. Examples: &#39;https://example.com/logo.png&#39;, &#39;/path/to/local/file.png&#39;.
+         * @param fileSource Where the file bytes come from: a local file path (resolved relative to the Pulumi program&#39;s working directory, e.g., &#39;./assets/logo.png&#39;) or an http(s) URL (e.g., &#39;https://example.com/logo.png&#39;). The content is read at apply time, MD5-hashed and uploaded to Webflow.
          * 
          * @return builder
          * 
@@ -183,7 +183,7 @@ public final class AssetArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param parentFolder Optional folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset will be placed at the root level. Example: &#39;5f0c8c9e1c9d440000e8d8c4&#39;.
+         * @param parentFolder Optional asset folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset is placed at the root level. Example: &#39;5f0c8c9e1c9d440000e8d8c4&#39;.
          * 
          * @return builder
          * 
@@ -194,7 +194,7 @@ public final class AssetArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param parentFolder Optional folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset will be placed at the root level. Example: &#39;5f0c8c9e1c9d440000e8d8c4&#39;.
+         * @param parentFolder Optional asset folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset is placed at the root level. Example: &#39;5f0c8c9e1c9d440000e8d8c4&#39;.
          * 
          * @return builder
          * 
@@ -204,7 +204,7 @@ public final class AssetArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param siteId The Webflow site ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c3&#39;). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
+         * @param siteId The Webflow site ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c3&#39;). You can find your site ID in the Webflow dashboard under Site Settings.
          * 
          * @return builder
          * 
@@ -215,7 +215,7 @@ public final class AssetArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param siteId The Webflow site ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c3&#39;). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
+         * @param siteId The Webflow site ID (24-character lowercase hexadecimal string, e.g., &#39;5f0c8c9e1c9d440000e8d8c3&#39;). You can find your site ID in the Webflow dashboard under Site Settings.
          * 
          * @return builder
          * 
@@ -225,11 +225,11 @@ public final class AssetArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         public AssetArgs build() {
-            if ($.fileHash == null) {
-                throw new MissingRequiredPropertyException("AssetArgs", "fileHash");
-            }
             if ($.fileName == null) {
                 throw new MissingRequiredPropertyException("AssetArgs", "fileName");
+            }
+            if ($.fileSource == null) {
+                throw new MissingRequiredPropertyException("AssetArgs", "fileSource");
             }
             if ($.siteId == null) {
                 throw new MissingRequiredPropertyException("AssetArgs", "siteId");

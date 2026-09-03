@@ -13,6 +13,1042 @@ import (
 
 var _ = internal.GetEnvOrDefault
 
+type AnalyticsAverageSecondsPoint struct {
+	// Average time spent on the page in seconds.
+	AverageSeconds float64 `pulumi:"averageSeconds"`
+	// Start of the bucket as a UTC instant in ISO 8601 / RFC 3339 format.
+	Timestamp string `pulumi:"timestamp"`
+}
+
+type AnalyticsAverageSecondsPointOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsAverageSecondsPointOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*AnalyticsAverageSecondsPoint)(nil)).Elem()
+}
+
+func (o AnalyticsAverageSecondsPointOutput) ToAnalyticsAverageSecondsPointOutput() AnalyticsAverageSecondsPointOutput {
+	return o
+}
+
+func (o AnalyticsAverageSecondsPointOutput) ToAnalyticsAverageSecondsPointOutputWithContext(ctx context.Context) AnalyticsAverageSecondsPointOutput {
+	return o
+}
+
+// Average time spent on the page in seconds.
+func (o AnalyticsAverageSecondsPointOutput) AverageSeconds() pulumi.Float64Output {
+	return o.ApplyT(func(v AnalyticsAverageSecondsPoint) float64 { return v.AverageSeconds }).(pulumi.Float64Output)
+}
+
+// Start of the bucket as a UTC instant in ISO 8601 / RFC 3339 format.
+func (o AnalyticsAverageSecondsPointOutput) Timestamp() pulumi.StringOutput {
+	return o.ApplyT(func(v AnalyticsAverageSecondsPoint) string { return v.Timestamp }).(pulumi.StringOutput)
+}
+
+type AnalyticsAverageSecondsPointArrayOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsAverageSecondsPointArrayOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*[]AnalyticsAverageSecondsPoint)(nil)).Elem()
+}
+
+func (o AnalyticsAverageSecondsPointArrayOutput) ToAnalyticsAverageSecondsPointArrayOutput() AnalyticsAverageSecondsPointArrayOutput {
+	return o
+}
+
+func (o AnalyticsAverageSecondsPointArrayOutput) ToAnalyticsAverageSecondsPointArrayOutputWithContext(ctx context.Context) AnalyticsAverageSecondsPointArrayOutput {
+	return o
+}
+
+func (o AnalyticsAverageSecondsPointArrayOutput) Index(i pulumi.IntInput) AnalyticsAverageSecondsPointOutput {
+	return pulumi.All(o, i).ApplyT(func(vs []interface{}) AnalyticsAverageSecondsPoint {
+		return vs[0].([]AnalyticsAverageSecondsPoint)[vs[1].(int)]
+	}).(AnalyticsAverageSecondsPointOutput)
+}
+
+type AnalyticsBucketing struct {
+	// The IANA time zone used to align bucket boundaries (e.g., 'UTC', 'America/New_York').
+	BucketTimeZone string `pulumi:"bucketTimeZone"`
+	// The size of each time bucket: 'day' or 'week'.
+	GranularityPeriod string `pulumi:"granularityPeriod"`
+}
+
+type AnalyticsBucketingOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsBucketingOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*AnalyticsBucketing)(nil)).Elem()
+}
+
+func (o AnalyticsBucketingOutput) ToAnalyticsBucketingOutput() AnalyticsBucketingOutput {
+	return o
+}
+
+func (o AnalyticsBucketingOutput) ToAnalyticsBucketingOutputWithContext(ctx context.Context) AnalyticsBucketingOutput {
+	return o
+}
+
+// The IANA time zone used to align bucket boundaries (e.g., 'UTC', 'America/New_York').
+func (o AnalyticsBucketingOutput) BucketTimeZone() pulumi.StringOutput {
+	return o.ApplyT(func(v AnalyticsBucketing) string { return v.BucketTimeZone }).(pulumi.StringOutput)
+}
+
+// The size of each time bucket: 'day' or 'week'.
+func (o AnalyticsBucketingOutput) GranularityPeriod() pulumi.StringOutput {
+	return o.ApplyT(func(v AnalyticsBucketing) string { return v.GranularityPeriod }).(pulumi.StringOutput)
+}
+
+type AnalyticsBucketingPtrOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsBucketingPtrOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((**AnalyticsBucketing)(nil)).Elem()
+}
+
+func (o AnalyticsBucketingPtrOutput) ToAnalyticsBucketingPtrOutput() AnalyticsBucketingPtrOutput {
+	return o
+}
+
+func (o AnalyticsBucketingPtrOutput) ToAnalyticsBucketingPtrOutputWithContext(ctx context.Context) AnalyticsBucketingPtrOutput {
+	return o
+}
+
+func (o AnalyticsBucketingPtrOutput) Elem() AnalyticsBucketingOutput {
+	return o.ApplyT(func(v *AnalyticsBucketing) AnalyticsBucketing {
+		if v != nil {
+			return *v
+		}
+		var ret AnalyticsBucketing
+		return ret
+	}).(AnalyticsBucketingOutput)
+}
+
+// The IANA time zone used to align bucket boundaries (e.g., 'UTC', 'America/New_York').
+func (o AnalyticsBucketingPtrOutput) BucketTimeZone() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v *AnalyticsBucketing) *string {
+		if v == nil {
+			return nil
+		}
+		return &v.BucketTimeZone
+	}).(pulumi.StringPtrOutput)
+}
+
+// The size of each time bucket: 'day' or 'week'.
+func (o AnalyticsBucketingPtrOutput) GranularityPeriod() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v *AnalyticsBucketing) *string {
+		if v == nil {
+			return nil
+		}
+		return &v.GranularityPeriod
+	}).(pulumi.StringPtrOutput)
+}
+
+type AnalyticsCmsContext struct {
+	// The CMS collection ID.
+	CollectionId string `pulumi:"collectionId"`
+	// The CMS item ID.
+	ItemId string `pulumi:"itemId"`
+}
+
+type AnalyticsCmsContextOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsCmsContextOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*AnalyticsCmsContext)(nil)).Elem()
+}
+
+func (o AnalyticsCmsContextOutput) ToAnalyticsCmsContextOutput() AnalyticsCmsContextOutput {
+	return o
+}
+
+func (o AnalyticsCmsContextOutput) ToAnalyticsCmsContextOutputWithContext(ctx context.Context) AnalyticsCmsContextOutput {
+	return o
+}
+
+// The CMS collection ID.
+func (o AnalyticsCmsContextOutput) CollectionId() pulumi.StringOutput {
+	return o.ApplyT(func(v AnalyticsCmsContext) string { return v.CollectionId }).(pulumi.StringOutput)
+}
+
+// The CMS item ID.
+func (o AnalyticsCmsContextOutput) ItemId() pulumi.StringOutput {
+	return o.ApplyT(func(v AnalyticsCmsContext) string { return v.ItemId }).(pulumi.StringOutput)
+}
+
+type AnalyticsCmsContextArrayOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsCmsContextArrayOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*[]AnalyticsCmsContext)(nil)).Elem()
+}
+
+func (o AnalyticsCmsContextArrayOutput) ToAnalyticsCmsContextArrayOutput() AnalyticsCmsContextArrayOutput {
+	return o
+}
+
+func (o AnalyticsCmsContextArrayOutput) ToAnalyticsCmsContextArrayOutputWithContext(ctx context.Context) AnalyticsCmsContextArrayOutput {
+	return o
+}
+
+func (o AnalyticsCmsContextArrayOutput) Index(i pulumi.IntInput) AnalyticsCmsContextOutput {
+	return pulumi.All(o, i).ApplyT(func(vs []interface{}) AnalyticsCmsContext {
+		return vs[0].([]AnalyticsCmsContext)[vs[1].(int)]
+	}).(AnalyticsCmsContextOutput)
+}
+
+type AnalyticsComponentContext struct {
+	// The Webflow component ID the event is attached to.
+	ComponentId string `pulumi:"componentId"`
+	// The ID of the component instance the event fired from.
+	InstanceId string `pulumi:"instanceId"`
+}
+
+type AnalyticsComponentContextOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsComponentContextOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*AnalyticsComponentContext)(nil)).Elem()
+}
+
+func (o AnalyticsComponentContextOutput) ToAnalyticsComponentContextOutput() AnalyticsComponentContextOutput {
+	return o
+}
+
+func (o AnalyticsComponentContextOutput) ToAnalyticsComponentContextOutputWithContext(ctx context.Context) AnalyticsComponentContextOutput {
+	return o
+}
+
+// The Webflow component ID the event is attached to.
+func (o AnalyticsComponentContextOutput) ComponentId() pulumi.StringOutput {
+	return o.ApplyT(func(v AnalyticsComponentContext) string { return v.ComponentId }).(pulumi.StringOutput)
+}
+
+// The ID of the component instance the event fired from.
+func (o AnalyticsComponentContextOutput) InstanceId() pulumi.StringOutput {
+	return o.ApplyT(func(v AnalyticsComponentContext) string { return v.InstanceId }).(pulumi.StringOutput)
+}
+
+type AnalyticsComponentContextArrayOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsComponentContextArrayOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*[]AnalyticsComponentContext)(nil)).Elem()
+}
+
+func (o AnalyticsComponentContextArrayOutput) ToAnalyticsComponentContextArrayOutput() AnalyticsComponentContextArrayOutput {
+	return o
+}
+
+func (o AnalyticsComponentContextArrayOutput) ToAnalyticsComponentContextArrayOutputWithContext(ctx context.Context) AnalyticsComponentContextArrayOutput {
+	return o
+}
+
+func (o AnalyticsComponentContextArrayOutput) Index(i pulumi.IntInput) AnalyticsComponentContextOutput {
+	return pulumi.All(o, i).ApplyT(func(vs []interface{}) AnalyticsComponentContext {
+		return vs[0].([]AnalyticsComponentContext)[vs[1].(int)]
+	}).(AnalyticsComponentContextOutput)
+}
+
+type AnalyticsCountPoint struct {
+	// Number of sessions, users, pageviews or events in the bucket, per the report's metric scope.
+	Count int `pulumi:"count"`
+	// Start of the time bucket as a UTC instant in ISO 8601 / RFC 3339 format.
+	Timestamp string `pulumi:"timestamp"`
+}
+
+type AnalyticsCountPointOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsCountPointOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*AnalyticsCountPoint)(nil)).Elem()
+}
+
+func (o AnalyticsCountPointOutput) ToAnalyticsCountPointOutput() AnalyticsCountPointOutput {
+	return o
+}
+
+func (o AnalyticsCountPointOutput) ToAnalyticsCountPointOutputWithContext(ctx context.Context) AnalyticsCountPointOutput {
+	return o
+}
+
+// Number of sessions, users, pageviews or events in the bucket, per the report's metric scope.
+func (o AnalyticsCountPointOutput) Count() pulumi.IntOutput {
+	return o.ApplyT(func(v AnalyticsCountPoint) int { return v.Count }).(pulumi.IntOutput)
+}
+
+// Start of the time bucket as a UTC instant in ISO 8601 / RFC 3339 format.
+func (o AnalyticsCountPointOutput) Timestamp() pulumi.StringOutput {
+	return o.ApplyT(func(v AnalyticsCountPoint) string { return v.Timestamp }).(pulumi.StringOutput)
+}
+
+type AnalyticsCountPointArrayOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsCountPointArrayOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*[]AnalyticsCountPoint)(nil)).Elem()
+}
+
+func (o AnalyticsCountPointArrayOutput) ToAnalyticsCountPointArrayOutput() AnalyticsCountPointArrayOutput {
+	return o
+}
+
+func (o AnalyticsCountPointArrayOutput) ToAnalyticsCountPointArrayOutputWithContext(ctx context.Context) AnalyticsCountPointArrayOutput {
+	return o
+}
+
+func (o AnalyticsCountPointArrayOutput) Index(i pulumi.IntInput) AnalyticsCountPointOutput {
+	return pulumi.All(o, i).ApplyT(func(vs []interface{}) AnalyticsCountPoint {
+		return vs[0].([]AnalyticsCountPoint)[vs[1].(int)]
+	}).(AnalyticsCountPointOutput)
+}
+
+type AnalyticsDimensionFilter struct {
+	// Keep only rows whose dimension value equals this value.
+	Eq *string `pulumi:"eq"`
+	// Keep only rows whose dimension value is one of these values.
+	In []string `pulumi:"in"`
+	// Exclude rows whose dimension value equals this value.
+	Ne *string `pulumi:"ne"`
+	// Exclude rows whose dimension value is one of these values.
+	Nin []string `pulumi:"nin"`
+}
+
+// AnalyticsDimensionFilterInput is an input type that accepts AnalyticsDimensionFilterArgs and AnalyticsDimensionFilterOutput values.
+// You can construct a concrete instance of `AnalyticsDimensionFilterInput` via:
+//
+//	AnalyticsDimensionFilterArgs{...}
+type AnalyticsDimensionFilterInput interface {
+	pulumi.Input
+
+	ToAnalyticsDimensionFilterOutput() AnalyticsDimensionFilterOutput
+	ToAnalyticsDimensionFilterOutputWithContext(context.Context) AnalyticsDimensionFilterOutput
+}
+
+type AnalyticsDimensionFilterArgs struct {
+	// Keep only rows whose dimension value equals this value.
+	Eq pulumi.StringPtrInput `pulumi:"eq"`
+	// Keep only rows whose dimension value is one of these values.
+	In pulumi.StringArrayInput `pulumi:"in"`
+	// Exclude rows whose dimension value equals this value.
+	Ne pulumi.StringPtrInput `pulumi:"ne"`
+	// Exclude rows whose dimension value is one of these values.
+	Nin pulumi.StringArrayInput `pulumi:"nin"`
+}
+
+func (AnalyticsDimensionFilterArgs) ElementType() reflect.Type {
+	return reflect.TypeOf((*AnalyticsDimensionFilter)(nil)).Elem()
+}
+
+func (i AnalyticsDimensionFilterArgs) ToAnalyticsDimensionFilterOutput() AnalyticsDimensionFilterOutput {
+	return i.ToAnalyticsDimensionFilterOutputWithContext(context.Background())
+}
+
+func (i AnalyticsDimensionFilterArgs) ToAnalyticsDimensionFilterOutputWithContext(ctx context.Context) AnalyticsDimensionFilterOutput {
+	return pulumi.ToOutputWithContext(ctx, i).(AnalyticsDimensionFilterOutput)
+}
+
+// AnalyticsDimensionFilterMapInput is an input type that accepts AnalyticsDimensionFilterMap and AnalyticsDimensionFilterMapOutput values.
+// You can construct a concrete instance of `AnalyticsDimensionFilterMapInput` via:
+//
+//	AnalyticsDimensionFilterMap{ "key": AnalyticsDimensionFilterArgs{...} }
+type AnalyticsDimensionFilterMapInput interface {
+	pulumi.Input
+
+	ToAnalyticsDimensionFilterMapOutput() AnalyticsDimensionFilterMapOutput
+	ToAnalyticsDimensionFilterMapOutputWithContext(context.Context) AnalyticsDimensionFilterMapOutput
+}
+
+type AnalyticsDimensionFilterMap map[string]AnalyticsDimensionFilterInput
+
+func (AnalyticsDimensionFilterMap) ElementType() reflect.Type {
+	return reflect.TypeOf((*map[string]AnalyticsDimensionFilter)(nil)).Elem()
+}
+
+func (i AnalyticsDimensionFilterMap) ToAnalyticsDimensionFilterMapOutput() AnalyticsDimensionFilterMapOutput {
+	return i.ToAnalyticsDimensionFilterMapOutputWithContext(context.Background())
+}
+
+func (i AnalyticsDimensionFilterMap) ToAnalyticsDimensionFilterMapOutputWithContext(ctx context.Context) AnalyticsDimensionFilterMapOutput {
+	return pulumi.ToOutputWithContext(ctx, i).(AnalyticsDimensionFilterMapOutput)
+}
+
+type AnalyticsDimensionFilterOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsDimensionFilterOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*AnalyticsDimensionFilter)(nil)).Elem()
+}
+
+func (o AnalyticsDimensionFilterOutput) ToAnalyticsDimensionFilterOutput() AnalyticsDimensionFilterOutput {
+	return o
+}
+
+func (o AnalyticsDimensionFilterOutput) ToAnalyticsDimensionFilterOutputWithContext(ctx context.Context) AnalyticsDimensionFilterOutput {
+	return o
+}
+
+// Keep only rows whose dimension value equals this value.
+func (o AnalyticsDimensionFilterOutput) Eq() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v AnalyticsDimensionFilter) *string { return v.Eq }).(pulumi.StringPtrOutput)
+}
+
+// Keep only rows whose dimension value is one of these values.
+func (o AnalyticsDimensionFilterOutput) In() pulumi.StringArrayOutput {
+	return o.ApplyT(func(v AnalyticsDimensionFilter) []string { return v.In }).(pulumi.StringArrayOutput)
+}
+
+// Exclude rows whose dimension value equals this value.
+func (o AnalyticsDimensionFilterOutput) Ne() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v AnalyticsDimensionFilter) *string { return v.Ne }).(pulumi.StringPtrOutput)
+}
+
+// Exclude rows whose dimension value is one of these values.
+func (o AnalyticsDimensionFilterOutput) Nin() pulumi.StringArrayOutput {
+	return o.ApplyT(func(v AnalyticsDimensionFilter) []string { return v.Nin }).(pulumi.StringArrayOutput)
+}
+
+type AnalyticsDimensionFilterMapOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsDimensionFilterMapOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*map[string]AnalyticsDimensionFilter)(nil)).Elem()
+}
+
+func (o AnalyticsDimensionFilterMapOutput) ToAnalyticsDimensionFilterMapOutput() AnalyticsDimensionFilterMapOutput {
+	return o
+}
+
+func (o AnalyticsDimensionFilterMapOutput) ToAnalyticsDimensionFilterMapOutputWithContext(ctx context.Context) AnalyticsDimensionFilterMapOutput {
+	return o
+}
+
+func (o AnalyticsDimensionFilterMapOutput) MapIndex(k pulumi.StringInput) AnalyticsDimensionFilterOutput {
+	return pulumi.All(o, k).ApplyT(func(vs []interface{}) AnalyticsDimensionFilter {
+		return vs[0].(map[string]AnalyticsDimensionFilter)[vs[1].(string)]
+	}).(AnalyticsDimensionFilterOutput)
+}
+
+type AnalyticsDimensionRow struct {
+	// The raw value of the dimension (e.g., 'US-CA' for a region, 'SO' for a traffic source).
+	AttributeKey string `pulumi:"attributeKey"`
+	// Number of sessions or users with this value, per the requested metric scope.
+	Count int `pulumi:"count"`
+	// A human-readable label for the value (e.g., 'California, United States').
+	Name string `pulumi:"name"`
+}
+
+type AnalyticsDimensionRowOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsDimensionRowOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*AnalyticsDimensionRow)(nil)).Elem()
+}
+
+func (o AnalyticsDimensionRowOutput) ToAnalyticsDimensionRowOutput() AnalyticsDimensionRowOutput {
+	return o
+}
+
+func (o AnalyticsDimensionRowOutput) ToAnalyticsDimensionRowOutputWithContext(ctx context.Context) AnalyticsDimensionRowOutput {
+	return o
+}
+
+// The raw value of the dimension (e.g., 'US-CA' for a region, 'SO' for a traffic source).
+func (o AnalyticsDimensionRowOutput) AttributeKey() pulumi.StringOutput {
+	return o.ApplyT(func(v AnalyticsDimensionRow) string { return v.AttributeKey }).(pulumi.StringOutput)
+}
+
+// Number of sessions or users with this value, per the requested metric scope.
+func (o AnalyticsDimensionRowOutput) Count() pulumi.IntOutput {
+	return o.ApplyT(func(v AnalyticsDimensionRow) int { return v.Count }).(pulumi.IntOutput)
+}
+
+// A human-readable label for the value (e.g., 'California, United States').
+func (o AnalyticsDimensionRowOutput) Name() pulumi.StringOutput {
+	return o.ApplyT(func(v AnalyticsDimensionRow) string { return v.Name }).(pulumi.StringOutput)
+}
+
+type AnalyticsDimensionRowArrayOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsDimensionRowArrayOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*[]AnalyticsDimensionRow)(nil)).Elem()
+}
+
+func (o AnalyticsDimensionRowArrayOutput) ToAnalyticsDimensionRowArrayOutput() AnalyticsDimensionRowArrayOutput {
+	return o
+}
+
+func (o AnalyticsDimensionRowArrayOutput) ToAnalyticsDimensionRowArrayOutputWithContext(ctx context.Context) AnalyticsDimensionRowArrayOutput {
+	return o
+}
+
+func (o AnalyticsDimensionRowArrayOutput) Index(i pulumi.IntInput) AnalyticsDimensionRowOutput {
+	return pulumi.All(o, i).ApplyT(func(vs []interface{}) AnalyticsDimensionRow {
+		return vs[0].([]AnalyticsDimensionRow)[vs[1].(int)]
+	}).(AnalyticsDimensionRowOutput)
+}
+
+type AnalyticsPageviewPoint struct {
+	// Number of pageviews in the bucket.
+	PageviewCount int `pulumi:"pageviewCount"`
+	// Start of the daily bucket as a UTC instant in ISO 8601 / RFC 3339 format.
+	Timestamp string `pulumi:"timestamp"`
+}
+
+type AnalyticsPageviewPointOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsPageviewPointOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*AnalyticsPageviewPoint)(nil)).Elem()
+}
+
+func (o AnalyticsPageviewPointOutput) ToAnalyticsPageviewPointOutput() AnalyticsPageviewPointOutput {
+	return o
+}
+
+func (o AnalyticsPageviewPointOutput) ToAnalyticsPageviewPointOutputWithContext(ctx context.Context) AnalyticsPageviewPointOutput {
+	return o
+}
+
+// Number of pageviews in the bucket.
+func (o AnalyticsPageviewPointOutput) PageviewCount() pulumi.IntOutput {
+	return o.ApplyT(func(v AnalyticsPageviewPoint) int { return v.PageviewCount }).(pulumi.IntOutput)
+}
+
+// Start of the daily bucket as a UTC instant in ISO 8601 / RFC 3339 format.
+func (o AnalyticsPageviewPointOutput) Timestamp() pulumi.StringOutput {
+	return o.ApplyT(func(v AnalyticsPageviewPoint) string { return v.Timestamp }).(pulumi.StringOutput)
+}
+
+type AnalyticsPageviewPointArrayOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsPageviewPointArrayOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*[]AnalyticsPageviewPoint)(nil)).Elem()
+}
+
+func (o AnalyticsPageviewPointArrayOutput) ToAnalyticsPageviewPointArrayOutput() AnalyticsPageviewPointArrayOutput {
+	return o
+}
+
+func (o AnalyticsPageviewPointArrayOutput) ToAnalyticsPageviewPointArrayOutputWithContext(ctx context.Context) AnalyticsPageviewPointArrayOutput {
+	return o
+}
+
+func (o AnalyticsPageviewPointArrayOutput) Index(i pulumi.IntInput) AnalyticsPageviewPointOutput {
+	return pulumi.All(o, i).ApplyT(func(vs []interface{}) AnalyticsPageviewPoint {
+		return vs[0].([]AnalyticsPageviewPoint)[vs[1].(int)]
+	}).(AnalyticsPageviewPointOutput)
+}
+
+type AnalyticsTimeOnPageTimeseriesArgs struct {
+	// IANA time zone used to align bucket boundaries (e.g., 'UTC', 'America/New_York').
+	BucketTimeZone string `pulumi:"bucketTimeZone"`
+	// Size of each bucket: 'day' or 'week'.
+	GranularityPeriod string `pulumi:"granularityPeriod"`
+}
+
+// AnalyticsTimeOnPageTimeseriesArgsInput is an input type that accepts AnalyticsTimeOnPageTimeseriesArgsArgs and AnalyticsTimeOnPageTimeseriesArgsOutput values.
+// You can construct a concrete instance of `AnalyticsTimeOnPageTimeseriesArgsInput` via:
+//
+//	AnalyticsTimeOnPageTimeseriesArgsArgs{...}
+type AnalyticsTimeOnPageTimeseriesArgsInput interface {
+	pulumi.Input
+
+	ToAnalyticsTimeOnPageTimeseriesArgsOutput() AnalyticsTimeOnPageTimeseriesArgsOutput
+	ToAnalyticsTimeOnPageTimeseriesArgsOutputWithContext(context.Context) AnalyticsTimeOnPageTimeseriesArgsOutput
+}
+
+type AnalyticsTimeOnPageTimeseriesArgsArgs struct {
+	// IANA time zone used to align bucket boundaries (e.g., 'UTC', 'America/New_York').
+	BucketTimeZone pulumi.StringInput `pulumi:"bucketTimeZone"`
+	// Size of each bucket: 'day' or 'week'.
+	GranularityPeriod pulumi.StringInput `pulumi:"granularityPeriod"`
+}
+
+func (AnalyticsTimeOnPageTimeseriesArgsArgs) ElementType() reflect.Type {
+	return reflect.TypeOf((*AnalyticsTimeOnPageTimeseriesArgs)(nil)).Elem()
+}
+
+func (i AnalyticsTimeOnPageTimeseriesArgsArgs) ToAnalyticsTimeOnPageTimeseriesArgsOutput() AnalyticsTimeOnPageTimeseriesArgsOutput {
+	return i.ToAnalyticsTimeOnPageTimeseriesArgsOutputWithContext(context.Background())
+}
+
+func (i AnalyticsTimeOnPageTimeseriesArgsArgs) ToAnalyticsTimeOnPageTimeseriesArgsOutputWithContext(ctx context.Context) AnalyticsTimeOnPageTimeseriesArgsOutput {
+	return pulumi.ToOutputWithContext(ctx, i).(AnalyticsTimeOnPageTimeseriesArgsOutput)
+}
+
+func (i AnalyticsTimeOnPageTimeseriesArgsArgs) ToAnalyticsTimeOnPageTimeseriesArgsPtrOutput() AnalyticsTimeOnPageTimeseriesArgsPtrOutput {
+	return i.ToAnalyticsTimeOnPageTimeseriesArgsPtrOutputWithContext(context.Background())
+}
+
+func (i AnalyticsTimeOnPageTimeseriesArgsArgs) ToAnalyticsTimeOnPageTimeseriesArgsPtrOutputWithContext(ctx context.Context) AnalyticsTimeOnPageTimeseriesArgsPtrOutput {
+	return pulumi.ToOutputWithContext(ctx, i).(AnalyticsTimeOnPageTimeseriesArgsOutput).ToAnalyticsTimeOnPageTimeseriesArgsPtrOutputWithContext(ctx)
+}
+
+// AnalyticsTimeOnPageTimeseriesArgsPtrInput is an input type that accepts AnalyticsTimeOnPageTimeseriesArgsArgs, AnalyticsTimeOnPageTimeseriesArgsPtr and AnalyticsTimeOnPageTimeseriesArgsPtrOutput values.
+// You can construct a concrete instance of `AnalyticsTimeOnPageTimeseriesArgsPtrInput` via:
+//
+//	        AnalyticsTimeOnPageTimeseriesArgsArgs{...}
+//
+//	or:
+//
+//	        nil
+type AnalyticsTimeOnPageTimeseriesArgsPtrInput interface {
+	pulumi.Input
+
+	ToAnalyticsTimeOnPageTimeseriesArgsPtrOutput() AnalyticsTimeOnPageTimeseriesArgsPtrOutput
+	ToAnalyticsTimeOnPageTimeseriesArgsPtrOutputWithContext(context.Context) AnalyticsTimeOnPageTimeseriesArgsPtrOutput
+}
+
+type analyticsTimeOnPageTimeseriesArgsPtrType AnalyticsTimeOnPageTimeseriesArgsArgs
+
+func AnalyticsTimeOnPageTimeseriesArgsPtr(v *AnalyticsTimeOnPageTimeseriesArgsArgs) AnalyticsTimeOnPageTimeseriesArgsPtrInput {
+	return (*analyticsTimeOnPageTimeseriesArgsPtrType)(v)
+}
+
+func (*analyticsTimeOnPageTimeseriesArgsPtrType) ElementType() reflect.Type {
+	return reflect.TypeOf((**AnalyticsTimeOnPageTimeseriesArgs)(nil)).Elem()
+}
+
+func (i *analyticsTimeOnPageTimeseriesArgsPtrType) ToAnalyticsTimeOnPageTimeseriesArgsPtrOutput() AnalyticsTimeOnPageTimeseriesArgsPtrOutput {
+	return i.ToAnalyticsTimeOnPageTimeseriesArgsPtrOutputWithContext(context.Background())
+}
+
+func (i *analyticsTimeOnPageTimeseriesArgsPtrType) ToAnalyticsTimeOnPageTimeseriesArgsPtrOutputWithContext(ctx context.Context) AnalyticsTimeOnPageTimeseriesArgsPtrOutput {
+	return pulumi.ToOutputWithContext(ctx, i).(AnalyticsTimeOnPageTimeseriesArgsPtrOutput)
+}
+
+type AnalyticsTimeOnPageTimeseriesArgsOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsTimeOnPageTimeseriesArgsOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*AnalyticsTimeOnPageTimeseriesArgs)(nil)).Elem()
+}
+
+func (o AnalyticsTimeOnPageTimeseriesArgsOutput) ToAnalyticsTimeOnPageTimeseriesArgsOutput() AnalyticsTimeOnPageTimeseriesArgsOutput {
+	return o
+}
+
+func (o AnalyticsTimeOnPageTimeseriesArgsOutput) ToAnalyticsTimeOnPageTimeseriesArgsOutputWithContext(ctx context.Context) AnalyticsTimeOnPageTimeseriesArgsOutput {
+	return o
+}
+
+func (o AnalyticsTimeOnPageTimeseriesArgsOutput) ToAnalyticsTimeOnPageTimeseriesArgsPtrOutput() AnalyticsTimeOnPageTimeseriesArgsPtrOutput {
+	return o.ToAnalyticsTimeOnPageTimeseriesArgsPtrOutputWithContext(context.Background())
+}
+
+func (o AnalyticsTimeOnPageTimeseriesArgsOutput) ToAnalyticsTimeOnPageTimeseriesArgsPtrOutputWithContext(ctx context.Context) AnalyticsTimeOnPageTimeseriesArgsPtrOutput {
+	return o.ApplyTWithContext(ctx, func(_ context.Context, v AnalyticsTimeOnPageTimeseriesArgs) *AnalyticsTimeOnPageTimeseriesArgs {
+		return &v
+	}).(AnalyticsTimeOnPageTimeseriesArgsPtrOutput)
+}
+
+// IANA time zone used to align bucket boundaries (e.g., 'UTC', 'America/New_York').
+func (o AnalyticsTimeOnPageTimeseriesArgsOutput) BucketTimeZone() pulumi.StringOutput {
+	return o.ApplyT(func(v AnalyticsTimeOnPageTimeseriesArgs) string { return v.BucketTimeZone }).(pulumi.StringOutput)
+}
+
+// Size of each bucket: 'day' or 'week'.
+func (o AnalyticsTimeOnPageTimeseriesArgsOutput) GranularityPeriod() pulumi.StringOutput {
+	return o.ApplyT(func(v AnalyticsTimeOnPageTimeseriesArgs) string { return v.GranularityPeriod }).(pulumi.StringOutput)
+}
+
+type AnalyticsTimeOnPageTimeseriesArgsPtrOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsTimeOnPageTimeseriesArgsPtrOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((**AnalyticsTimeOnPageTimeseriesArgs)(nil)).Elem()
+}
+
+func (o AnalyticsTimeOnPageTimeseriesArgsPtrOutput) ToAnalyticsTimeOnPageTimeseriesArgsPtrOutput() AnalyticsTimeOnPageTimeseriesArgsPtrOutput {
+	return o
+}
+
+func (o AnalyticsTimeOnPageTimeseriesArgsPtrOutput) ToAnalyticsTimeOnPageTimeseriesArgsPtrOutputWithContext(ctx context.Context) AnalyticsTimeOnPageTimeseriesArgsPtrOutput {
+	return o
+}
+
+func (o AnalyticsTimeOnPageTimeseriesArgsPtrOutput) Elem() AnalyticsTimeOnPageTimeseriesArgsOutput {
+	return o.ApplyT(func(v *AnalyticsTimeOnPageTimeseriesArgs) AnalyticsTimeOnPageTimeseriesArgs {
+		if v != nil {
+			return *v
+		}
+		var ret AnalyticsTimeOnPageTimeseriesArgs
+		return ret
+	}).(AnalyticsTimeOnPageTimeseriesArgsOutput)
+}
+
+// IANA time zone used to align bucket boundaries (e.g., 'UTC', 'America/New_York').
+func (o AnalyticsTimeOnPageTimeseriesArgsPtrOutput) BucketTimeZone() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v *AnalyticsTimeOnPageTimeseriesArgs) *string {
+		if v == nil {
+			return nil
+		}
+		return &v.BucketTimeZone
+	}).(pulumi.StringPtrOutput)
+}
+
+// Size of each bucket: 'day' or 'week'.
+func (o AnalyticsTimeOnPageTimeseriesArgsPtrOutput) GranularityPeriod() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v *AnalyticsTimeOnPageTimeseriesArgs) *string {
+		if v == nil {
+			return nil
+		}
+		return &v.GranularityPeriod
+	}).(pulumi.StringPtrOutput)
+}
+
+type AnalyticsTimeseriesArgs struct {
+	// IANA time zone used to align daily bucket boundaries (e.g., 'UTC', 'America/New_York'). Bucket timestamps are returned as UTC instants of local midnight in this zone.
+	BucketTimeZone string `pulumi:"bucketTimeZone"`
+}
+
+// AnalyticsTimeseriesArgsInput is an input type that accepts AnalyticsTimeseriesArgsArgs and AnalyticsTimeseriesArgsOutput values.
+// You can construct a concrete instance of `AnalyticsTimeseriesArgsInput` via:
+//
+//	AnalyticsTimeseriesArgsArgs{...}
+type AnalyticsTimeseriesArgsInput interface {
+	pulumi.Input
+
+	ToAnalyticsTimeseriesArgsOutput() AnalyticsTimeseriesArgsOutput
+	ToAnalyticsTimeseriesArgsOutputWithContext(context.Context) AnalyticsTimeseriesArgsOutput
+}
+
+type AnalyticsTimeseriesArgsArgs struct {
+	// IANA time zone used to align daily bucket boundaries (e.g., 'UTC', 'America/New_York'). Bucket timestamps are returned as UTC instants of local midnight in this zone.
+	BucketTimeZone pulumi.StringInput `pulumi:"bucketTimeZone"`
+}
+
+func (AnalyticsTimeseriesArgsArgs) ElementType() reflect.Type {
+	return reflect.TypeOf((*AnalyticsTimeseriesArgs)(nil)).Elem()
+}
+
+func (i AnalyticsTimeseriesArgsArgs) ToAnalyticsTimeseriesArgsOutput() AnalyticsTimeseriesArgsOutput {
+	return i.ToAnalyticsTimeseriesArgsOutputWithContext(context.Background())
+}
+
+func (i AnalyticsTimeseriesArgsArgs) ToAnalyticsTimeseriesArgsOutputWithContext(ctx context.Context) AnalyticsTimeseriesArgsOutput {
+	return pulumi.ToOutputWithContext(ctx, i).(AnalyticsTimeseriesArgsOutput)
+}
+
+func (i AnalyticsTimeseriesArgsArgs) ToAnalyticsTimeseriesArgsPtrOutput() AnalyticsTimeseriesArgsPtrOutput {
+	return i.ToAnalyticsTimeseriesArgsPtrOutputWithContext(context.Background())
+}
+
+func (i AnalyticsTimeseriesArgsArgs) ToAnalyticsTimeseriesArgsPtrOutputWithContext(ctx context.Context) AnalyticsTimeseriesArgsPtrOutput {
+	return pulumi.ToOutputWithContext(ctx, i).(AnalyticsTimeseriesArgsOutput).ToAnalyticsTimeseriesArgsPtrOutputWithContext(ctx)
+}
+
+// AnalyticsTimeseriesArgsPtrInput is an input type that accepts AnalyticsTimeseriesArgsArgs, AnalyticsTimeseriesArgsPtr and AnalyticsTimeseriesArgsPtrOutput values.
+// You can construct a concrete instance of `AnalyticsTimeseriesArgsPtrInput` via:
+//
+//	        AnalyticsTimeseriesArgsArgs{...}
+//
+//	or:
+//
+//	        nil
+type AnalyticsTimeseriesArgsPtrInput interface {
+	pulumi.Input
+
+	ToAnalyticsTimeseriesArgsPtrOutput() AnalyticsTimeseriesArgsPtrOutput
+	ToAnalyticsTimeseriesArgsPtrOutputWithContext(context.Context) AnalyticsTimeseriesArgsPtrOutput
+}
+
+type analyticsTimeseriesArgsPtrType AnalyticsTimeseriesArgsArgs
+
+func AnalyticsTimeseriesArgsPtr(v *AnalyticsTimeseriesArgsArgs) AnalyticsTimeseriesArgsPtrInput {
+	return (*analyticsTimeseriesArgsPtrType)(v)
+}
+
+func (*analyticsTimeseriesArgsPtrType) ElementType() reflect.Type {
+	return reflect.TypeOf((**AnalyticsTimeseriesArgs)(nil)).Elem()
+}
+
+func (i *analyticsTimeseriesArgsPtrType) ToAnalyticsTimeseriesArgsPtrOutput() AnalyticsTimeseriesArgsPtrOutput {
+	return i.ToAnalyticsTimeseriesArgsPtrOutputWithContext(context.Background())
+}
+
+func (i *analyticsTimeseriesArgsPtrType) ToAnalyticsTimeseriesArgsPtrOutputWithContext(ctx context.Context) AnalyticsTimeseriesArgsPtrOutput {
+	return pulumi.ToOutputWithContext(ctx, i).(AnalyticsTimeseriesArgsPtrOutput)
+}
+
+type AnalyticsTimeseriesArgsOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsTimeseriesArgsOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*AnalyticsTimeseriesArgs)(nil)).Elem()
+}
+
+func (o AnalyticsTimeseriesArgsOutput) ToAnalyticsTimeseriesArgsOutput() AnalyticsTimeseriesArgsOutput {
+	return o
+}
+
+func (o AnalyticsTimeseriesArgsOutput) ToAnalyticsTimeseriesArgsOutputWithContext(ctx context.Context) AnalyticsTimeseriesArgsOutput {
+	return o
+}
+
+func (o AnalyticsTimeseriesArgsOutput) ToAnalyticsTimeseriesArgsPtrOutput() AnalyticsTimeseriesArgsPtrOutput {
+	return o.ToAnalyticsTimeseriesArgsPtrOutputWithContext(context.Background())
+}
+
+func (o AnalyticsTimeseriesArgsOutput) ToAnalyticsTimeseriesArgsPtrOutputWithContext(ctx context.Context) AnalyticsTimeseriesArgsPtrOutput {
+	return o.ApplyTWithContext(ctx, func(_ context.Context, v AnalyticsTimeseriesArgs) *AnalyticsTimeseriesArgs {
+		return &v
+	}).(AnalyticsTimeseriesArgsPtrOutput)
+}
+
+// IANA time zone used to align daily bucket boundaries (e.g., 'UTC', 'America/New_York'). Bucket timestamps are returned as UTC instants of local midnight in this zone.
+func (o AnalyticsTimeseriesArgsOutput) BucketTimeZone() pulumi.StringOutput {
+	return o.ApplyT(func(v AnalyticsTimeseriesArgs) string { return v.BucketTimeZone }).(pulumi.StringOutput)
+}
+
+type AnalyticsTimeseriesArgsPtrOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsTimeseriesArgsPtrOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((**AnalyticsTimeseriesArgs)(nil)).Elem()
+}
+
+func (o AnalyticsTimeseriesArgsPtrOutput) ToAnalyticsTimeseriesArgsPtrOutput() AnalyticsTimeseriesArgsPtrOutput {
+	return o
+}
+
+func (o AnalyticsTimeseriesArgsPtrOutput) ToAnalyticsTimeseriesArgsPtrOutputWithContext(ctx context.Context) AnalyticsTimeseriesArgsPtrOutput {
+	return o
+}
+
+func (o AnalyticsTimeseriesArgsPtrOutput) Elem() AnalyticsTimeseriesArgsOutput {
+	return o.ApplyT(func(v *AnalyticsTimeseriesArgs) AnalyticsTimeseriesArgs {
+		if v != nil {
+			return *v
+		}
+		var ret AnalyticsTimeseriesArgs
+		return ret
+	}).(AnalyticsTimeseriesArgsOutput)
+}
+
+// IANA time zone used to align daily bucket boundaries (e.g., 'UTC', 'America/New_York'). Bucket timestamps are returned as UTC instants of local midnight in this zone.
+func (o AnalyticsTimeseriesArgsPtrOutput) BucketTimeZone() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v *AnalyticsTimeseriesArgs) *string {
+		if v == nil {
+			return nil
+		}
+		return &v.BucketTimeZone
+	}).(pulumi.StringPtrOutput)
+}
+
+type AnalyticsTopEventRow struct {
+	// CMS items the event fired from, when applicable.
+	CmsContext []AnalyticsCmsContext `pulumi:"cmsContext"`
+	// The CMS collection ID, for events on collection template pages.
+	CollectionId *string `pulumi:"collectionId"`
+	// Component instances the event fired from, when applicable.
+	ComponentContext []AnalyticsComponentContext `pulumi:"componentContext"`
+	// Number of times the event fired in the window.
+	Count int `pulumi:"count"`
+	// The event identifier.
+	EventId string `pulumi:"eventId"`
+	// The CMS item slug, for events on collection template pages.
+	ItemSlug *string `pulumi:"itemSlug"`
+	// The event name, when available.
+	Name *string `pulumi:"name"`
+	// The ID of the page the event is attached to, when available.
+	PageId *string `pulumi:"pageId"`
+	// The name of the page the event is attached to, when available.
+	PageName *string `pulumi:"pageName"`
+	// Daily event counts; present only when 'timeseries' was requested.
+	Timeseries []AnalyticsCountPoint `pulumi:"timeseries"`
+}
+
+type AnalyticsTopEventRowOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsTopEventRowOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*AnalyticsTopEventRow)(nil)).Elem()
+}
+
+func (o AnalyticsTopEventRowOutput) ToAnalyticsTopEventRowOutput() AnalyticsTopEventRowOutput {
+	return o
+}
+
+func (o AnalyticsTopEventRowOutput) ToAnalyticsTopEventRowOutputWithContext(ctx context.Context) AnalyticsTopEventRowOutput {
+	return o
+}
+
+// CMS items the event fired from, when applicable.
+func (o AnalyticsTopEventRowOutput) CmsContext() AnalyticsCmsContextArrayOutput {
+	return o.ApplyT(func(v AnalyticsTopEventRow) []AnalyticsCmsContext { return v.CmsContext }).(AnalyticsCmsContextArrayOutput)
+}
+
+// The CMS collection ID, for events on collection template pages.
+func (o AnalyticsTopEventRowOutput) CollectionId() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v AnalyticsTopEventRow) *string { return v.CollectionId }).(pulumi.StringPtrOutput)
+}
+
+// Component instances the event fired from, when applicable.
+func (o AnalyticsTopEventRowOutput) ComponentContext() AnalyticsComponentContextArrayOutput {
+	return o.ApplyT(func(v AnalyticsTopEventRow) []AnalyticsComponentContext { return v.ComponentContext }).(AnalyticsComponentContextArrayOutput)
+}
+
+// Number of times the event fired in the window.
+func (o AnalyticsTopEventRowOutput) Count() pulumi.IntOutput {
+	return o.ApplyT(func(v AnalyticsTopEventRow) int { return v.Count }).(pulumi.IntOutput)
+}
+
+// The event identifier.
+func (o AnalyticsTopEventRowOutput) EventId() pulumi.StringOutput {
+	return o.ApplyT(func(v AnalyticsTopEventRow) string { return v.EventId }).(pulumi.StringOutput)
+}
+
+// The CMS item slug, for events on collection template pages.
+func (o AnalyticsTopEventRowOutput) ItemSlug() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v AnalyticsTopEventRow) *string { return v.ItemSlug }).(pulumi.StringPtrOutput)
+}
+
+// The event name, when available.
+func (o AnalyticsTopEventRowOutput) Name() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v AnalyticsTopEventRow) *string { return v.Name }).(pulumi.StringPtrOutput)
+}
+
+// The ID of the page the event is attached to, when available.
+func (o AnalyticsTopEventRowOutput) PageId() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v AnalyticsTopEventRow) *string { return v.PageId }).(pulumi.StringPtrOutput)
+}
+
+// The name of the page the event is attached to, when available.
+func (o AnalyticsTopEventRowOutput) PageName() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v AnalyticsTopEventRow) *string { return v.PageName }).(pulumi.StringPtrOutput)
+}
+
+// Daily event counts; present only when 'timeseries' was requested.
+func (o AnalyticsTopEventRowOutput) Timeseries() AnalyticsCountPointArrayOutput {
+	return o.ApplyT(func(v AnalyticsTopEventRow) []AnalyticsCountPoint { return v.Timeseries }).(AnalyticsCountPointArrayOutput)
+}
+
+type AnalyticsTopEventRowArrayOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsTopEventRowArrayOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*[]AnalyticsTopEventRow)(nil)).Elem()
+}
+
+func (o AnalyticsTopEventRowArrayOutput) ToAnalyticsTopEventRowArrayOutput() AnalyticsTopEventRowArrayOutput {
+	return o
+}
+
+func (o AnalyticsTopEventRowArrayOutput) ToAnalyticsTopEventRowArrayOutputWithContext(ctx context.Context) AnalyticsTopEventRowArrayOutput {
+	return o
+}
+
+func (o AnalyticsTopEventRowArrayOutput) Index(i pulumi.IntInput) AnalyticsTopEventRowOutput {
+	return pulumi.All(o, i).ApplyT(func(vs []interface{}) AnalyticsTopEventRow {
+		return vs[0].([]AnalyticsTopEventRow)[vs[1].(int)]
+	}).(AnalyticsTopEventRowOutput)
+}
+
+type AnalyticsTopPageRow struct {
+	// The CMS collection ID, for collection template pages.
+	CollectionId *string `pulumi:"collectionId"`
+	// The CMS item slug, for collection template pages.
+	ItemSlug *string `pulumi:"itemSlug"`
+	// The Webflow page ID.
+	PageId string `pulumi:"pageId"`
+	// Number of pageviews of this page.
+	PageviewCount int `pulumi:"pageviewCount"`
+	// Number of sessions that included a view of this page.
+	SessionCount int `pulumi:"sessionCount"`
+	// Daily pageview counts for this page; present only when 'timeseries' was requested.
+	Timeseries []AnalyticsPageviewPoint `pulumi:"timeseries"`
+	// The page title.
+	Title string `pulumi:"title"`
+	// Number of unique users who viewed this page.
+	UserCount int `pulumi:"userCount"`
+}
+
+type AnalyticsTopPageRowOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsTopPageRowOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*AnalyticsTopPageRow)(nil)).Elem()
+}
+
+func (o AnalyticsTopPageRowOutput) ToAnalyticsTopPageRowOutput() AnalyticsTopPageRowOutput {
+	return o
+}
+
+func (o AnalyticsTopPageRowOutput) ToAnalyticsTopPageRowOutputWithContext(ctx context.Context) AnalyticsTopPageRowOutput {
+	return o
+}
+
+// The CMS collection ID, for collection template pages.
+func (o AnalyticsTopPageRowOutput) CollectionId() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v AnalyticsTopPageRow) *string { return v.CollectionId }).(pulumi.StringPtrOutput)
+}
+
+// The CMS item slug, for collection template pages.
+func (o AnalyticsTopPageRowOutput) ItemSlug() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v AnalyticsTopPageRow) *string { return v.ItemSlug }).(pulumi.StringPtrOutput)
+}
+
+// The Webflow page ID.
+func (o AnalyticsTopPageRowOutput) PageId() pulumi.StringOutput {
+	return o.ApplyT(func(v AnalyticsTopPageRow) string { return v.PageId }).(pulumi.StringOutput)
+}
+
+// Number of pageviews of this page.
+func (o AnalyticsTopPageRowOutput) PageviewCount() pulumi.IntOutput {
+	return o.ApplyT(func(v AnalyticsTopPageRow) int { return v.PageviewCount }).(pulumi.IntOutput)
+}
+
+// Number of sessions that included a view of this page.
+func (o AnalyticsTopPageRowOutput) SessionCount() pulumi.IntOutput {
+	return o.ApplyT(func(v AnalyticsTopPageRow) int { return v.SessionCount }).(pulumi.IntOutput)
+}
+
+// Daily pageview counts for this page; present only when 'timeseries' was requested.
+func (o AnalyticsTopPageRowOutput) Timeseries() AnalyticsPageviewPointArrayOutput {
+	return o.ApplyT(func(v AnalyticsTopPageRow) []AnalyticsPageviewPoint { return v.Timeseries }).(AnalyticsPageviewPointArrayOutput)
+}
+
+// The page title.
+func (o AnalyticsTopPageRowOutput) Title() pulumi.StringOutput {
+	return o.ApplyT(func(v AnalyticsTopPageRow) string { return v.Title }).(pulumi.StringOutput)
+}
+
+// Number of unique users who viewed this page.
+func (o AnalyticsTopPageRowOutput) UserCount() pulumi.IntOutput {
+	return o.ApplyT(func(v AnalyticsTopPageRow) int { return v.UserCount }).(pulumi.IntOutput)
+}
+
+type AnalyticsTopPageRowArrayOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsTopPageRowArrayOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*[]AnalyticsTopPageRow)(nil)).Elem()
+}
+
+func (o AnalyticsTopPageRowArrayOutput) ToAnalyticsTopPageRowArrayOutput() AnalyticsTopPageRowArrayOutput {
+	return o
+}
+
+func (o AnalyticsTopPageRowArrayOutput) ToAnalyticsTopPageRowArrayOutputWithContext(ctx context.Context) AnalyticsTopPageRowArrayOutput {
+	return o
+}
+
+func (o AnalyticsTopPageRowArrayOutput) Index(i pulumi.IntInput) AnalyticsTopPageRowOutput {
+	return pulumi.All(o, i).ApplyT(func(vs []interface{}) AnalyticsTopPageRow {
+		return vs[0].([]AnalyticsTopPageRow)[vs[1].(int)]
+	}).(AnalyticsTopPageRowOutput)
+}
+
+type AnalyticsWindow struct {
+	// Exclusive end of the reporting window, in ISO 8601 / RFC 3339 format.
+	EndTime string `pulumi:"endTime"`
+	// Inclusive start of the reporting window, in ISO 8601 / RFC 3339 format.
+	StartTime string `pulumi:"startTime"`
+}
+
+type AnalyticsWindowOutput struct{ *pulumi.OutputState }
+
+func (AnalyticsWindowOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*AnalyticsWindow)(nil)).Elem()
+}
+
+func (o AnalyticsWindowOutput) ToAnalyticsWindowOutput() AnalyticsWindowOutput {
+	return o
+}
+
+func (o AnalyticsWindowOutput) ToAnalyticsWindowOutputWithContext(ctx context.Context) AnalyticsWindowOutput {
+	return o
+}
+
+// Exclusive end of the reporting window, in ISO 8601 / RFC 3339 format.
+func (o AnalyticsWindowOutput) EndTime() pulumi.StringOutput {
+	return o.ApplyT(func(v AnalyticsWindow) string { return v.EndTime }).(pulumi.StringOutput)
+}
+
+// Inclusive start of the reporting window, in ISO 8601 / RFC 3339 format.
+func (o AnalyticsWindowOutput) StartTime() pulumi.StringOutput {
+	return o.ApplyT(func(v AnalyticsWindow) string { return v.StartTime }).(pulumi.StringOutput)
+}
+
 type CustomScriptArgs struct {
 	// Optional developer-specified key/value pairs applied as HTML attributes to the script tag. Example: {'data-config': 'my-value'}. These attributes are passed directly to the script tag.
 	Attributes map[string]interface{} `pulumi:"attributes"`
@@ -287,9 +1323,9 @@ func (o GetTokenInfoAuthorizedToOutput) WorkspaceIds() pulumi.StringArrayOutput 
 }
 
 type NodeContentUpdate struct {
-	// The unique identifier for the DOM node to update. This ID comes from the page's DOM structure and must exist on the page. Retrieve node IDs using GET /pages/{page_id}/dom endpoint.
+	// The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
 	NodeId string `pulumi:"nodeId"`
-	// The new text content for the node. This will replace the existing text content in the specified node. Only applicable to text nodes or elements containing text.
+	// The new HTML content for the node (required, non-empty). The HTML tags must match the node's current content as returned by GET /v2/pages/{page_id}/dom (e.g., '<h1>Hello</h1>' for a heading). An empty string does not clear the node; Webflow rejects it.
 	Text string `pulumi:"text"`
 }
 
@@ -305,9 +1341,9 @@ type NodeContentUpdateInput interface {
 }
 
 type NodeContentUpdateArgs struct {
-	// The unique identifier for the DOM node to update. This ID comes from the page's DOM structure and must exist on the page. Retrieve node IDs using GET /pages/{page_id}/dom endpoint.
+	// The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
 	NodeId pulumi.StringInput `pulumi:"nodeId"`
-	// The new text content for the node. This will replace the existing text content in the specified node. Only applicable to text nodes or elements containing text.
+	// The new HTML content for the node (required, non-empty). The HTML tags must match the node's current content as returned by GET /v2/pages/{page_id}/dom (e.g., '<h1>Hello</h1>' for a heading). An empty string does not clear the node; Webflow rejects it.
 	Text pulumi.StringInput `pulumi:"text"`
 }
 
@@ -362,12 +1398,12 @@ func (o NodeContentUpdateOutput) ToNodeContentUpdateOutputWithContext(ctx contex
 	return o
 }
 
-// The unique identifier for the DOM node to update. This ID comes from the page's DOM structure and must exist on the page. Retrieve node IDs using GET /pages/{page_id}/dom endpoint.
+// The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
 func (o NodeContentUpdateOutput) NodeId() pulumi.StringOutput {
 	return o.ApplyT(func(v NodeContentUpdate) string { return v.NodeId }).(pulumi.StringOutput)
 }
 
-// The new text content for the node. This will replace the existing text content in the specified node. Only applicable to text nodes or elements containing text.
+// The new HTML content for the node (required, non-empty). The HTML tags must match the node's current content as returned by GET /v2/pages/{page_id}/dom (e.g., '<h1>Hello</h1>' for a heading). An empty string does not clear the node; Webflow rejects it.
 func (o NodeContentUpdateOutput) Text() pulumi.StringOutput {
 	return o.ApplyT(func(v NodeContentUpdate) string { return v.Text }).(pulumi.StringOutput)
 }
@@ -516,100 +1552,630 @@ func (o PageCustomCodeScriptArrayOutput) Index(i pulumi.IntInput) PageCustomCode
 	}).(PageCustomCodeScriptOutput)
 }
 
-type PageInfo struct {
-	Archived     bool    `pulumi:"archived"`
-	CollectionId *string `pulumi:"collectionId"`
-	CreatedOn    string  `pulumi:"createdOn"`
-	Draft        bool    `pulumi:"draft"`
-	LastUpdated  string  `pulumi:"lastUpdated"`
-	PageId       string  `pulumi:"pageId"`
-	ParentId     *string `pulumi:"parentId"`
-	SiteId       string  `pulumi:"siteId"`
-	Slug         string  `pulumi:"slug"`
-	Title        string  `pulumi:"title"`
+type PageOpenGraphArgs struct {
+	// The Open Graph description of the page.
+	Description *string `pulumi:"description"`
+	// Whether the Open Graph description is copied from the SEO description.
+	DescriptionCopied *bool `pulumi:"descriptionCopied"`
+	// The Open Graph title of the page.
+	Title *string `pulumi:"title"`
+	// Whether the Open Graph title is copied from the SEO title.
+	TitleCopied *bool `pulumi:"titleCopied"`
 }
 
-type PageInfoOutput struct{ *pulumi.OutputState }
+// PageOpenGraphArgsInput is an input type that accepts PageOpenGraphArgsArgs and PageOpenGraphArgsOutput values.
+// You can construct a concrete instance of `PageOpenGraphArgsInput` via:
+//
+//	PageOpenGraphArgsArgs{...}
+type PageOpenGraphArgsInput interface {
+	pulumi.Input
 
-func (PageInfoOutput) ElementType() reflect.Type {
-	return reflect.TypeOf((*PageInfo)(nil)).Elem()
+	ToPageOpenGraphArgsOutput() PageOpenGraphArgsOutput
+	ToPageOpenGraphArgsOutputWithContext(context.Context) PageOpenGraphArgsOutput
 }
 
-func (o PageInfoOutput) ToPageInfoOutput() PageInfoOutput {
+type PageOpenGraphArgsArgs struct {
+	// The Open Graph description of the page.
+	Description pulumi.StringPtrInput `pulumi:"description"`
+	// Whether the Open Graph description is copied from the SEO description.
+	DescriptionCopied pulumi.BoolPtrInput `pulumi:"descriptionCopied"`
+	// The Open Graph title of the page.
+	Title pulumi.StringPtrInput `pulumi:"title"`
+	// Whether the Open Graph title is copied from the SEO title.
+	TitleCopied pulumi.BoolPtrInput `pulumi:"titleCopied"`
+}
+
+func (PageOpenGraphArgsArgs) ElementType() reflect.Type {
+	return reflect.TypeOf((*PageOpenGraphArgs)(nil)).Elem()
+}
+
+func (i PageOpenGraphArgsArgs) ToPageOpenGraphArgsOutput() PageOpenGraphArgsOutput {
+	return i.ToPageOpenGraphArgsOutputWithContext(context.Background())
+}
+
+func (i PageOpenGraphArgsArgs) ToPageOpenGraphArgsOutputWithContext(ctx context.Context) PageOpenGraphArgsOutput {
+	return pulumi.ToOutputWithContext(ctx, i).(PageOpenGraphArgsOutput)
+}
+
+func (i PageOpenGraphArgsArgs) ToPageOpenGraphArgsPtrOutput() PageOpenGraphArgsPtrOutput {
+	return i.ToPageOpenGraphArgsPtrOutputWithContext(context.Background())
+}
+
+func (i PageOpenGraphArgsArgs) ToPageOpenGraphArgsPtrOutputWithContext(ctx context.Context) PageOpenGraphArgsPtrOutput {
+	return pulumi.ToOutputWithContext(ctx, i).(PageOpenGraphArgsOutput).ToPageOpenGraphArgsPtrOutputWithContext(ctx)
+}
+
+// PageOpenGraphArgsPtrInput is an input type that accepts PageOpenGraphArgsArgs, PageOpenGraphArgsPtr and PageOpenGraphArgsPtrOutput values.
+// You can construct a concrete instance of `PageOpenGraphArgsPtrInput` via:
+//
+//	        PageOpenGraphArgsArgs{...}
+//
+//	or:
+//
+//	        nil
+type PageOpenGraphArgsPtrInput interface {
+	pulumi.Input
+
+	ToPageOpenGraphArgsPtrOutput() PageOpenGraphArgsPtrOutput
+	ToPageOpenGraphArgsPtrOutputWithContext(context.Context) PageOpenGraphArgsPtrOutput
+}
+
+type pageOpenGraphArgsPtrType PageOpenGraphArgsArgs
+
+func PageOpenGraphArgsPtr(v *PageOpenGraphArgsArgs) PageOpenGraphArgsPtrInput {
+	return (*pageOpenGraphArgsPtrType)(v)
+}
+
+func (*pageOpenGraphArgsPtrType) ElementType() reflect.Type {
+	return reflect.TypeOf((**PageOpenGraphArgs)(nil)).Elem()
+}
+
+func (i *pageOpenGraphArgsPtrType) ToPageOpenGraphArgsPtrOutput() PageOpenGraphArgsPtrOutput {
+	return i.ToPageOpenGraphArgsPtrOutputWithContext(context.Background())
+}
+
+func (i *pageOpenGraphArgsPtrType) ToPageOpenGraphArgsPtrOutputWithContext(ctx context.Context) PageOpenGraphArgsPtrOutput {
+	return pulumi.ToOutputWithContext(ctx, i).(PageOpenGraphArgsPtrOutput)
+}
+
+type PageOpenGraphArgsOutput struct{ *pulumi.OutputState }
+
+func (PageOpenGraphArgsOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*PageOpenGraphArgs)(nil)).Elem()
+}
+
+func (o PageOpenGraphArgsOutput) ToPageOpenGraphArgsOutput() PageOpenGraphArgsOutput {
 	return o
 }
 
-func (o PageInfoOutput) ToPageInfoOutputWithContext(ctx context.Context) PageInfoOutput {
+func (o PageOpenGraphArgsOutput) ToPageOpenGraphArgsOutputWithContext(ctx context.Context) PageOpenGraphArgsOutput {
 	return o
 }
 
-func (o PageInfoOutput) Archived() pulumi.BoolOutput {
-	return o.ApplyT(func(v PageInfo) bool { return v.Archived }).(pulumi.BoolOutput)
+func (o PageOpenGraphArgsOutput) ToPageOpenGraphArgsPtrOutput() PageOpenGraphArgsPtrOutput {
+	return o.ToPageOpenGraphArgsPtrOutputWithContext(context.Background())
 }
 
-func (o PageInfoOutput) CollectionId() pulumi.StringPtrOutput {
-	return o.ApplyT(func(v PageInfo) *string { return v.CollectionId }).(pulumi.StringPtrOutput)
+func (o PageOpenGraphArgsOutput) ToPageOpenGraphArgsPtrOutputWithContext(ctx context.Context) PageOpenGraphArgsPtrOutput {
+	return o.ApplyTWithContext(ctx, func(_ context.Context, v PageOpenGraphArgs) *PageOpenGraphArgs {
+		return &v
+	}).(PageOpenGraphArgsPtrOutput)
 }
 
-func (o PageInfoOutput) CreatedOn() pulumi.StringOutput {
-	return o.ApplyT(func(v PageInfo) string { return v.CreatedOn }).(pulumi.StringOutput)
+// The Open Graph description of the page.
+func (o PageOpenGraphArgsOutput) Description() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v PageOpenGraphArgs) *string { return v.Description }).(pulumi.StringPtrOutput)
 }
 
-func (o PageInfoOutput) Draft() pulumi.BoolOutput {
-	return o.ApplyT(func(v PageInfo) bool { return v.Draft }).(pulumi.BoolOutput)
+// Whether the Open Graph description is copied from the SEO description.
+func (o PageOpenGraphArgsOutput) DescriptionCopied() pulumi.BoolPtrOutput {
+	return o.ApplyT(func(v PageOpenGraphArgs) *bool { return v.DescriptionCopied }).(pulumi.BoolPtrOutput)
 }
 
-func (o PageInfoOutput) LastUpdated() pulumi.StringOutput {
-	return o.ApplyT(func(v PageInfo) string { return v.LastUpdated }).(pulumi.StringOutput)
+// The Open Graph title of the page.
+func (o PageOpenGraphArgsOutput) Title() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v PageOpenGraphArgs) *string { return v.Title }).(pulumi.StringPtrOutput)
 }
 
-func (o PageInfoOutput) PageId() pulumi.StringOutput {
-	return o.ApplyT(func(v PageInfo) string { return v.PageId }).(pulumi.StringOutput)
+// Whether the Open Graph title is copied from the SEO title.
+func (o PageOpenGraphArgsOutput) TitleCopied() pulumi.BoolPtrOutput {
+	return o.ApplyT(func(v PageOpenGraphArgs) *bool { return v.TitleCopied }).(pulumi.BoolPtrOutput)
 }
 
-func (o PageInfoOutput) ParentId() pulumi.StringPtrOutput {
-	return o.ApplyT(func(v PageInfo) *string { return v.ParentId }).(pulumi.StringPtrOutput)
+type PageOpenGraphArgsPtrOutput struct{ *pulumi.OutputState }
+
+func (PageOpenGraphArgsPtrOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((**PageOpenGraphArgs)(nil)).Elem()
 }
 
-func (o PageInfoOutput) SiteId() pulumi.StringOutput {
-	return o.ApplyT(func(v PageInfo) string { return v.SiteId }).(pulumi.StringOutput)
-}
-
-func (o PageInfoOutput) Slug() pulumi.StringOutput {
-	return o.ApplyT(func(v PageInfo) string { return v.Slug }).(pulumi.StringOutput)
-}
-
-func (o PageInfoOutput) Title() pulumi.StringOutput {
-	return o.ApplyT(func(v PageInfo) string { return v.Title }).(pulumi.StringOutput)
-}
-
-type PageInfoArrayOutput struct{ *pulumi.OutputState }
-
-func (PageInfoArrayOutput) ElementType() reflect.Type {
-	return reflect.TypeOf((*[]PageInfo)(nil)).Elem()
-}
-
-func (o PageInfoArrayOutput) ToPageInfoArrayOutput() PageInfoArrayOutput {
+func (o PageOpenGraphArgsPtrOutput) ToPageOpenGraphArgsPtrOutput() PageOpenGraphArgsPtrOutput {
 	return o
 }
 
-func (o PageInfoArrayOutput) ToPageInfoArrayOutputWithContext(ctx context.Context) PageInfoArrayOutput {
+func (o PageOpenGraphArgsPtrOutput) ToPageOpenGraphArgsPtrOutputWithContext(ctx context.Context) PageOpenGraphArgsPtrOutput {
 	return o
 }
 
-func (o PageInfoArrayOutput) Index(i pulumi.IntInput) PageInfoOutput {
-	return pulumi.All(o, i).ApplyT(func(vs []interface{}) PageInfo {
-		return vs[0].([]PageInfo)[vs[1].(int)]
-	}).(PageInfoOutput)
+func (o PageOpenGraphArgsPtrOutput) Elem() PageOpenGraphArgsOutput {
+	return o.ApplyT(func(v *PageOpenGraphArgs) PageOpenGraphArgs {
+		if v != nil {
+			return *v
+		}
+		var ret PageOpenGraphArgs
+		return ret
+	}).(PageOpenGraphArgsOutput)
+}
+
+// The Open Graph description of the page.
+func (o PageOpenGraphArgsPtrOutput) Description() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v *PageOpenGraphArgs) *string {
+		if v == nil {
+			return nil
+		}
+		return v.Description
+	}).(pulumi.StringPtrOutput)
+}
+
+// Whether the Open Graph description is copied from the SEO description.
+func (o PageOpenGraphArgsPtrOutput) DescriptionCopied() pulumi.BoolPtrOutput {
+	return o.ApplyT(func(v *PageOpenGraphArgs) *bool {
+		if v == nil {
+			return nil
+		}
+		return v.DescriptionCopied
+	}).(pulumi.BoolPtrOutput)
+}
+
+// The Open Graph title of the page.
+func (o PageOpenGraphArgsPtrOutput) Title() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v *PageOpenGraphArgs) *string {
+		if v == nil {
+			return nil
+		}
+		return v.Title
+	}).(pulumi.StringPtrOutput)
+}
+
+// Whether the Open Graph title is copied from the SEO title.
+func (o PageOpenGraphArgsPtrOutput) TitleCopied() pulumi.BoolPtrOutput {
+	return o.ApplyT(func(v *PageOpenGraphArgs) *bool {
+		if v == nil {
+			return nil
+		}
+		return v.TitleCopied
+	}).(pulumi.BoolPtrOutput)
+}
+
+type PageOpenGraphRecord struct {
+	// The Open Graph description of the page.
+	Description string `pulumi:"description"`
+	// Whether the Open Graph description is copied from the SEO description.
+	DescriptionCopied bool `pulumi:"descriptionCopied"`
+	// The Open Graph title of the page.
+	Title string `pulumi:"title"`
+	// Whether the Open Graph title is copied from the SEO title.
+	TitleCopied bool `pulumi:"titleCopied"`
+}
+
+type PageOpenGraphRecordOutput struct{ *pulumi.OutputState }
+
+func (PageOpenGraphRecordOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*PageOpenGraphRecord)(nil)).Elem()
+}
+
+func (o PageOpenGraphRecordOutput) ToPageOpenGraphRecordOutput() PageOpenGraphRecordOutput {
+	return o
+}
+
+func (o PageOpenGraphRecordOutput) ToPageOpenGraphRecordOutputWithContext(ctx context.Context) PageOpenGraphRecordOutput {
+	return o
+}
+
+// The Open Graph description of the page.
+func (o PageOpenGraphRecordOutput) Description() pulumi.StringOutput {
+	return o.ApplyT(func(v PageOpenGraphRecord) string { return v.Description }).(pulumi.StringOutput)
+}
+
+// Whether the Open Graph description is copied from the SEO description.
+func (o PageOpenGraphRecordOutput) DescriptionCopied() pulumi.BoolOutput {
+	return o.ApplyT(func(v PageOpenGraphRecord) bool { return v.DescriptionCopied }).(pulumi.BoolOutput)
+}
+
+// The Open Graph title of the page.
+func (o PageOpenGraphRecordOutput) Title() pulumi.StringOutput {
+	return o.ApplyT(func(v PageOpenGraphRecord) string { return v.Title }).(pulumi.StringOutput)
+}
+
+// Whether the Open Graph title is copied from the SEO title.
+func (o PageOpenGraphRecordOutput) TitleCopied() pulumi.BoolOutput {
+	return o.ApplyT(func(v PageOpenGraphRecord) bool { return v.TitleCopied }).(pulumi.BoolOutput)
+}
+
+type PageRecord struct {
+	// Whether the page is archived.
+	Archived bool `pulumi:"archived"`
+	// The ID of the parent branch, or empty.
+	BranchId string `pulumi:"branchId"`
+	// Whether the page can be branched.
+	CanBranch bool `pulumi:"canBranch"`
+	// The CMS collection ID for collection template pages, or empty.
+	CollectionId string `pulumi:"collectionId"`
+	// The timestamp when the page was created (RFC3339 format).
+	CreatedOn string `pulumi:"createdOn"`
+	// Whether the page is a draft.
+	Draft bool `pulumi:"draft"`
+	// Whether the page is a branch of another page.
+	IsBranch bool `pulumi:"isBranch"`
+	// The timestamp when the page was last updated (RFC3339 format).
+	LastUpdated string `pulumi:"lastUpdated"`
+	// The locale ID of the returned page data, or empty for the primary locale.
+	LocaleId string `pulumi:"localeId"`
+	// The Open Graph settings of the page.
+	OpenGraph PageOpenGraphRecord `pulumi:"openGraph"`
+	// The Webflow page ID.
+	PageId string `pulumi:"pageId"`
+	// The ID of the parent folder, or empty when the page is at the root.
+	ParentId string `pulumi:"parentId"`
+	// The relative URL path of the published page.
+	PublishedPath string `pulumi:"publishedPath"`
+	// The SEO title and description of the page.
+	Seo PageSEORecord `pulumi:"seo"`
+	// The Webflow site ID this page belongs to.
+	SiteId string `pulumi:"siteId"`
+	// The URL slug of the page (e.g., 'about' for '/about').
+	Slug string `pulumi:"slug"`
+	// The page title shown in browser tabs and search results.
+	Title string `pulumi:"title"`
+}
+
+type PageRecordOutput struct{ *pulumi.OutputState }
+
+func (PageRecordOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*PageRecord)(nil)).Elem()
+}
+
+func (o PageRecordOutput) ToPageRecordOutput() PageRecordOutput {
+	return o
+}
+
+func (o PageRecordOutput) ToPageRecordOutputWithContext(ctx context.Context) PageRecordOutput {
+	return o
+}
+
+// Whether the page is archived.
+func (o PageRecordOutput) Archived() pulumi.BoolOutput {
+	return o.ApplyT(func(v PageRecord) bool { return v.Archived }).(pulumi.BoolOutput)
+}
+
+// The ID of the parent branch, or empty.
+func (o PageRecordOutput) BranchId() pulumi.StringOutput {
+	return o.ApplyT(func(v PageRecord) string { return v.BranchId }).(pulumi.StringOutput)
+}
+
+// Whether the page can be branched.
+func (o PageRecordOutput) CanBranch() pulumi.BoolOutput {
+	return o.ApplyT(func(v PageRecord) bool { return v.CanBranch }).(pulumi.BoolOutput)
+}
+
+// The CMS collection ID for collection template pages, or empty.
+func (o PageRecordOutput) CollectionId() pulumi.StringOutput {
+	return o.ApplyT(func(v PageRecord) string { return v.CollectionId }).(pulumi.StringOutput)
+}
+
+// The timestamp when the page was created (RFC3339 format).
+func (o PageRecordOutput) CreatedOn() pulumi.StringOutput {
+	return o.ApplyT(func(v PageRecord) string { return v.CreatedOn }).(pulumi.StringOutput)
+}
+
+// Whether the page is a draft.
+func (o PageRecordOutput) Draft() pulumi.BoolOutput {
+	return o.ApplyT(func(v PageRecord) bool { return v.Draft }).(pulumi.BoolOutput)
+}
+
+// Whether the page is a branch of another page.
+func (o PageRecordOutput) IsBranch() pulumi.BoolOutput {
+	return o.ApplyT(func(v PageRecord) bool { return v.IsBranch }).(pulumi.BoolOutput)
+}
+
+// The timestamp when the page was last updated (RFC3339 format).
+func (o PageRecordOutput) LastUpdated() pulumi.StringOutput {
+	return o.ApplyT(func(v PageRecord) string { return v.LastUpdated }).(pulumi.StringOutput)
+}
+
+// The locale ID of the returned page data, or empty for the primary locale.
+func (o PageRecordOutput) LocaleId() pulumi.StringOutput {
+	return o.ApplyT(func(v PageRecord) string { return v.LocaleId }).(pulumi.StringOutput)
+}
+
+// The Open Graph settings of the page.
+func (o PageRecordOutput) OpenGraph() PageOpenGraphRecordOutput {
+	return o.ApplyT(func(v PageRecord) PageOpenGraphRecord { return v.OpenGraph }).(PageOpenGraphRecordOutput)
+}
+
+// The Webflow page ID.
+func (o PageRecordOutput) PageId() pulumi.StringOutput {
+	return o.ApplyT(func(v PageRecord) string { return v.PageId }).(pulumi.StringOutput)
+}
+
+// The ID of the parent folder, or empty when the page is at the root.
+func (o PageRecordOutput) ParentId() pulumi.StringOutput {
+	return o.ApplyT(func(v PageRecord) string { return v.ParentId }).(pulumi.StringOutput)
+}
+
+// The relative URL path of the published page.
+func (o PageRecordOutput) PublishedPath() pulumi.StringOutput {
+	return o.ApplyT(func(v PageRecord) string { return v.PublishedPath }).(pulumi.StringOutput)
+}
+
+// The SEO title and description of the page.
+func (o PageRecordOutput) Seo() PageSEORecordOutput {
+	return o.ApplyT(func(v PageRecord) PageSEORecord { return v.Seo }).(PageSEORecordOutput)
+}
+
+// The Webflow site ID this page belongs to.
+func (o PageRecordOutput) SiteId() pulumi.StringOutput {
+	return o.ApplyT(func(v PageRecord) string { return v.SiteId }).(pulumi.StringOutput)
+}
+
+// The URL slug of the page (e.g., 'about' for '/about').
+func (o PageRecordOutput) Slug() pulumi.StringOutput {
+	return o.ApplyT(func(v PageRecord) string { return v.Slug }).(pulumi.StringOutput)
+}
+
+// The page title shown in browser tabs and search results.
+func (o PageRecordOutput) Title() pulumi.StringOutput {
+	return o.ApplyT(func(v PageRecord) string { return v.Title }).(pulumi.StringOutput)
+}
+
+type PageRecordArrayOutput struct{ *pulumi.OutputState }
+
+func (PageRecordArrayOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*[]PageRecord)(nil)).Elem()
+}
+
+func (o PageRecordArrayOutput) ToPageRecordArrayOutput() PageRecordArrayOutput {
+	return o
+}
+
+func (o PageRecordArrayOutput) ToPageRecordArrayOutputWithContext(ctx context.Context) PageRecordArrayOutput {
+	return o
+}
+
+func (o PageRecordArrayOutput) Index(i pulumi.IntInput) PageRecordOutput {
+	return pulumi.All(o, i).ApplyT(func(vs []interface{}) PageRecord {
+		return vs[0].([]PageRecord)[vs[1].(int)]
+	}).(PageRecordOutput)
+}
+
+type PageSEOArgs struct {
+	// The SEO meta description of the page.
+	Description *string `pulumi:"description"`
+	// The SEO title of the page.
+	Title *string `pulumi:"title"`
+}
+
+// PageSEOArgsInput is an input type that accepts PageSEOArgsArgs and PageSEOArgsOutput values.
+// You can construct a concrete instance of `PageSEOArgsInput` via:
+//
+//	PageSEOArgsArgs{...}
+type PageSEOArgsInput interface {
+	pulumi.Input
+
+	ToPageSEOArgsOutput() PageSEOArgsOutput
+	ToPageSEOArgsOutputWithContext(context.Context) PageSEOArgsOutput
+}
+
+type PageSEOArgsArgs struct {
+	// The SEO meta description of the page.
+	Description pulumi.StringPtrInput `pulumi:"description"`
+	// The SEO title of the page.
+	Title pulumi.StringPtrInput `pulumi:"title"`
+}
+
+func (PageSEOArgsArgs) ElementType() reflect.Type {
+	return reflect.TypeOf((*PageSEOArgs)(nil)).Elem()
+}
+
+func (i PageSEOArgsArgs) ToPageSEOArgsOutput() PageSEOArgsOutput {
+	return i.ToPageSEOArgsOutputWithContext(context.Background())
+}
+
+func (i PageSEOArgsArgs) ToPageSEOArgsOutputWithContext(ctx context.Context) PageSEOArgsOutput {
+	return pulumi.ToOutputWithContext(ctx, i).(PageSEOArgsOutput)
+}
+
+func (i PageSEOArgsArgs) ToPageSEOArgsPtrOutput() PageSEOArgsPtrOutput {
+	return i.ToPageSEOArgsPtrOutputWithContext(context.Background())
+}
+
+func (i PageSEOArgsArgs) ToPageSEOArgsPtrOutputWithContext(ctx context.Context) PageSEOArgsPtrOutput {
+	return pulumi.ToOutputWithContext(ctx, i).(PageSEOArgsOutput).ToPageSEOArgsPtrOutputWithContext(ctx)
+}
+
+// PageSEOArgsPtrInput is an input type that accepts PageSEOArgsArgs, PageSEOArgsPtr and PageSEOArgsPtrOutput values.
+// You can construct a concrete instance of `PageSEOArgsPtrInput` via:
+//
+//	        PageSEOArgsArgs{...}
+//
+//	or:
+//
+//	        nil
+type PageSEOArgsPtrInput interface {
+	pulumi.Input
+
+	ToPageSEOArgsPtrOutput() PageSEOArgsPtrOutput
+	ToPageSEOArgsPtrOutputWithContext(context.Context) PageSEOArgsPtrOutput
+}
+
+type pageSEOArgsPtrType PageSEOArgsArgs
+
+func PageSEOArgsPtr(v *PageSEOArgsArgs) PageSEOArgsPtrInput {
+	return (*pageSEOArgsPtrType)(v)
+}
+
+func (*pageSEOArgsPtrType) ElementType() reflect.Type {
+	return reflect.TypeOf((**PageSEOArgs)(nil)).Elem()
+}
+
+func (i *pageSEOArgsPtrType) ToPageSEOArgsPtrOutput() PageSEOArgsPtrOutput {
+	return i.ToPageSEOArgsPtrOutputWithContext(context.Background())
+}
+
+func (i *pageSEOArgsPtrType) ToPageSEOArgsPtrOutputWithContext(ctx context.Context) PageSEOArgsPtrOutput {
+	return pulumi.ToOutputWithContext(ctx, i).(PageSEOArgsPtrOutput)
+}
+
+type PageSEOArgsOutput struct{ *pulumi.OutputState }
+
+func (PageSEOArgsOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*PageSEOArgs)(nil)).Elem()
+}
+
+func (o PageSEOArgsOutput) ToPageSEOArgsOutput() PageSEOArgsOutput {
+	return o
+}
+
+func (o PageSEOArgsOutput) ToPageSEOArgsOutputWithContext(ctx context.Context) PageSEOArgsOutput {
+	return o
+}
+
+func (o PageSEOArgsOutput) ToPageSEOArgsPtrOutput() PageSEOArgsPtrOutput {
+	return o.ToPageSEOArgsPtrOutputWithContext(context.Background())
+}
+
+func (o PageSEOArgsOutput) ToPageSEOArgsPtrOutputWithContext(ctx context.Context) PageSEOArgsPtrOutput {
+	return o.ApplyTWithContext(ctx, func(_ context.Context, v PageSEOArgs) *PageSEOArgs {
+		return &v
+	}).(PageSEOArgsPtrOutput)
+}
+
+// The SEO meta description of the page.
+func (o PageSEOArgsOutput) Description() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v PageSEOArgs) *string { return v.Description }).(pulumi.StringPtrOutput)
+}
+
+// The SEO title of the page.
+func (o PageSEOArgsOutput) Title() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v PageSEOArgs) *string { return v.Title }).(pulumi.StringPtrOutput)
+}
+
+type PageSEOArgsPtrOutput struct{ *pulumi.OutputState }
+
+func (PageSEOArgsPtrOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((**PageSEOArgs)(nil)).Elem()
+}
+
+func (o PageSEOArgsPtrOutput) ToPageSEOArgsPtrOutput() PageSEOArgsPtrOutput {
+	return o
+}
+
+func (o PageSEOArgsPtrOutput) ToPageSEOArgsPtrOutputWithContext(ctx context.Context) PageSEOArgsPtrOutput {
+	return o
+}
+
+func (o PageSEOArgsPtrOutput) Elem() PageSEOArgsOutput {
+	return o.ApplyT(func(v *PageSEOArgs) PageSEOArgs {
+		if v != nil {
+			return *v
+		}
+		var ret PageSEOArgs
+		return ret
+	}).(PageSEOArgsOutput)
+}
+
+// The SEO meta description of the page.
+func (o PageSEOArgsPtrOutput) Description() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v *PageSEOArgs) *string {
+		if v == nil {
+			return nil
+		}
+		return v.Description
+	}).(pulumi.StringPtrOutput)
+}
+
+// The SEO title of the page.
+func (o PageSEOArgsPtrOutput) Title() pulumi.StringPtrOutput {
+	return o.ApplyT(func(v *PageSEOArgs) *string {
+		if v == nil {
+			return nil
+		}
+		return v.Title
+	}).(pulumi.StringPtrOutput)
+}
+
+type PageSEORecord struct {
+	// The SEO meta description of the page.
+	Description string `pulumi:"description"`
+	// The SEO title of the page.
+	Title string `pulumi:"title"`
+}
+
+type PageSEORecordOutput struct{ *pulumi.OutputState }
+
+func (PageSEORecordOutput) ElementType() reflect.Type {
+	return reflect.TypeOf((*PageSEORecord)(nil)).Elem()
+}
+
+func (o PageSEORecordOutput) ToPageSEORecordOutput() PageSEORecordOutput {
+	return o
+}
+
+func (o PageSEORecordOutput) ToPageSEORecordOutputWithContext(ctx context.Context) PageSEORecordOutput {
+	return o
+}
+
+// The SEO meta description of the page.
+func (o PageSEORecordOutput) Description() pulumi.StringOutput {
+	return o.ApplyT(func(v PageSEORecord) string { return v.Description }).(pulumi.StringOutput)
+}
+
+// The SEO title of the page.
+func (o PageSEORecordOutput) Title() pulumi.StringOutput {
+	return o.ApplyT(func(v PageSEORecord) string { return v.Title }).(pulumi.StringOutput)
 }
 
 func init() {
+	pulumi.RegisterInputType(reflect.TypeOf((*AnalyticsDimensionFilterInput)(nil)).Elem(), AnalyticsDimensionFilterArgs{})
+	pulumi.RegisterInputType(reflect.TypeOf((*AnalyticsDimensionFilterMapInput)(nil)).Elem(), AnalyticsDimensionFilterMap{})
+	pulumi.RegisterInputType(reflect.TypeOf((*AnalyticsTimeOnPageTimeseriesArgsInput)(nil)).Elem(), AnalyticsTimeOnPageTimeseriesArgsArgs{})
+	pulumi.RegisterInputType(reflect.TypeOf((*AnalyticsTimeOnPageTimeseriesArgsPtrInput)(nil)).Elem(), AnalyticsTimeOnPageTimeseriesArgsArgs{})
+	pulumi.RegisterInputType(reflect.TypeOf((*AnalyticsTimeseriesArgsInput)(nil)).Elem(), AnalyticsTimeseriesArgsArgs{})
+	pulumi.RegisterInputType(reflect.TypeOf((*AnalyticsTimeseriesArgsPtrInput)(nil)).Elem(), AnalyticsTimeseriesArgsArgs{})
 	pulumi.RegisterInputType(reflect.TypeOf((*CustomScriptArgsInput)(nil)).Elem(), CustomScriptArgsArgs{})
 	pulumi.RegisterInputType(reflect.TypeOf((*CustomScriptArgsArrayInput)(nil)).Elem(), CustomScriptArgsArray{})
 	pulumi.RegisterInputType(reflect.TypeOf((*NodeContentUpdateInput)(nil)).Elem(), NodeContentUpdateArgs{})
 	pulumi.RegisterInputType(reflect.TypeOf((*NodeContentUpdateArrayInput)(nil)).Elem(), NodeContentUpdateArray{})
 	pulumi.RegisterInputType(reflect.TypeOf((*PageCustomCodeScriptInput)(nil)).Elem(), PageCustomCodeScriptArgs{})
 	pulumi.RegisterInputType(reflect.TypeOf((*PageCustomCodeScriptArrayInput)(nil)).Elem(), PageCustomCodeScriptArray{})
+	pulumi.RegisterInputType(reflect.TypeOf((*PageOpenGraphArgsInput)(nil)).Elem(), PageOpenGraphArgsArgs{})
+	pulumi.RegisterInputType(reflect.TypeOf((*PageOpenGraphArgsPtrInput)(nil)).Elem(), PageOpenGraphArgsArgs{})
+	pulumi.RegisterInputType(reflect.TypeOf((*PageSEOArgsInput)(nil)).Elem(), PageSEOArgsArgs{})
+	pulumi.RegisterInputType(reflect.TypeOf((*PageSEOArgsPtrInput)(nil)).Elem(), PageSEOArgsArgs{})
+	pulumi.RegisterOutputType(AnalyticsAverageSecondsPointOutput{})
+	pulumi.RegisterOutputType(AnalyticsAverageSecondsPointArrayOutput{})
+	pulumi.RegisterOutputType(AnalyticsBucketingOutput{})
+	pulumi.RegisterOutputType(AnalyticsBucketingPtrOutput{})
+	pulumi.RegisterOutputType(AnalyticsCmsContextOutput{})
+	pulumi.RegisterOutputType(AnalyticsCmsContextArrayOutput{})
+	pulumi.RegisterOutputType(AnalyticsComponentContextOutput{})
+	pulumi.RegisterOutputType(AnalyticsComponentContextArrayOutput{})
+	pulumi.RegisterOutputType(AnalyticsCountPointOutput{})
+	pulumi.RegisterOutputType(AnalyticsCountPointArrayOutput{})
+	pulumi.RegisterOutputType(AnalyticsDimensionFilterOutput{})
+	pulumi.RegisterOutputType(AnalyticsDimensionFilterMapOutput{})
+	pulumi.RegisterOutputType(AnalyticsDimensionRowOutput{})
+	pulumi.RegisterOutputType(AnalyticsDimensionRowArrayOutput{})
+	pulumi.RegisterOutputType(AnalyticsPageviewPointOutput{})
+	pulumi.RegisterOutputType(AnalyticsPageviewPointArrayOutput{})
+	pulumi.RegisterOutputType(AnalyticsTimeOnPageTimeseriesArgsOutput{})
+	pulumi.RegisterOutputType(AnalyticsTimeOnPageTimeseriesArgsPtrOutput{})
+	pulumi.RegisterOutputType(AnalyticsTimeseriesArgsOutput{})
+	pulumi.RegisterOutputType(AnalyticsTimeseriesArgsPtrOutput{})
+	pulumi.RegisterOutputType(AnalyticsTopEventRowOutput{})
+	pulumi.RegisterOutputType(AnalyticsTopEventRowArrayOutput{})
+	pulumi.RegisterOutputType(AnalyticsTopPageRowOutput{})
+	pulumi.RegisterOutputType(AnalyticsTopPageRowArrayOutput{})
+	pulumi.RegisterOutputType(AnalyticsWindowOutput{})
 	pulumi.RegisterOutputType(CustomScriptArgsOutput{})
 	pulumi.RegisterOutputType(CustomScriptArgsArrayOutput{})
 	pulumi.RegisterOutputType(GetTokenInfoApplicationOutput{})
@@ -619,6 +2185,12 @@ func init() {
 	pulumi.RegisterOutputType(NodeContentUpdateArrayOutput{})
 	pulumi.RegisterOutputType(PageCustomCodeScriptOutput{})
 	pulumi.RegisterOutputType(PageCustomCodeScriptArrayOutput{})
-	pulumi.RegisterOutputType(PageInfoOutput{})
-	pulumi.RegisterOutputType(PageInfoArrayOutput{})
+	pulumi.RegisterOutputType(PageOpenGraphArgsOutput{})
+	pulumi.RegisterOutputType(PageOpenGraphArgsPtrOutput{})
+	pulumi.RegisterOutputType(PageOpenGraphRecordOutput{})
+	pulumi.RegisterOutputType(PageRecordOutput{})
+	pulumi.RegisterOutputType(PageRecordArrayOutput{})
+	pulumi.RegisterOutputType(PageSEOArgsOutput{})
+	pulumi.RegisterOutputType(PageSEOArgsPtrOutput{})
+	pulumi.RegisterOutputType(PageSEORecordOutput{})
 }

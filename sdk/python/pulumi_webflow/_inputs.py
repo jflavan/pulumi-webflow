@@ -15,36 +15,205 @@ else:
 from . import _utilities
 
 __all__ = [
+    'AnalyticsDimensionFilter',
+    'AnalyticsDimensionFilterDict',
+    'AnalyticsTimeOnPageTimeseriesArgs',
+    'AnalyticsTimeOnPageTimeseriesArgsDict',
+    'AnalyticsTimeseriesArgs',
+    'AnalyticsTimeseriesArgsDict',
     'CustomScriptArgsArgs',
     'CustomScriptArgsArgsDict',
     'NodeContentUpdateArgs',
     'NodeContentUpdateArgsDict',
     'PageCustomCodeScriptArgs',
     'PageCustomCodeScriptArgsDict',
+    'PageOpenGraphArgsArgs',
+    'PageOpenGraphArgsArgsDict',
+    'PageSEOArgsArgs',
+    'PageSEOArgsArgsDict',
 ]
 
-MYPY = False
+class AnalyticsDimensionFilterDict(TypedDict):
+    eq: NotRequired[_builtins.str]
+    """
+    Keep only rows whose dimension value equals this value.
+    """
+    in_: NotRequired[Sequence[_builtins.str]]
+    """
+    Keep only rows whose dimension value is one of these values.
+    """
+    ne: NotRequired[_builtins.str]
+    """
+    Exclude rows whose dimension value equals this value.
+    """
+    nin: NotRequired[Sequence[_builtins.str]]
+    """
+    Exclude rows whose dimension value is one of these values.
+    """
 
-if not MYPY:
-    class CustomScriptArgsArgsDict(TypedDict):
-        id: pulumi.Input[_builtins.str]
+@pulumi.input_type
+class AnalyticsDimensionFilter:
+    def __init__(__self__, *,
+                 eq: Optional[_builtins.str] = None,
+                 in_: Optional[Sequence[_builtins.str]] = None,
+                 ne: Optional[_builtins.str] = None,
+                 nin: Optional[Sequence[_builtins.str]] = None):
         """
-        The unique identifier of the registered custom code script. The script must first be registered to the site using the RegisterScript resource. Examples: 'cms_slider', 'analytics', 'custom_widget'
+        :param _builtins.str eq: Keep only rows whose dimension value equals this value.
+        :param Sequence[_builtins.str] in_: Keep only rows whose dimension value is one of these values.
+        :param _builtins.str ne: Exclude rows whose dimension value equals this value.
+        :param Sequence[_builtins.str] nin: Exclude rows whose dimension value is one of these values.
         """
-        location: pulumi.Input[_builtins.str]
+        if eq is not None:
+            pulumi.set(__self__, "eq", eq)
+        if in_ is not None:
+            pulumi.set(__self__, "in_", in_)
+        if ne is not None:
+            pulumi.set(__self__, "ne", ne)
+        if nin is not None:
+            pulumi.set(__self__, "nin", nin)
+
+    @_builtins.property
+    @pulumi.getter
+    def eq(self) -> Optional[_builtins.str]:
         """
-        The location where the script is placed on the page. Valid values: 'header' (placed in the <head> section), 'footer' (placed before </body>). Scripts in the header execute before page content loads, while footer scripts execute after the page has loaded.
+        Keep only rows whose dimension value equals this value.
         """
-        script_version: pulumi.Input[_builtins.str]
+        return pulumi.get(self, "eq")
+
+    @eq.setter
+    def eq(self, value: Optional[_builtins.str]):
+        pulumi.set(self, "eq", value)
+
+    @_builtins.property
+    @pulumi.getter(name="in")
+    def in_(self) -> Optional[Sequence[_builtins.str]]:
         """
-        The semantic version string for the registered script (e.g., '1.0.0', '0.1.2'). This version must exist for the registered script ID. When you update the version, a different version of the script will be applied.
+        Keep only rows whose dimension value is one of these values.
         """
-        attributes: NotRequired[pulumi.Input[Mapping[str, Any]]]
+        return pulumi.get(self, "in_")
+
+    @in_.setter
+    def in_(self, value: Optional[Sequence[_builtins.str]]):
+        pulumi.set(self, "in_", value)
+
+    @_builtins.property
+    @pulumi.getter
+    def ne(self) -> Optional[_builtins.str]:
         """
-        Optional developer-specified key/value pairs applied as HTML attributes to the script tag. Example: {'data-config': 'my-value'}. These attributes are passed directly to the script tag.
+        Exclude rows whose dimension value equals this value.
         """
-elif False:
-    CustomScriptArgsArgsDict: TypeAlias = Mapping[str, Any]
+        return pulumi.get(self, "ne")
+
+    @ne.setter
+    def ne(self, value: Optional[_builtins.str]):
+        pulumi.set(self, "ne", value)
+
+    @_builtins.property
+    @pulumi.getter
+    def nin(self) -> Optional[Sequence[_builtins.str]]:
+        """
+        Exclude rows whose dimension value is one of these values.
+        """
+        return pulumi.get(self, "nin")
+
+    @nin.setter
+    def nin(self, value: Optional[Sequence[_builtins.str]]):
+        pulumi.set(self, "nin", value)
+
+
+class AnalyticsTimeOnPageTimeseriesArgsDict(TypedDict):
+    bucket_time_zone: _builtins.str
+    """
+    IANA time zone used to align bucket boundaries (e.g., 'UTC', 'America/New_York').
+    """
+    granularity_period: _builtins.str
+    """
+    Size of each bucket: 'day' or 'week'.
+    """
+
+@pulumi.input_type
+class AnalyticsTimeOnPageTimeseriesArgs:
+    def __init__(__self__, *,
+                 bucket_time_zone: _builtins.str,
+                 granularity_period: _builtins.str):
+        """
+        :param _builtins.str bucket_time_zone: IANA time zone used to align bucket boundaries (e.g., 'UTC', 'America/New_York').
+        :param _builtins.str granularity_period: Size of each bucket: 'day' or 'week'.
+        """
+        pulumi.set(__self__, "bucket_time_zone", bucket_time_zone)
+        pulumi.set(__self__, "granularity_period", granularity_period)
+
+    @_builtins.property
+    @pulumi.getter(name="bucketTimeZone")
+    def bucket_time_zone(self) -> _builtins.str:
+        """
+        IANA time zone used to align bucket boundaries (e.g., 'UTC', 'America/New_York').
+        """
+        return pulumi.get(self, "bucket_time_zone")
+
+    @bucket_time_zone.setter
+    def bucket_time_zone(self, value: _builtins.str):
+        pulumi.set(self, "bucket_time_zone", value)
+
+    @_builtins.property
+    @pulumi.getter(name="granularityPeriod")
+    def granularity_period(self) -> _builtins.str:
+        """
+        Size of each bucket: 'day' or 'week'.
+        """
+        return pulumi.get(self, "granularity_period")
+
+    @granularity_period.setter
+    def granularity_period(self, value: _builtins.str):
+        pulumi.set(self, "granularity_period", value)
+
+
+class AnalyticsTimeseriesArgsDict(TypedDict):
+    bucket_time_zone: _builtins.str
+    """
+    IANA time zone used to align daily bucket boundaries (e.g., 'UTC', 'America/New_York'). Bucket timestamps are returned as UTC instants of local midnight in this zone.
+    """
+
+@pulumi.input_type
+class AnalyticsTimeseriesArgs:
+    def __init__(__self__, *,
+                 bucket_time_zone: _builtins.str):
+        """
+        :param _builtins.str bucket_time_zone: IANA time zone used to align daily bucket boundaries (e.g., 'UTC', 'America/New_York'). Bucket timestamps are returned as UTC instants of local midnight in this zone.
+        """
+        pulumi.set(__self__, "bucket_time_zone", bucket_time_zone)
+
+    @_builtins.property
+    @pulumi.getter(name="bucketTimeZone")
+    def bucket_time_zone(self) -> _builtins.str:
+        """
+        IANA time zone used to align daily bucket boundaries (e.g., 'UTC', 'America/New_York'). Bucket timestamps are returned as UTC instants of local midnight in this zone.
+        """
+        return pulumi.get(self, "bucket_time_zone")
+
+    @bucket_time_zone.setter
+    def bucket_time_zone(self, value: _builtins.str):
+        pulumi.set(self, "bucket_time_zone", value)
+
+
+class CustomScriptArgsArgsDict(TypedDict):
+    id: pulumi.Input[_builtins.str]
+    """
+    The unique identifier of the registered custom code script. The script must first be registered to the site using the RegisterScript resource. Examples: 'cms_slider', 'analytics', 'custom_widget'
+    """
+    location: pulumi.Input[_builtins.str]
+    """
+    The location where the script is placed on the page. Valid values: 'header' (placed in the <head> section), 'footer' (placed before </body>). Scripts in the header execute before page content loads, while footer scripts execute after the page has loaded.
+    """
+    script_version: pulumi.Input[_builtins.str]
+    """
+    The semantic version string for the registered script (e.g., '1.0.0', '0.1.2'). This version must exist for the registered script ID. When you update the version, a different version of the script will be applied.
+    """
+    attributes: NotRequired[pulumi.Input[Optional[Mapping[str, Any]]]]
+    """
+    Optional developer-specified key/value pairs applied as HTML attributes to the script tag. Example: {'data-config': 'my-value'}. These attributes are passed directly to the script tag.
+    """
 
 @pulumi.input_type
 class CustomScriptArgsArgs:
@@ -52,7 +221,7 @@ class CustomScriptArgsArgs:
                  id: pulumi.Input[_builtins.str],
                  location: pulumi.Input[_builtins.str],
                  script_version: pulumi.Input[_builtins.str],
-                 attributes: Optional[pulumi.Input[Mapping[str, Any]]] = None):
+                 attributes: pulumi.Input[Optional[Mapping[str, Any]]] = None):
         """
         :param pulumi.Input[_builtins.str] id: The unique identifier of the registered custom code script. The script must first be registered to the site using the RegisterScript resource. Examples: 'cms_slider', 'analytics', 'custom_widget'
         :param pulumi.Input[_builtins.str] location: The location where the script is placed on the page. Valid values: 'header' (placed in the <head> section), 'footer' (placed before </body>). Scripts in the header execute before page content loads, while footer scripts execute after the page has loaded.
@@ -103,29 +272,26 @@ class CustomScriptArgsArgs:
 
     @_builtins.property
     @pulumi.getter
-    def attributes(self) -> Optional[pulumi.Input[Mapping[str, Any]]]:
+    def attributes(self) -> pulumi.Input[Optional[Mapping[str, Any]]]:
         """
         Optional developer-specified key/value pairs applied as HTML attributes to the script tag. Example: {'data-config': 'my-value'}. These attributes are passed directly to the script tag.
         """
         return pulumi.get(self, "attributes")
 
     @attributes.setter
-    def attributes(self, value: Optional[pulumi.Input[Mapping[str, Any]]]):
+    def attributes(self, value: pulumi.Input[Optional[Mapping[str, Any]]]):
         pulumi.set(self, "attributes", value)
 
 
-if not MYPY:
-    class NodeContentUpdateArgsDict(TypedDict):
-        node_id: pulumi.Input[_builtins.str]
-        """
-        The unique identifier for the DOM node to update. This ID comes from the page's DOM structure and must exist on the page. Retrieve node IDs using GET /pages/{page_id}/dom endpoint.
-        """
-        text: pulumi.Input[_builtins.str]
-        """
-        The new text content for the node. This will replace the existing text content in the specified node. Only applicable to text nodes or elements containing text.
-        """
-elif False:
-    NodeContentUpdateArgsDict: TypeAlias = Mapping[str, Any]
+class NodeContentUpdateArgsDict(TypedDict):
+    node_id: pulumi.Input[_builtins.str]
+    """
+    The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
+    """
+    text: pulumi.Input[_builtins.str]
+    """
+    The new HTML content for the node (required, non-empty). The HTML tags must match the node's current content as returned by GET /v2/pages/{page_id}/dom (e.g., '<h1>Hello</h1>' for a heading). An empty string does not clear the node; Webflow rejects it.
+    """
 
 @pulumi.input_type
 class NodeContentUpdateArgs:
@@ -133,8 +299,8 @@ class NodeContentUpdateArgs:
                  node_id: pulumi.Input[_builtins.str],
                  text: pulumi.Input[_builtins.str]):
         """
-        :param pulumi.Input[_builtins.str] node_id: The unique identifier for the DOM node to update. This ID comes from the page's DOM structure and must exist on the page. Retrieve node IDs using GET /pages/{page_id}/dom endpoint.
-        :param pulumi.Input[_builtins.str] text: The new text content for the node. This will replace the existing text content in the specified node. Only applicable to text nodes or elements containing text.
+        :param pulumi.Input[_builtins.str] node_id: The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
+        :param pulumi.Input[_builtins.str] text: The new HTML content for the node (required, non-empty). The HTML tags must match the node's current content as returned by GET /v2/pages/{page_id}/dom (e.g., '<h1>Hello</h1>' for a heading). An empty string does not clear the node; Webflow rejects it.
         """
         pulumi.set(__self__, "node_id", node_id)
         pulumi.set(__self__, "text", text)
@@ -143,7 +309,7 @@ class NodeContentUpdateArgs:
     @pulumi.getter(name="nodeId")
     def node_id(self) -> pulumi.Input[_builtins.str]:
         """
-        The unique identifier for the DOM node to update. This ID comes from the page's DOM structure and must exist on the page. Retrieve node IDs using GET /pages/{page_id}/dom endpoint.
+        The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
         """
         return pulumi.get(self, "node_id")
 
@@ -155,7 +321,7 @@ class NodeContentUpdateArgs:
     @pulumi.getter
     def text(self) -> pulumi.Input[_builtins.str]:
         """
-        The new text content for the node. This will replace the existing text content in the specified node. Only applicable to text nodes or elements containing text.
+        The new HTML content for the node (required, non-empty). The HTML tags must match the node's current content as returned by GET /v2/pages/{page_id}/dom (e.g., '<h1>Hello</h1>' for a heading). An empty string does not clear the node; Webflow rejects it.
         """
         return pulumi.get(self, "text")
 
@@ -164,26 +330,23 @@ class NodeContentUpdateArgs:
         pulumi.set(self, "text", value)
 
 
-if not MYPY:
-    class PageCustomCodeScriptArgsDict(TypedDict):
-        id: pulumi.Input[_builtins.str]
-        """
-        The unique identifier of a registered custom code script. This must be a script that was previously registered using the RegisteredScript resource. Script IDs are assigned by Webflow when the script is registered.
-        """
-        location: pulumi.Input[_builtins.str]
-        """
-        Where the script should be applied on the page. Must be either 'header' (loaded in page header) or 'footer' (loaded at end of page). Use 'header' for scripts that don't depend on DOM elements. Use 'footer' for scripts that need to run after DOM is fully loaded.
-        """
-        script_version: pulumi.Input[_builtins.str]
-        """
-        The semantic version string for the registered script (e.g., '1.0.0'). This version must match a registered version of the script. You can have multiple versions of the same script registered.
-        """
-        attributes: NotRequired[pulumi.Input[Mapping[str, Any]]]
-        """
-        Optional developer-specified key/value pairs for script attributes. These attributes can be used by the script to customize its behavior on this page.
-        """
-elif False:
-    PageCustomCodeScriptArgsDict: TypeAlias = Mapping[str, Any]
+class PageCustomCodeScriptArgsDict(TypedDict):
+    id: pulumi.Input[_builtins.str]
+    """
+    The unique identifier of a registered custom code script. This must be a script that was previously registered using the RegisteredScript resource. Script IDs are assigned by Webflow when the script is registered.
+    """
+    location: pulumi.Input[_builtins.str]
+    """
+    Where the script should be applied on the page. Must be either 'header' (loaded in page header) or 'footer' (loaded at end of page). Use 'header' for scripts that don't depend on DOM elements. Use 'footer' for scripts that need to run after DOM is fully loaded.
+    """
+    script_version: pulumi.Input[_builtins.str]
+    """
+    The semantic version string for the registered script (e.g., '1.0.0'). This version must match a registered version of the script. You can have multiple versions of the same script registered.
+    """
+    attributes: NotRequired[pulumi.Input[Optional[Mapping[str, Any]]]]
+    """
+    Optional developer-specified key/value pairs for script attributes. These attributes can be used by the script to customize its behavior on this page.
+    """
 
 @pulumi.input_type
 class PageCustomCodeScriptArgs:
@@ -191,7 +354,7 @@ class PageCustomCodeScriptArgs:
                  id: pulumi.Input[_builtins.str],
                  location: pulumi.Input[_builtins.str],
                  script_version: pulumi.Input[_builtins.str],
-                 attributes: Optional[pulumi.Input[Mapping[str, Any]]] = None):
+                 attributes: pulumi.Input[Optional[Mapping[str, Any]]] = None):
         """
         :param pulumi.Input[_builtins.str] id: The unique identifier of a registered custom code script. This must be a script that was previously registered using the RegisteredScript resource. Script IDs are assigned by Webflow when the script is registered.
         :param pulumi.Input[_builtins.str] location: Where the script should be applied on the page. Must be either 'header' (loaded in page header) or 'footer' (loaded at end of page). Use 'header' for scripts that don't depend on DOM elements. Use 'footer' for scripts that need to run after DOM is fully loaded.
@@ -242,14 +405,152 @@ class PageCustomCodeScriptArgs:
 
     @_builtins.property
     @pulumi.getter
-    def attributes(self) -> Optional[pulumi.Input[Mapping[str, Any]]]:
+    def attributes(self) -> pulumi.Input[Optional[Mapping[str, Any]]]:
         """
         Optional developer-specified key/value pairs for script attributes. These attributes can be used by the script to customize its behavior on this page.
         """
         return pulumi.get(self, "attributes")
 
     @attributes.setter
-    def attributes(self, value: Optional[pulumi.Input[Mapping[str, Any]]]):
+    def attributes(self, value: pulumi.Input[Optional[Mapping[str, Any]]]):
         pulumi.set(self, "attributes", value)
+
+
+class PageOpenGraphArgsArgsDict(TypedDict):
+    description: NotRequired[pulumi.Input[Optional[_builtins.str]]]
+    """
+    The Open Graph description of the page.
+    """
+    description_copied: NotRequired[pulumi.Input[Optional[_builtins.bool]]]
+    """
+    Whether the Open Graph description is copied from the SEO description.
+    """
+    title: NotRequired[pulumi.Input[Optional[_builtins.str]]]
+    """
+    The Open Graph title of the page.
+    """
+    title_copied: NotRequired[pulumi.Input[Optional[_builtins.bool]]]
+    """
+    Whether the Open Graph title is copied from the SEO title.
+    """
+
+@pulumi.input_type
+class PageOpenGraphArgsArgs:
+    def __init__(__self__, *,
+                 description: pulumi.Input[Optional[_builtins.str]] = None,
+                 description_copied: pulumi.Input[Optional[_builtins.bool]] = None,
+                 title: pulumi.Input[Optional[_builtins.str]] = None,
+                 title_copied: pulumi.Input[Optional[_builtins.bool]] = None):
+        """
+        :param pulumi.Input[_builtins.str] description: The Open Graph description of the page.
+        :param pulumi.Input[_builtins.bool] description_copied: Whether the Open Graph description is copied from the SEO description.
+        :param pulumi.Input[_builtins.str] title: The Open Graph title of the page.
+        :param pulumi.Input[_builtins.bool] title_copied: Whether the Open Graph title is copied from the SEO title.
+        """
+        if description is not None:
+            pulumi.set(__self__, "description", description)
+        if description_copied is not None:
+            pulumi.set(__self__, "description_copied", description_copied)
+        if title is not None:
+            pulumi.set(__self__, "title", title)
+        if title_copied is not None:
+            pulumi.set(__self__, "title_copied", title_copied)
+
+    @_builtins.property
+    @pulumi.getter
+    def description(self) -> pulumi.Input[Optional[_builtins.str]]:
+        """
+        The Open Graph description of the page.
+        """
+        return pulumi.get(self, "description")
+
+    @description.setter
+    def description(self, value: pulumi.Input[Optional[_builtins.str]]):
+        pulumi.set(self, "description", value)
+
+    @_builtins.property
+    @pulumi.getter(name="descriptionCopied")
+    def description_copied(self) -> pulumi.Input[Optional[_builtins.bool]]:
+        """
+        Whether the Open Graph description is copied from the SEO description.
+        """
+        return pulumi.get(self, "description_copied")
+
+    @description_copied.setter
+    def description_copied(self, value: pulumi.Input[Optional[_builtins.bool]]):
+        pulumi.set(self, "description_copied", value)
+
+    @_builtins.property
+    @pulumi.getter
+    def title(self) -> pulumi.Input[Optional[_builtins.str]]:
+        """
+        The Open Graph title of the page.
+        """
+        return pulumi.get(self, "title")
+
+    @title.setter
+    def title(self, value: pulumi.Input[Optional[_builtins.str]]):
+        pulumi.set(self, "title", value)
+
+    @_builtins.property
+    @pulumi.getter(name="titleCopied")
+    def title_copied(self) -> pulumi.Input[Optional[_builtins.bool]]:
+        """
+        Whether the Open Graph title is copied from the SEO title.
+        """
+        return pulumi.get(self, "title_copied")
+
+    @title_copied.setter
+    def title_copied(self, value: pulumi.Input[Optional[_builtins.bool]]):
+        pulumi.set(self, "title_copied", value)
+
+
+class PageSEOArgsArgsDict(TypedDict):
+    description: NotRequired[pulumi.Input[Optional[_builtins.str]]]
+    """
+    The SEO meta description of the page.
+    """
+    title: NotRequired[pulumi.Input[Optional[_builtins.str]]]
+    """
+    The SEO title of the page.
+    """
+
+@pulumi.input_type
+class PageSEOArgsArgs:
+    def __init__(__self__, *,
+                 description: pulumi.Input[Optional[_builtins.str]] = None,
+                 title: pulumi.Input[Optional[_builtins.str]] = None):
+        """
+        :param pulumi.Input[_builtins.str] description: The SEO meta description of the page.
+        :param pulumi.Input[_builtins.str] title: The SEO title of the page.
+        """
+        if description is not None:
+            pulumi.set(__self__, "description", description)
+        if title is not None:
+            pulumi.set(__self__, "title", title)
+
+    @_builtins.property
+    @pulumi.getter
+    def description(self) -> pulumi.Input[Optional[_builtins.str]]:
+        """
+        The SEO meta description of the page.
+        """
+        return pulumi.get(self, "description")
+
+    @description.setter
+    def description(self, value: pulumi.Input[Optional[_builtins.str]]):
+        pulumi.set(self, "description", value)
+
+    @_builtins.property
+    @pulumi.getter
+    def title(self) -> pulumi.Input[Optional[_builtins.str]]:
+        """
+        The SEO title of the page.
+        """
+        return pulumi.get(self, "title")
+
+    @title.setter
+    def title(self, value: pulumi.Input[Optional[_builtins.str]]):
+        pulumi.set(self, "title", value)
 
 

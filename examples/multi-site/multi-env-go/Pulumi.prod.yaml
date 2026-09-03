@@ -1,4 +1,5 @@
 # Production stack configuration
 config:
+  workspaceId: "YOUR_WORKSPACE_ID"  # Enterprise workspace ID (Account Settings > Workspace)
   sitePrefix: "prod"
   siteCount: 10

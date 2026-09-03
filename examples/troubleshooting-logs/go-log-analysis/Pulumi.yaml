@@ -1,3 +1,10 @@
 name: webflow-logging-analysis
 runtime: go
 description: Go logging analysis example for troubleshooting Webflow provider deployments
+
+config:
+  webflow:apiToken:
+    description: Webflow API token (or set WEBFLOW_API_TOKEN)
+    secret: true
+  workspaceId:
+    description: Webflow workspace ID that owns the sites (Enterprise workspace required for site creation)

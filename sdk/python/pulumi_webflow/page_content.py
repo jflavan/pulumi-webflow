@@ -21,21 +21,37 @@ __all__ = ['PageContentArgs', 'PageContent']
 @pulumi.input_type
 class PageContentArgs:
     def __init__(__self__, *,
+                 locale_id: pulumi.Input[_builtins.str],
                  nodes: pulumi.Input[Sequence[pulumi.Input['NodeContentUpdateArgs']]],
                  page_id: pulumi.Input[_builtins.str]):
         """
         The set of arguments for constructing a PageContent resource.
-        :param pulumi.Input[Sequence[pulumi.Input['NodeContentUpdateArgs']]] nodes: List of node content updates to apply. Each update specifies the nodeId (from the page's DOM structure) and the new text content. Node IDs can be retrieved by fetching the page DOM using GET /pages/{page_id}/dom. Only text content in existing nodes can be updated via this resource.
-        :param pulumi.Input[_builtins.str] page_id: The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). You can find page IDs using the Pages API list endpoint or in the Webflow designer. This field will be validated before making any API calls.
+
+        :param pulumi.Input[_builtins.str] locale_id: The ID of the secondary locale to update (24-character lowercase hexadecimal string). Required: the Update Page Content endpoint only edits secondary locales, and Webflow rejects the request when the locale is the primary locale or not a locale of the site. Locale IDs are listed under Site Settings > Localization or via the Get Site endpoint. Changing it replaces the resource.
+        :param pulumi.Input[Sequence[pulumi.Input['NodeContentUpdateArgs']]] nodes: List of node content updates to apply (1 to 1000 entries). Each entry names a nodeId from the page's DOM and the node's new HTML text. Node IDs must be unique within the list.
+        :param pulumi.Input[_builtins.str] page_id: The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs. Changing it replaces the resource.
         """
+        pulumi.set(__self__, "locale_id", locale_id)
         pulumi.set(__self__, "nodes", nodes)
         pulumi.set(__self__, "page_id", page_id)
+
+    @_builtins.property
+    @pulumi.getter(name="localeId")
+    def locale_id(self) -> pulumi.Input[_builtins.str]:
+        """
+        The ID of the secondary locale to update (24-character lowercase hexadecimal string). Required: the Update Page Content endpoint only edits secondary locales, and Webflow rejects the request when the locale is the primary locale or not a locale of the site. Locale IDs are listed under Site Settings > Localization or via the Get Site endpoint. Changing it replaces the resource.
+        """
+        return pulumi.get(self, "locale_id")
+
+    @locale_id.setter
+    def locale_id(self, value: pulumi.Input[_builtins.str]):
+        pulumi.set(self, "locale_id", value)
 
     @_builtins.property
     @pulumi.getter
     def nodes(self) -> pulumi.Input[Sequence[pulumi.Input['NodeContentUpdateArgs']]]:
         """
-        List of node content updates to apply. Each update specifies the nodeId (from the page's DOM structure) and the new text content. Node IDs can be retrieved by fetching the page DOM using GET /pages/{page_id}/dom. Only text content in existing nodes can be updated via this resource.
+        List of node content updates to apply (1 to 1000 entries). Each entry names a nodeId from the page's DOM and the node's new HTML text. Node IDs must be unique within the list.
         """
         return pulumi.get(self, "nodes")
 
@@ -47,7 +63,7 @@ class PageContentArgs:
     @pulumi.getter(name="pageId")
     def page_id(self) -> pulumi.Input[_builtins.str]:
         """
-        The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). You can find page IDs using the Pages API list endpoint or in the Webflow designer. This field will be validated before making any API calls.
+        The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs. Changing it replaces the resource.
         """
         return pulumi.get(self, "page_id")
 
@@ -62,18 +78,18 @@ class PageContent(pulumi.CustomResource):
     def __init__(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 nodes: Optional[pulumi.Input[Sequence[pulumi.Input[Union['NodeContentUpdateArgs', 'NodeContentUpdateArgsDict']]]]] = None,
-                 page_id: Optional[pulumi.Input[_builtins.str]] = None,
+                 locale_id: pulumi.Input[Optional[_builtins.str]] = None,
+                 nodes: pulumi.Input[Optional[Sequence[pulumi.Input[Union['NodeContentUpdateArgs', 'NodeContentUpdateArgsDict']]]]] = None,
+                 page_id: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         """
-        Manages static content (text) for a Webflow page. This resource allows you to update text content within existing DOM nodes on a page. It does NOT manage page structure or layout - only content within existing nodes. To find node IDs, you must first retrieve the page DOM structure using the Webflow API.
-
-        **IMPORTANT LIMITATION:** This resource does NOT support drift detection for content changes. If content is modified outside of Pulumi (via Webflow UI or API), those changes will NOT be detected during 'pulumi refresh' or 'pulumi up'. The resource only verifies that the page still exists. This is due to the complexity of extracting and comparing specific node text from the full DOM structure.
+        Manages the static text content of a Webflow page in a secondary locale (POST /v2/pages/{page_id}/dom?localeId=...). Webflow's Update Page Content endpoint only edits secondary locales: localeId is required and must be a valid secondary locale of the site, and the primary locale's content cannot be changed via the API. This resource updates the HTML of existing text nodes; it does NOT manage page structure or layout. Find node IDs by fetching the page DOM (GET /v2/pages/{page_id}/dom?localeId=...). Each node's text is required, and its HTML tags must match the node's current content; an empty text does not clear a node and is rejected. At most 1000 nodes may be updated per resource. Webflow reports per-node failures in the response; the update fails if any node was rejected. Refresh reads the current text of the managed nodes from the page DOM, so content changed outside of Pulumi shows up as drift. Import with the ID {pageId}/content/{localeId} to adopt every text node of the page. Destroying the resource leaves the content in place.
 
         :param str resource_name: The name of the resource.
         :param pulumi.ResourceOptions opts: Options for the resource.
-        :param pulumi.Input[Sequence[pulumi.Input[Union['NodeContentUpdateArgs', 'NodeContentUpdateArgsDict']]]] nodes: List of node content updates to apply. Each update specifies the nodeId (from the page's DOM structure) and the new text content. Node IDs can be retrieved by fetching the page DOM using GET /pages/{page_id}/dom. Only text content in existing nodes can be updated via this resource.
-        :param pulumi.Input[_builtins.str] page_id: The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). You can find page IDs using the Pages API list endpoint or in the Webflow designer. This field will be validated before making any API calls.
+        :param pulumi.Input[_builtins.str] locale_id: The ID of the secondary locale to update (24-character lowercase hexadecimal string). Required: the Update Page Content endpoint only edits secondary locales, and Webflow rejects the request when the locale is the primary locale or not a locale of the site. Locale IDs are listed under Site Settings > Localization or via the Get Site endpoint. Changing it replaces the resource.
+        :param pulumi.Input[Sequence[pulumi.Input[Union['NodeContentUpdateArgs', 'NodeContentUpdateArgsDict']]]] nodes: List of node content updates to apply (1 to 1000 entries). Each entry names a nodeId from the page's DOM and the node's new HTML text. Node IDs must be unique within the list.
+        :param pulumi.Input[_builtins.str] page_id: The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs. Changing it replaces the resource.
         """
         ...
     @overload
@@ -82,9 +98,7 @@ class PageContent(pulumi.CustomResource):
                  args: PageContentArgs,
                  opts: Optional[pulumi.ResourceOptions] = None):
         """
-        Manages static content (text) for a Webflow page. This resource allows you to update text content within existing DOM nodes on a page. It does NOT manage page structure or layout - only content within existing nodes. To find node IDs, you must first retrieve the page DOM structure using the Webflow API.
-
-        **IMPORTANT LIMITATION:** This resource does NOT support drift detection for content changes. If content is modified outside of Pulumi (via Webflow UI or API), those changes will NOT be detected during 'pulumi refresh' or 'pulumi up'. The resource only verifies that the page still exists. This is due to the complexity of extracting and comparing specific node text from the full DOM structure.
+        Manages the static text content of a Webflow page in a secondary locale (POST /v2/pages/{page_id}/dom?localeId=...). Webflow's Update Page Content endpoint only edits secondary locales: localeId is required and must be a valid secondary locale of the site, and the primary locale's content cannot be changed via the API. This resource updates the HTML of existing text nodes; it does NOT manage page structure or layout. Find node IDs by fetching the page DOM (GET /v2/pages/{page_id}/dom?localeId=...). Each node's text is required, and its HTML tags must match the node's current content; an empty text does not clear a node and is rejected. At most 1000 nodes may be updated per resource. Webflow reports per-node failures in the response; the update fails if any node was rejected. Refresh reads the current text of the managed nodes from the page DOM, so content changed outside of Pulumi shows up as drift. Import with the ID {pageId}/content/{localeId} to adopt every text node of the page. Destroying the resource leaves the content in place.
 
         :param str resource_name: The name of the resource.
         :param PageContentArgs args: The arguments to use to populate this resource's properties.
@@ -101,8 +115,9 @@ class PageContent(pulumi.CustomResource):
     def _internal_init(__self__,
                  resource_name: str,
                  opts: Optional[pulumi.ResourceOptions] = None,
-                 nodes: Optional[pulumi.Input[Sequence[pulumi.Input[Union['NodeContentUpdateArgs', 'NodeContentUpdateArgsDict']]]]] = None,
-                 page_id: Optional[pulumi.Input[_builtins.str]] = None,
+                 locale_id: pulumi.Input[Optional[_builtins.str]] = None,
+                 nodes: pulumi.Input[Optional[Sequence[pulumi.Input[Union['NodeContentUpdateArgs', 'NodeContentUpdateArgsDict']]]]] = None,
+                 page_id: pulumi.Input[Optional[_builtins.str]] = None,
                  __props__=None):
         opts = pulumi.ResourceOptions.merge(_utilities.get_resource_opts_defaults(), opts)
         if not isinstance(opts, pulumi.ResourceOptions):
@@ -112,13 +127,15 @@ class PageContent(pulumi.CustomResource):
                 raise TypeError('__props__ is only valid when passed in combination with a valid opts.id to get an existing resource')
             __props__ = PageContentArgs.__new__(PageContentArgs)
 
+            if locale_id is None and not opts.urn:
+                raise TypeError("Missing required property 'locale_id'")
+            __props__.__dict__["locale_id"] = locale_id
             if nodes is None and not opts.urn:
                 raise TypeError("Missing required property 'nodes'")
             __props__.__dict__["nodes"] = nodes
             if page_id is None and not opts.urn:
                 raise TypeError("Missing required property 'page_id'")
             __props__.__dict__["page_id"] = page_id
-            __props__.__dict__["last_updated"] = None
         super(PageContent, __self__).__init__(
             'webflow:index:PageContent',
             resource_name,
@@ -141,24 +158,24 @@ class PageContent(pulumi.CustomResource):
 
         __props__ = PageContentArgs.__new__(PageContentArgs)
 
-        __props__.__dict__["last_updated"] = None
+        __props__.__dict__["locale_id"] = None
         __props__.__dict__["nodes"] = None
         __props__.__dict__["page_id"] = None
         return PageContent(resource_name, opts=opts, __props__=__props__)
 
     @_builtins.property
-    @pulumi.getter(name="lastUpdated")
-    def last_updated(self) -> pulumi.Output[Optional[_builtins.str]]:
+    @pulumi.getter(name="localeId")
+    def locale_id(self) -> pulumi.Output[_builtins.str]:
         """
-        The timestamp when the page content was last updated (RFC3339 format). This is automatically set when content is updated and is read-only.
+        The ID of the secondary locale to update (24-character lowercase hexadecimal string). Required: the Update Page Content endpoint only edits secondary locales, and Webflow rejects the request when the locale is the primary locale or not a locale of the site. Locale IDs are listed under Site Settings > Localization or via the Get Site endpoint. Changing it replaces the resource.
         """
-        return pulumi.get(self, "last_updated")
+        return pulumi.get(self, "locale_id")
 
     @_builtins.property
     @pulumi.getter
     def nodes(self) -> pulumi.Output[Sequence['outputs.NodeContentUpdate']]:
         """
-        List of node content updates to apply. Each update specifies the nodeId (from the page's DOM structure) and the new text content. Node IDs can be retrieved by fetching the page DOM using GET /pages/{page_id}/dom. Only text content in existing nodes can be updated via this resource.
+        List of node content updates to apply (1 to 1000 entries). Each entry names a nodeId from the page's DOM and the node's new HTML text. Node IDs must be unique within the list.
         """
         return pulumi.get(self, "nodes")
 
@@ -166,7 +183,7 @@ class PageContent(pulumi.CustomResource):
     @pulumi.getter(name="pageId")
     def page_id(self) -> pulumi.Output[_builtins.str]:
         """
-        The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). You can find page IDs using the Pages API list endpoint or in the Webflow designer. This field will be validated before making any API calls.
+        The Webflow page ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c4'). Use the getPages function to find page IDs. Changing it replaces the resource.
         """
         return pulumi.get(self, "page_id")
 

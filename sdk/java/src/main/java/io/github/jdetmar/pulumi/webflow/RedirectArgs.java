@@ -9,6 +9,8 @@ import com.pulumi.exceptions.MissingRequiredPropertyException;
 import java.lang.Integer;
 import java.lang.String;
 import java.util.Objects;
+import java.util.Optional;
+import javax.annotation.Nullable;
 
 
 public final class RedirectArgs extends com.pulumi.resources.ResourceArgs {
@@ -16,14 +18,14 @@ public final class RedirectArgs extends com.pulumi.resources.ResourceArgs {
     public static final RedirectArgs Empty = new RedirectArgs();
 
     /**
-     * The URL path to redirect to (e.g., &#39;/new-page&#39;, &#39;/home&#39;). Must start with &#39;/&#39; and contain only valid URL characters. This is the location where users will be redirected when they visit the source path.
+     * The URL path to redirect to (e.g., &#39;/new-page&#39;, &#39;/home&#39;). Must start with &#39;/&#39; and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
      * 
      */
     @Import(name="destinationPath", required=true)
     private Output<String> destinationPath;
 
     /**
-     * @return The URL path to redirect to (e.g., &#39;/new-page&#39;, &#39;/home&#39;). Must start with &#39;/&#39; and contain only valid URL characters. This is the location where users will be redirected when they visit the source path.
+     * @return The URL path to redirect to (e.g., &#39;/new-page&#39;, &#39;/home&#39;). Must start with &#39;/&#39; and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
      * 
      */
     public Output<String> destinationPath() {
@@ -46,14 +48,14 @@ public final class RedirectArgs extends com.pulumi.resources.ResourceArgs {
     }
 
     /**
-     * The URL path to redirect from (e.g., &#39;/old-page&#39;, &#39;/blog/2023&#39;). Must start with &#39;/&#39; and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path.
+     * The URL path to redirect from (e.g., &#39;/old-page&#39;, &#39;/blog/2023&#39;). Must start with &#39;/&#39; and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
      * 
      */
     @Import(name="sourcePath", required=true)
     private Output<String> sourcePath;
 
     /**
-     * @return The URL path to redirect from (e.g., &#39;/old-page&#39;, &#39;/blog/2023&#39;). Must start with &#39;/&#39; and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path.
+     * @return The URL path to redirect from (e.g., &#39;/old-page&#39;, &#39;/blog/2023&#39;). Must start with &#39;/&#39; and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
      * 
      */
     public Output<String> sourcePath() {
@@ -61,18 +63,26 @@ public final class RedirectArgs extends com.pulumi.resources.ResourceArgs {
     }
 
     /**
-     * The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves).
+     * Deprecated and ignored. Webflow redirects are always 301 (permanent) redirects: the redirect API object is {id, fromUrl, toUrl} and has no status code, so this value is never sent to Webflow, never validated and never produces a diff. Remove it from your program; it only remains for backwards compatibility.
+     * 
+     * @deprecated
+     * Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version.
      * 
      */
-    @Import(name="statusCode", required=true)
-    private Output<Integer> statusCode;
+    @Deprecated /* Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version. */
+    @Import(name="statusCode")
+    private @Nullable Output<Integer> statusCode;
 
     /**
-     * @return The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves).
+     * @return Deprecated and ignored. Webflow redirects are always 301 (permanent) redirects: the redirect API object is {id, fromUrl, toUrl} and has no status code, so this value is never sent to Webflow, never validated and never produces a diff. Remove it from your program; it only remains for backwards compatibility.
+     * 
+     * @deprecated
+     * Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version.
      * 
      */
-    public Output<Integer> statusCode() {
-        return this.statusCode;
+    @Deprecated /* Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version. */
+    public Optional<Output<Integer>> statusCode() {
+        return Optional.ofNullable(this.statusCode);
     }
 
     private RedirectArgs() {}
@@ -103,7 +113,7 @@ public final class RedirectArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param destinationPath The URL path to redirect to (e.g., &#39;/new-page&#39;, &#39;/home&#39;). Must start with &#39;/&#39; and contain only valid URL characters. This is the location where users will be redirected when they visit the source path.
+         * @param destinationPath The URL path to redirect to (e.g., &#39;/new-page&#39;, &#39;/home&#39;). Must start with &#39;/&#39; and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
          * 
          * @return builder
          * 
@@ -114,7 +124,7 @@ public final class RedirectArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param destinationPath The URL path to redirect to (e.g., &#39;/new-page&#39;, &#39;/home&#39;). Must start with &#39;/&#39; and contain only valid URL characters. This is the location where users will be redirected when they visit the source path.
+         * @param destinationPath The URL path to redirect to (e.g., &#39;/new-page&#39;, &#39;/home&#39;). Must start with &#39;/&#39; and contain only valid URL characters. This is the location where users will be redirected when they visit the source path. Changing this value updates the redirect in place.
          * 
          * @return builder
          * 
@@ -145,7 +155,7 @@ public final class RedirectArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param sourcePath The URL path to redirect from (e.g., &#39;/old-page&#39;, &#39;/blog/2023&#39;). Must start with &#39;/&#39; and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path.
+         * @param sourcePath The URL path to redirect from (e.g., &#39;/old-page&#39;, &#39;/blog/2023&#39;). Must start with &#39;/&#39; and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
          * 
          * @return builder
          * 
@@ -156,7 +166,7 @@ public final class RedirectArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param sourcePath The URL path to redirect from (e.g., &#39;/old-page&#39;, &#39;/blog/2023&#39;). Must start with &#39;/&#39; and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path.
+         * @param sourcePath The URL path to redirect from (e.g., &#39;/old-page&#39;, &#39;/blog/2023&#39;). Must start with &#39;/&#39; and contain only valid URL characters (letters, numbers, hyphens, underscores, slashes, dots). Query strings and fragments are not allowed in the source path. Changing this value replaces the redirect.
          * 
          * @return builder
          * 
@@ -166,22 +176,30 @@ public final class RedirectArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param statusCode The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves).
+         * @param statusCode Deprecated and ignored. Webflow redirects are always 301 (permanent) redirects: the redirect API object is {id, fromUrl, toUrl} and has no status code, so this value is never sent to Webflow, never validated and never produces a diff. Remove it from your program; it only remains for backwards compatibility.
          * 
          * @return builder
          * 
+         * @deprecated
+         * Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version.
+         * 
          */
-        public Builder statusCode(Output<Integer> statusCode) {
+        @Deprecated /* Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version. */
+        public Builder statusCode(@Nullable Output<Integer> statusCode) {
             $.statusCode = statusCode;
             return this;
         }
 
         /**
-         * @param statusCode The HTTP status code for the redirect. Must be either 301 or 302. 301 = permanent redirect (use when a page has moved permanently; search engines update their index). 302 = temporary redirect (use for maintenance or temporary page moves).
+         * @param statusCode Deprecated and ignored. Webflow redirects are always 301 (permanent) redirects: the redirect API object is {id, fromUrl, toUrl} and has no status code, so this value is never sent to Webflow, never validated and never produces a diff. Remove it from your program; it only remains for backwards compatibility.
          * 
          * @return builder
          * 
+         * @deprecated
+         * Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version.
+         * 
          */
+        @Deprecated /* Webflow redirects are always 301; statusCode is ignored and will be removed in a future major version. */
         public Builder statusCode(Integer statusCode) {
             return statusCode(Output.of(statusCode));
         }
@@ -195,9 +213,6 @@ public final class RedirectArgs extends com.pulumi.resources.ResourceArgs {
             }
             if ($.sourcePath == null) {
                 throw new MissingRequiredPropertyException("RedirectArgs", "sourcePath");
-            }
-            if ($.statusCode == null) {
-                throw new MissingRequiredPropertyException("RedirectArgs", "statusCode");
             }
             return $;
         }

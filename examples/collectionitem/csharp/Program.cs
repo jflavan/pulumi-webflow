@@ -4,14 +4,14 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Threading.Tasks;
 using Pulumi;
-using Pulumi.Webflow;
+using Community.Pulumi.Webflow;
 
 class Program
 {
     static Task<int> Main() => Deployment.RunAsync(() =>
     {
         // Create a Pulumi config object
-        var config = new Config();
+        var config = new Pulumi.Config();
 
         // Get configuration values
         var collectionId = config.Require("collectionId");
@@ -53,8 +53,11 @@ class Program
                 // ["category"] = "Electronics",
                 // ["in-stock"] = true,
             }.ToImmutableDictionary(),
-            IsDraft = false, // Published to live site
+            IsDraft = false, // Staged: goes out with the next site publish
             IsArchived = false,
+            // Publish the item to the live site right away, after every create and
+            // update. Requires the site to have been published at least once.
+            Live = true,
         });
 
         // Example 3: Archived Content
@@ -136,6 +139,7 @@ class Program
             ["publishedProductId"] = publishedProduct.Id,
             ["publishedProductItemId"] = publishedProduct.ItemId,
             ["publishedProductLastUpdated"] = publishedProduct.LastUpdated,
+            ["publishedProductLastPublished"] = publishedProduct.LastPublished, // set because Live = true
 
             // Archived item exports
             ["archivedItemId"] = archivedItem.Id,

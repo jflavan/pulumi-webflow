@@ -12,7 +12,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-// Manages fields for a Webflow CMS collection. Collection fields define the structure of content items in a collection. Note: The field type cannot be changed after creation - changing it requires replacement (delete + recreate).
+// Manages fields for a Webflow CMS collection. Collection fields define the structure of content items in a collection. Only displayName, helpText and isRequired can be updated in place; type and metadata cannot be changed after creation and changing them requires replacement (delete + recreate). The Webflow API does not accept a slug or validations when creating a field: the slug is generated from displayName and both are reported as outputs only.
 type CollectionField struct {
 	pulumi.CustomResourceState
 
@@ -28,11 +28,17 @@ type CollectionField struct {
 	IsEditable pulumi.BoolPtrOutput `pulumi:"isEditable"`
 	// Whether the field is required (optional, defaults to false). When true, content items must provide a value for this field.
 	IsRequired pulumi.BoolPtrOutput `pulumi:"isRequired"`
-	// The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName. The slug is used in API requests and exports.
+	// Type-specific configuration (create-only). Required for Option fields: {"options": [{"name": "Draft"}, {"name": "Published"}]}. Required for Reference and MultiReference fields: {"collectionId": "<referenced collection ID>"}. Not accepted for other field types. Changing metadata requires replacement.
+	Metadata pulumi.MapOutput `pulumi:"metadata"`
+	// Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.
+	//
+	// Deprecated: The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs.
 	Slug pulumi.StringPtrOutput `pulumi:"slug"`
-	// The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: PlainText, RichText, Image, MultiImage, Video, Link, Email, Phone, Number, DateTime, Switch, Color, Option, File, Reference, MultiReference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
+	// The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: Color, DateTime, Email, File, Image, Link, MultiImage, Number, Phone, PlainText, RichText, Switch, VideoLink, Option, MultiReference, Reference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
 	Type pulumi.StringOutput `pulumi:"type"`
-	// Type-specific validation rules (optional). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Refer to Webflow API documentation for validation options for each field type.
+	// Deprecated: the Webflow API does not accept validations when creating a field ("field validation is currently not available through the API"). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.
+	//
+	// Deprecated: The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs.
 	Validations pulumi.MapOutput `pulumi:"validations"`
 }
 
@@ -93,11 +99,17 @@ type collectionFieldArgs struct {
 	HelpText *string `pulumi:"helpText"`
 	// Whether the field is required (optional, defaults to false). When true, content items must provide a value for this field.
 	IsRequired *bool `pulumi:"isRequired"`
-	// The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName. The slug is used in API requests and exports.
+	// Type-specific configuration (create-only). Required for Option fields: {"options": [{"name": "Draft"}, {"name": "Published"}]}. Required for Reference and MultiReference fields: {"collectionId": "<referenced collection ID>"}. Not accepted for other field types. Changing metadata requires replacement.
+	Metadata map[string]interface{} `pulumi:"metadata"`
+	// Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.
+	//
+	// Deprecated: The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs.
 	Slug *string `pulumi:"slug"`
-	// The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: PlainText, RichText, Image, MultiImage, Video, Link, Email, Phone, Number, DateTime, Switch, Color, Option, File, Reference, MultiReference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
+	// The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: Color, DateTime, Email, File, Image, Link, MultiImage, Number, Phone, PlainText, RichText, Switch, VideoLink, Option, MultiReference, Reference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
 	Type string `pulumi:"type"`
-	// Type-specific validation rules (optional). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Refer to Webflow API documentation for validation options for each field type.
+	// Deprecated: the Webflow API does not accept validations when creating a field ("field validation is currently not available through the API"). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.
+	//
+	// Deprecated: The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs.
 	Validations map[string]interface{} `pulumi:"validations"`
 }
 
@@ -111,11 +123,17 @@ type CollectionFieldArgs struct {
 	HelpText pulumi.StringPtrInput
 	// Whether the field is required (optional, defaults to false). When true, content items must provide a value for this field.
 	IsRequired pulumi.BoolPtrInput
-	// The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName. The slug is used in API requests and exports.
+	// Type-specific configuration (create-only). Required for Option fields: {"options": [{"name": "Draft"}, {"name": "Published"}]}. Required for Reference and MultiReference fields: {"collectionId": "<referenced collection ID>"}. Not accepted for other field types. Changing metadata requires replacement.
+	Metadata pulumi.MapInput
+	// Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.
+	//
+	// Deprecated: The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs.
 	Slug pulumi.StringPtrInput
-	// The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: PlainText, RichText, Image, MultiImage, Video, Link, Email, Phone, Number, DateTime, Switch, Color, Option, File, Reference, MultiReference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
+	// The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: Color, DateTime, Email, File, Image, Link, MultiImage, Number, Phone, PlainText, RichText, Switch, VideoLink, Option, MultiReference, Reference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
 	Type pulumi.StringInput
-	// Type-specific validation rules (optional). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Refer to Webflow API documentation for validation options for each field type.
+	// Deprecated: the Webflow API does not accept validations when creating a field ("field validation is currently not available through the API"). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.
+	//
+	// Deprecated: The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs.
 	Validations pulumi.MapInput
 }
 
@@ -186,17 +204,26 @@ func (o CollectionFieldOutput) IsRequired() pulumi.BoolPtrOutput {
 	return o.ApplyT(func(v *CollectionField) pulumi.BoolPtrOutput { return v.IsRequired }).(pulumi.BoolPtrOutput)
 }
 
-// The URL-friendly slug for the field (optional, e.g., 'title', 'description'). If not provided, Webflow will auto-generate a slug from the displayName. The slug is used in API requests and exports.
+// Type-specific configuration (create-only). Required for Option fields: {"options": [{"name": "Draft"}, {"name": "Published"}]}. Required for Reference and MultiReference fields: {"collectionId": "<referenced collection ID>"}. Not accepted for other field types. Changing metadata requires replacement.
+func (o CollectionFieldOutput) Metadata() pulumi.MapOutput {
+	return o.ApplyT(func(v *CollectionField) pulumi.MapOutput { return v.Metadata }).(pulumi.MapOutput)
+}
+
+// Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.
+//
+// Deprecated: The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs.
 func (o CollectionFieldOutput) Slug() pulumi.StringPtrOutput {
 	return o.ApplyT(func(v *CollectionField) pulumi.StringPtrOutput { return v.Slug }).(pulumi.StringPtrOutput)
 }
 
-// The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: PlainText, RichText, Image, MultiImage, Video, Link, Email, Phone, Number, DateTime, Switch, Color, Option, File, Reference, MultiReference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
+// The field type (e.g., 'PlainText', 'RichText', 'Image', 'Number'). Supported types: Color, DateTime, Email, File, Image, Link, MultiImage, Number, Phone, PlainText, RichText, Switch, VideoLink, Option, MultiReference, Reference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
 func (o CollectionFieldOutput) Type() pulumi.StringOutput {
 	return o.ApplyT(func(v *CollectionField) pulumi.StringOutput { return v.Type }).(pulumi.StringOutput)
 }
 
-// Type-specific validation rules (optional). Different field types support different validations. Example for Number type: {"min": 0, "max": 100}. Example for PlainText type: {"maxLength": 500}. Refer to Webflow API documentation for validation options for each field type.
+// Deprecated: the Webflow API does not accept validations when creating a field ("field validation is currently not available through the API"). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.
+//
+// Deprecated: The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs.
 func (o CollectionFieldOutput) Validations() pulumi.MapOutput {
 	return o.ApplyT(func(v *CollectionField) pulumi.MapOutput { return v.Validations }).(pulumi.MapOutput)
 }

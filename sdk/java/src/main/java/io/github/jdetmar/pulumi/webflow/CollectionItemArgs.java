@@ -20,14 +20,14 @@ public final class CollectionItemArgs extends com.pulumi.resources.ResourceArgs 
     public static final CollectionItemArgs Empty = new CollectionItemArgs();
 
     /**
-     * The locale ID for localized sites (optional, e.g., &#39;en-US&#39;). Only required if your site uses Webflow&#39;s localization features. Leave empty for non-localized sites.
+     * The CMS locale ID for localized sites (optional). Only required if your site uses Webflow&#39;s localization features; it is sent with every request for this item, including reads. Leave empty for non-localized sites.
      * 
      */
     @Import(name="cmsLocaleId")
     private @Nullable Output<String> cmsLocaleId;
 
     /**
-     * @return The locale ID for localized sites (optional, e.g., &#39;en-US&#39;). Only required if your site uses Webflow&#39;s localization features. Leave empty for non-localized sites.
+     * @return The CMS locale ID for localized sites (optional). Only required if your site uses Webflow&#39;s localization features; it is sent with every request for this item, including reads. Leave empty for non-localized sites.
      * 
      */
     public Optional<Output<String>> cmsLocaleId() {
@@ -50,14 +50,14 @@ public final class CollectionItemArgs extends com.pulumi.resources.ResourceArgs 
     }
 
     /**
-     * A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include &#39;name&#39; (required), &#39;slug&#39; (required, URL-friendly), and any custom fields you&#39;ve added to the collection. Example: {&#34;name&#34;: &#34;My Blog Post&#34;, &#34;slug&#34;: &#34;my-blog-post&#34;, &#34;content&#34;: &#34;Post content...&#34;}
+     * A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include &#39;name&#39; (required), &#39;slug&#39; (required, URL-friendly), and any custom fields you&#39;ve added to the collection. Only the fields listed here are managed; other fields of the item are left untouched. Example: {&#34;name&#34;: &#34;My Blog Post&#34;, &#34;slug&#34;: &#34;my-blog-post&#34;, &#34;content&#34;: &#34;Post content...&#34;}
      * 
      */
     @Import(name="fieldData", required=true)
     private Output<Map<String,Object>> fieldData;
 
     /**
-     * @return A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include &#39;name&#39; (required), &#39;slug&#39; (required, URL-friendly), and any custom fields you&#39;ve added to the collection. Example: {&#34;name&#34;: &#34;My Blog Post&#34;, &#34;slug&#34;: &#34;my-blog-post&#34;, &#34;content&#34;: &#34;Post content...&#34;}
+     * @return A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include &#39;name&#39; (required), &#39;slug&#39; (required, URL-friendly), and any custom fields you&#39;ve added to the collection. Only the fields listed here are managed; other fields of the item are left untouched. Example: {&#34;name&#34;: &#34;My Blog Post&#34;, &#34;slug&#34;: &#34;my-blog-post&#34;, &#34;content&#34;: &#34;Post content...&#34;}
      * 
      */
     public Output<Map<String,Object>> fieldData() {
@@ -65,14 +65,14 @@ public final class CollectionItemArgs extends com.pulumi.resources.ResourceArgs 
     }
 
     /**
-     * Whether the item is archived (optional, defaults to false). Archived items are not visible on the published site but remain in the CMS.
+     * Whether the item is archived (optional). Archived items are not visible on the published site but remain in the CMS. When omitted, the archived state is not managed and never causes a diff.
      * 
      */
     @Import(name="isArchived")
     private @Nullable Output<Boolean> isArchived;
 
     /**
-     * @return Whether the item is archived (optional, defaults to false). Archived items are not visible on the published site but remain in the CMS.
+     * @return Whether the item is archived (optional). Archived items are not visible on the published site but remain in the CMS. When omitted, the archived state is not managed and never causes a diff.
      * 
      */
     public Optional<Output<Boolean>> isArchived() {
@@ -80,18 +80,33 @@ public final class CollectionItemArgs extends com.pulumi.resources.ResourceArgs 
     }
 
     /**
-     * Whether the item is a draft (optional, defaults to true). Draft items are not published to the live site. Set to false to publish the item immediately upon creation.
+     * Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff.
      * 
      */
     @Import(name="isDraft")
     private @Nullable Output<Boolean> isDraft;
 
     /**
-     * @return Whether the item is a draft (optional, defaults to true). Draft items are not published to the live site. Set to false to publish the item immediately upon creation.
+     * @return Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff.
      * 
      */
     public Optional<Output<Boolean>> isDraft() {
         return Optional.ofNullable(this.isDraft);
+    }
+
+    /**
+     * Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item.
+     * 
+     */
+    @Import(name="live")
+    private @Nullable Output<Boolean> live;
+
+    /**
+     * @return Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item.
+     * 
+     */
+    public Optional<Output<Boolean>> live() {
+        return Optional.ofNullable(this.live);
     }
 
     private CollectionItemArgs() {}
@@ -102,6 +117,7 @@ public final class CollectionItemArgs extends com.pulumi.resources.ResourceArgs 
         this.fieldData = $.fieldData;
         this.isArchived = $.isArchived;
         this.isDraft = $.isDraft;
+        this.live = $.live;
     }
 
     public static Builder builder() {
@@ -123,7 +139,7 @@ public final class CollectionItemArgs extends com.pulumi.resources.ResourceArgs 
         }
 
         /**
-         * @param cmsLocaleId The locale ID for localized sites (optional, e.g., &#39;en-US&#39;). Only required if your site uses Webflow&#39;s localization features. Leave empty for non-localized sites.
+         * @param cmsLocaleId The CMS locale ID for localized sites (optional). Only required if your site uses Webflow&#39;s localization features; it is sent with every request for this item, including reads. Leave empty for non-localized sites.
          * 
          * @return builder
          * 
@@ -134,7 +150,7 @@ public final class CollectionItemArgs extends com.pulumi.resources.ResourceArgs 
         }
 
         /**
-         * @param cmsLocaleId The locale ID for localized sites (optional, e.g., &#39;en-US&#39;). Only required if your site uses Webflow&#39;s localization features. Leave empty for non-localized sites.
+         * @param cmsLocaleId The CMS locale ID for localized sites (optional). Only required if your site uses Webflow&#39;s localization features; it is sent with every request for this item, including reads. Leave empty for non-localized sites.
          * 
          * @return builder
          * 
@@ -165,7 +181,7 @@ public final class CollectionItemArgs extends com.pulumi.resources.ResourceArgs 
         }
 
         /**
-         * @param fieldData A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include &#39;name&#39; (required), &#39;slug&#39; (required, URL-friendly), and any custom fields you&#39;ve added to the collection. Example: {&#34;name&#34;: &#34;My Blog Post&#34;, &#34;slug&#34;: &#34;my-blog-post&#34;, &#34;content&#34;: &#34;Post content...&#34;}
+         * @param fieldData A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include &#39;name&#39; (required), &#39;slug&#39; (required, URL-friendly), and any custom fields you&#39;ve added to the collection. Only the fields listed here are managed; other fields of the item are left untouched. Example: {&#34;name&#34;: &#34;My Blog Post&#34;, &#34;slug&#34;: &#34;my-blog-post&#34;, &#34;content&#34;: &#34;Post content...&#34;}
          * 
          * @return builder
          * 
@@ -176,7 +192,7 @@ public final class CollectionItemArgs extends com.pulumi.resources.ResourceArgs 
         }
 
         /**
-         * @param fieldData A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include &#39;name&#39; (required), &#39;slug&#39; (required, URL-friendly), and any custom fields you&#39;ve added to the collection. Example: {&#34;name&#34;: &#34;My Blog Post&#34;, &#34;slug&#34;: &#34;my-blog-post&#34;, &#34;content&#34;: &#34;Post content...&#34;}
+         * @param fieldData A map of field slugs to values for the collection item. The field slugs must match the fields defined in the collection schema. Common fields include &#39;name&#39; (required), &#39;slug&#39; (required, URL-friendly), and any custom fields you&#39;ve added to the collection. Only the fields listed here are managed; other fields of the item are left untouched. Example: {&#34;name&#34;: &#34;My Blog Post&#34;, &#34;slug&#34;: &#34;my-blog-post&#34;, &#34;content&#34;: &#34;Post content...&#34;}
          * 
          * @return builder
          * 
@@ -186,7 +202,7 @@ public final class CollectionItemArgs extends com.pulumi.resources.ResourceArgs 
         }
 
         /**
-         * @param isArchived Whether the item is archived (optional, defaults to false). Archived items are not visible on the published site but remain in the CMS.
+         * @param isArchived Whether the item is archived (optional). Archived items are not visible on the published site but remain in the CMS. When omitted, the archived state is not managed and never causes a diff.
          * 
          * @return builder
          * 
@@ -197,7 +213,7 @@ public final class CollectionItemArgs extends com.pulumi.resources.ResourceArgs 
         }
 
         /**
-         * @param isArchived Whether the item is archived (optional, defaults to false). Archived items are not visible on the published site but remain in the CMS.
+         * @param isArchived Whether the item is archived (optional). Archived items are not visible on the published site but remain in the CMS. When omitted, the archived state is not managed and never causes a diff.
          * 
          * @return builder
          * 
@@ -207,7 +223,7 @@ public final class CollectionItemArgs extends com.pulumi.resources.ResourceArgs 
         }
 
         /**
-         * @param isDraft Whether the item is a draft (optional, defaults to true). Draft items are not published to the live site. Set to false to publish the item immediately upon creation.
+         * @param isDraft Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff.
          * 
          * @return builder
          * 
@@ -218,13 +234,34 @@ public final class CollectionItemArgs extends com.pulumi.resources.ResourceArgs 
         }
 
         /**
-         * @param isDraft Whether the item is a draft (optional, defaults to true). Draft items are not published to the live site. Set to false to publish the item immediately upon creation.
+         * @param isDraft Whether the item is a draft (optional; Webflow defaults new items to true). Setting isDraft to false stages the item to go out with the next site publish - it does not publish the item by itself. Use live=true to publish the item immediately. When omitted, the draft state is not managed and never causes a diff.
          * 
          * @return builder
          * 
          */
         public Builder isDraft(Boolean isDraft) {
             return isDraft(Output.of(isDraft));
+        }
+
+        /**
+         * @param live Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item.
+         * 
+         * @return builder
+         * 
+         */
+        public Builder live(@Nullable Output<Boolean> live) {
+            $.live = live;
+            return this;
+        }
+
+        /**
+         * @param live Publish the item to the live site after every create and update (optional, defaults to false). When true the provider calls the Webflow publish-items endpoint after writing the item and reads the item back from the live endpoint, so lastPublished reflects the live copy. Setting this back to false stops publishing future changes but does not unpublish the item.
+         * 
+         * @return builder
+         * 
+         */
+        public Builder live(Boolean live) {
+            return live(Output.of(live));
         }
 
         public CollectionItemArgs build() {

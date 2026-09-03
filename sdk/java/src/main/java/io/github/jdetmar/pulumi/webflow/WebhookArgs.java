@@ -19,14 +19,14 @@ public final class WebhookArgs extends com.pulumi.resources.ResourceArgs {
     public static final WebhookArgs Empty = new WebhookArgs();
 
     /**
-     * Optional filter for webhook events. The structure depends on the triggerType and allows you to receive only specific events. For example, for collection_item_created, you can filter by collection ID. Refer to Webflow API documentation for filter options for each trigger type.
+     * Optional filter for webhook events. Only supported for the `form_submission` trigger type: it selects the form whose submissions should be sent, with the shape `{ name: string }` where `name` is the form name (e.g., `{ name: &#39;Contact Form&#39; }`). Setting a filter for any other trigger type, or any key other than `name`, is rejected. When omitted the provider does not track the filter Webflow reports, so a filter set outside Pulumi does not cause a diff. Changing this value replaces the webhook.
      * 
      */
     @Import(name="filter")
     private @Nullable Output<Map<String,Object>> filter;
 
     /**
-     * @return Optional filter for webhook events. The structure depends on the triggerType and allows you to receive only specific events. For example, for collection_item_created, you can filter by collection ID. Refer to Webflow API documentation for filter options for each trigger type.
+     * @return Optional filter for webhook events. Only supported for the `form_submission` trigger type: it selects the form whose submissions should be sent, with the shape `{ name: string }` where `name` is the form name (e.g., `{ name: &#39;Contact Form&#39; }`). Setting a filter for any other trigger type, or any key other than `name`, is rejected. When omitted the provider does not track the filter Webflow reports, so a filter set outside Pulumi does not cause a diff. Changing this value replaces the webhook.
      * 
      */
     public Optional<Output<Map<String,Object>>> filter() {
@@ -49,14 +49,14 @@ public final class WebhookArgs extends com.pulumi.resources.ResourceArgs {
     }
 
     /**
-     * The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, memberships_user_account_added, memberships_user_account_updated, memberships_user_account_deleted, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_unpublished. Example: &#39;form_submission&#39; to receive notifications when forms are submitted.
+     * The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_published, collection_item_unpublished, comment_created. Webhooks require a Data Client (OAuth) token with `sites:write` plus the read scope of the event family: `forms:read` (form_submission), `cms:read` (collection_item_*), `pages:read` (page_*), `ecommerce:read` (ecomm_*), `comments:read` (comment_created); site_publish needs `sites:read`. Example: &#39;form_submission&#39; to receive notifications when forms are submitted. Changing this value replaces the webhook.
      * 
      */
     @Import(name="triggerType", required=true)
     private Output<String> triggerType;
 
     /**
-     * @return The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, memberships_user_account_added, memberships_user_account_updated, memberships_user_account_deleted, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_unpublished. Example: &#39;form_submission&#39; to receive notifications when forms are submitted.
+     * @return The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_published, collection_item_unpublished, comment_created. Webhooks require a Data Client (OAuth) token with `sites:write` plus the read scope of the event family: `forms:read` (form_submission), `cms:read` (collection_item_*), `pages:read` (page_*), `ecommerce:read` (ecomm_*), `comments:read` (comment_created); site_publish needs `sites:read`. Example: &#39;form_submission&#39; to receive notifications when forms are submitted. Changing this value replaces the webhook.
      * 
      */
     public Output<String> triggerType() {
@@ -64,14 +64,14 @@ public final class WebhookArgs extends com.pulumi.resources.ResourceArgs {
     }
 
     /**
-     * The HTTPS endpoint where Webflow will send webhook events (e.g., &#39;https://example.com/webhooks/webflow&#39;, &#39;https://api.example.com/events&#39;). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data.
+     * The HTTPS endpoint where Webflow will send webhook events (e.g., &#39;https://example.com/webhooks/webflow&#39;, &#39;https://api.example.com/events&#39;). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data. Changing this value replaces the webhook.
      * 
      */
     @Import(name="url", required=true)
     private Output<String> url;
 
     /**
-     * @return The HTTPS endpoint where Webflow will send webhook events (e.g., &#39;https://example.com/webhooks/webflow&#39;, &#39;https://api.example.com/events&#39;). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data.
+     * @return The HTTPS endpoint where Webflow will send webhook events (e.g., &#39;https://example.com/webhooks/webflow&#39;, &#39;https://api.example.com/events&#39;). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data. Changing this value replaces the webhook.
      * 
      */
     public Output<String> url() {
@@ -106,7 +106,7 @@ public final class WebhookArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param filter Optional filter for webhook events. The structure depends on the triggerType and allows you to receive only specific events. For example, for collection_item_created, you can filter by collection ID. Refer to Webflow API documentation for filter options for each trigger type.
+         * @param filter Optional filter for webhook events. Only supported for the `form_submission` trigger type: it selects the form whose submissions should be sent, with the shape `{ name: string }` where `name` is the form name (e.g., `{ name: &#39;Contact Form&#39; }`). Setting a filter for any other trigger type, or any key other than `name`, is rejected. When omitted the provider does not track the filter Webflow reports, so a filter set outside Pulumi does not cause a diff. Changing this value replaces the webhook.
          * 
          * @return builder
          * 
@@ -117,7 +117,7 @@ public final class WebhookArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param filter Optional filter for webhook events. The structure depends on the triggerType and allows you to receive only specific events. For example, for collection_item_created, you can filter by collection ID. Refer to Webflow API documentation for filter options for each trigger type.
+         * @param filter Optional filter for webhook events. Only supported for the `form_submission` trigger type: it selects the form whose submissions should be sent, with the shape `{ name: string }` where `name` is the form name (e.g., `{ name: &#39;Contact Form&#39; }`). Setting a filter for any other trigger type, or any key other than `name`, is rejected. When omitted the provider does not track the filter Webflow reports, so a filter set outside Pulumi does not cause a diff. Changing this value replaces the webhook.
          * 
          * @return builder
          * 
@@ -148,7 +148,7 @@ public final class WebhookArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param triggerType The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, memberships_user_account_added, memberships_user_account_updated, memberships_user_account_deleted, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_unpublished. Example: &#39;form_submission&#39; to receive notifications when forms are submitted.
+         * @param triggerType The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_published, collection_item_unpublished, comment_created. Webhooks require a Data Client (OAuth) token with `sites:write` plus the read scope of the event family: `forms:read` (form_submission), `cms:read` (collection_item_*), `pages:read` (page_*), `ecommerce:read` (ecomm_*), `comments:read` (comment_created); site_publish needs `sites:read`. Example: &#39;form_submission&#39; to receive notifications when forms are submitted. Changing this value replaces the webhook.
          * 
          * @return builder
          * 
@@ -159,7 +159,7 @@ public final class WebhookArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param triggerType The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, memberships_user_account_added, memberships_user_account_updated, memberships_user_account_deleted, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_unpublished. Example: &#39;form_submission&#39; to receive notifications when forms are submitted.
+         * @param triggerType The Webflow event that triggers this webhook. Valid values: form_submission, site_publish, page_created, page_metadata_updated, page_deleted, ecomm_new_order, ecomm_order_changed, ecomm_inventory_changed, collection_item_created, collection_item_changed, collection_item_deleted, collection_item_published, collection_item_unpublished, comment_created. Webhooks require a Data Client (OAuth) token with `sites:write` plus the read scope of the event family: `forms:read` (form_submission), `cms:read` (collection_item_*), `pages:read` (page_*), `ecommerce:read` (ecomm_*), `comments:read` (comment_created); site_publish needs `sites:read`. Example: &#39;form_submission&#39; to receive notifications when forms are submitted. Changing this value replaces the webhook.
          * 
          * @return builder
          * 
@@ -169,7 +169,7 @@ public final class WebhookArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param url The HTTPS endpoint where Webflow will send webhook events (e.g., &#39;https://example.com/webhooks/webflow&#39;, &#39;https://api.example.com/events&#39;). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data.
+         * @param url The HTTPS endpoint where Webflow will send webhook events (e.g., &#39;https://example.com/webhooks/webflow&#39;, &#39;https://api.example.com/events&#39;). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data. Changing this value replaces the webhook.
          * 
          * @return builder
          * 
@@ -180,7 +180,7 @@ public final class WebhookArgs extends com.pulumi.resources.ResourceArgs {
         }
 
         /**
-         * @param url The HTTPS endpoint where Webflow will send webhook events (e.g., &#39;https://example.com/webhooks/webflow&#39;, &#39;https://api.example.com/events&#39;). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data.
+         * @param url The HTTPS endpoint where Webflow will send webhook events (e.g., &#39;https://example.com/webhooks/webflow&#39;, &#39;https://api.example.com/events&#39;). Must be a valid HTTPS URL. Webflow requires HTTPS for security. Your endpoint should accept POST requests with JSON payloads containing event data. Changing this value replaces the webhook.
          * 
          * @return builder
          * 

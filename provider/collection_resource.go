@@ -10,8 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
-	"time"
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
@@ -56,7 +54,8 @@ func (c *CollectionResource) Annotate(a infer.Annotator) {
 	a.SetToken("index", "Collection")
 	a.Describe(c, "Manages CMS collections for a Webflow site. "+
 		"Collections are containers for structured content items (blog posts, products, etc.). "+
-		"Note: Webflow collections do not support updates - any changes require replacement (delete + recreate).")
+		"displayName, singularName and slug are updated in place (PATCH /v2/collections/{collection_id}); "+
+		"changing siteId requires replacement (delete + recreate).")
 }
 
 // Annotate adds descriptions to the CollectionArgs fields.
@@ -79,8 +78,10 @@ func (args *CollectionArgs) Annotate(a infer.Annotator) {
 
 	a.Describe(&args.Slug,
 		"The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). "+
-			"If not provided, Webflow will auto-generate a slug from the displayName. "+
-			"The slug determines the URL path for collection items.")
+			"If not provided, Webflow will auto-generate a slug from the displayName and the generated "+
+			"value is recorded in the resource outputs without causing a diff. "+
+			"The slug determines the URL path for collection items; changing an explicit slug updates "+
+			"the collection in place, which changes the URLs of its items.")
 }
 
 // Annotate adds descriptions to the CollectionState fields.
@@ -99,47 +100,75 @@ func (state *CollectionState) Annotate(a infer.Annotator) {
 			"This is automatically updated by Webflow and is read-only.")
 }
 
+// collectionValidators are the per-property checks shared by Check and the apply-time validation.
+var collectionValidators = []stringValidator{
+	{property: "siteId", validate: ValidateSiteID},
+	{property: "displayName", validate: ValidateCollectionDisplayName},
+	{property: "singularName", validate: ValidateSingularName},
+	{property: "slug", validate: ValidateCollectionSlug},
+}
+
+// Check validates the known inputs at preview time. Unknown (computed) values, such as a
+// siteId that comes from a Site resource, are skipped and validated again in Create/Update.
+func (c *CollectionResource) Check(
+	ctx context.Context, req infer.CheckRequest,
+) (infer.CheckResponse[CollectionArgs], error) {
+	inputs, failures, err := checkStrings[CollectionArgs](ctx, req.NewInputs, collectionValidators...)
+	return infer.CheckResponse[CollectionArgs]{Inputs: inputs, Failures: failures}, err
+}
+
+// validateCollectionArgs validates fully-resolved inputs at apply time.
+func validateCollectionArgs(args CollectionArgs) error {
+	if err := ValidateSiteID(args.SiteID); err != nil {
+		return fmt.Errorf("validation failed for Collection resource: %w", err)
+	}
+	if err := ValidateCollectionDisplayName(args.DisplayName); err != nil {
+		return fmt.Errorf("validation failed for Collection resource: %w", err)
+	}
+	if err := ValidateSingularName(args.SingularName); err != nil {
+		return fmt.Errorf("validation failed for Collection resource: %w", err)
+	}
+	if err := ValidateCollectionSlug(args.Slug); err != nil {
+		return fmt.Errorf("validation failed for Collection resource: %w", err)
+	}
+	return nil
+}
+
 // Diff determines what changes need to be made to the collection resource.
-// Note: Webflow collections do not support updates via API, so ALL changes require replacement.
+// displayName, singularName and slug are updated in place through
+// PATCH /v2/collections/{collection_id}; only a siteId change requires replacement.
+//
+// An omitted slug input means "let Webflow choose": it never diffs against the
+// Webflow-generated slug that Create or Read recorded in state.
 func (c *CollectionResource) Diff(
 	ctx context.Context, req infer.DiffRequest[CollectionArgs, CollectionState],
 ) (infer.DiffResponse, error) {
 	diff := infer.DiffResponse{}
 	detailedDiff := map[string]p.PropertyDiff{}
 
-	// Check for siteId change (requires replacement)
+	update := func(property string) {
+		detailedDiff[property] = p.PropertyDiff{Kind: p.Update}
+		diff.HasChanges = true
+	}
+
 	if req.State.SiteID != req.Inputs.SiteID {
 		detailedDiff["siteId"] = p.PropertyDiff{Kind: p.UpdateReplace}
 		diff.DeleteBeforeReplace = true
 		diff.HasChanges = true
 	}
-
-	// Check for displayName change (requires replacement - no update API)
 	if req.State.DisplayName != req.Inputs.DisplayName {
-		detailedDiff["displayName"] = p.PropertyDiff{Kind: p.UpdateReplace}
-		diff.DeleteBeforeReplace = true
-		diff.HasChanges = true
+		update("displayName")
 	}
-
-	// Check for singularName change (requires replacement - no update API)
 	if req.State.SingularName != req.Inputs.SingularName {
-		detailedDiff["singularName"] = p.PropertyDiff{Kind: p.UpdateReplace}
-		diff.DeleteBeforeReplace = true
-		diff.HasChanges = true
+		update("singularName")
+	}
+	if req.Inputs.Slug != "" && req.State.Slug != req.Inputs.Slug {
+		update("slug")
 	}
 
-	// Check for slug change (requires replacement - no update API)
-	if req.State.Slug != req.Inputs.Slug {
-		detailedDiff["slug"] = p.PropertyDiff{Kind: p.UpdateReplace}
-		diff.DeleteBeforeReplace = true
-		diff.HasChanges = true
-	}
-
-	// Only set DetailedDiff if changes were detected
 	if len(detailedDiff) > 0 {
 		diff.DetailedDiff = detailedDiff
 	}
-
 	return diff, nil
 }
 
@@ -147,59 +176,33 @@ func (c *CollectionResource) Diff(
 func (c *CollectionResource) Create(
 	ctx context.Context, req infer.CreateRequest[CollectionArgs],
 ) (infer.CreateResponse[CollectionState], error) {
-	// Log the start of collection creation
 	log := NewLogContext(ctx).
 		WithField("siteId", req.Inputs.SiteID).
 		WithField("displayName", req.Inputs.DisplayName).
 		WithField("singularName", req.Inputs.SingularName)
-	log.Info("Creating Webflow collection")
 
-	// Validate inputs BEFORE generating resource ID
-	if err := ValidateSiteID(req.Inputs.SiteID); err != nil {
-		log.Errorf("Validation failed: %v", err)
-		return infer.CreateResponse[CollectionState]{}, fmt.Errorf("validation failed for Collection resource: %w", err)
-	}
-	if err := ValidateCollectionDisplayName(req.Inputs.DisplayName); err != nil {
-		log.Errorf("Validation failed: %v", err)
-		return infer.CreateResponse[CollectionState]{}, fmt.Errorf("validation failed for Collection resource: %w", err)
-	}
-	if err := ValidateSingularName(req.Inputs.SingularName); err != nil {
-		log.Errorf("Validation failed: %v", err)
-		return infer.CreateResponse[CollectionState]{}, fmt.Errorf("validation failed for Collection resource: %w", err)
-	}
+	state := CollectionState{CollectionArgs: req.Inputs}
 
-	state := CollectionState{
-		CollectionArgs: req.Inputs,
-		CollectionID:   "", // Will be populated from API response
-		CreatedOn:      "", // Will be populated from API response
-		LastUpdated:    "", // Will be populated from API response
-	}
-
-	// During preview, return expected state without making API calls
+	// During preview, return the expected state without making API calls or validating:
+	// inputs that come from other resources are unknown (empty) at this point.
+	// The ID is left empty so dependents see it as unknown, and server-assigned outputs
+	// (collectionId, timestamps) are left empty rather than fabricated.
 	if req.DryRun {
 		log.Debug("Dry run mode - skipping API call")
-		// Set preview timestamps
-		now := time.Now().Format(time.RFC3339)
-		state.CreatedOn = now
-		state.LastUpdated = now
-		// Generate a predictable ID for dry-run
-		previewID := fmt.Sprintf("preview-%d", time.Now().Unix())
-		state.CollectionID = previewID
-		return infer.CreateResponse[CollectionState]{
-			ID:     GenerateCollectionResourceID(req.Inputs.SiteID, previewID),
-			Output: state,
-		}, nil
+		return infer.CreateResponse[CollectionState]{Output: state}, nil
 	}
 
-	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	log.Info("Creating Webflow collection")
+
+	if err := validateCollectionArgs(req.Inputs); err != nil {
+		return infer.CreateResponse[CollectionState]{}, err
+	}
+
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
-		log.Errorf("Failed to create HTTP client: %v", err)
 		return infer.CreateResponse[CollectionState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API
-	log.Debug("Calling Webflow API to create collection")
 	response, err := PostCollection(
 		ctx, client, req.Inputs.SiteID,
 		req.Inputs.DisplayName, req.Inputs.SingularName, req.Inputs.Slug,
@@ -209,9 +212,7 @@ func (c *CollectionResource) Create(
 		return infer.CreateResponse[CollectionState]{}, fmt.Errorf("failed to create collection: %w", err)
 	}
 
-	// Defensive check: Ensure Webflow API returned a valid collection ID
 	if response.ID == "" {
-		log.Error("API returned empty collection ID")
 		return infer.CreateResponse[CollectionState]{}, errors.New(
 			"webflow API returned empty collection ID - " +
 				"this is unexpected and may indicate an API issue")
@@ -219,15 +220,17 @@ func (c *CollectionResource) Create(
 
 	log.WithField("collectionId", response.ID).Info("Collection created successfully")
 
-	// Set output fields from API response
 	state.CollectionID = response.ID
 	state.CreatedOn = response.CreatedOn
 	state.LastUpdated = response.LastUpdated
-
-	resourceID := GenerateCollectionResourceID(req.Inputs.SiteID, response.ID)
+	// Record the slug Webflow actually assigned (it generates one when the input is omitted).
+	// The input value is untouched, so an omitted slug stays omitted for Diff purposes.
+	if response.Slug != "" {
+		state.Slug = response.Slug
+	}
 
 	return infer.CreateResponse[CollectionState]{
-		ID:     resourceID,
+		ID:     GenerateCollectionResourceID(req.Inputs.SiteID, response.ID),
 		Output: state,
 	}, nil
 }
@@ -237,43 +240,49 @@ func (c *CollectionResource) Create(
 func (c *CollectionResource) Read(
 	ctx context.Context, req infer.ReadRequest[CollectionArgs, CollectionState],
 ) (infer.ReadResponse[CollectionArgs, CollectionState], error) {
-	// Extract siteID and collectionID from resource ID
 	siteID, collectionID, err := ExtractIDsFromCollectionResourceID(req.ID)
 	if err != nil {
 		return infer.ReadResponse[CollectionArgs, CollectionState]{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
+	if err := ValidateSiteID(siteID); err != nil {
+		return infer.ReadResponse[CollectionArgs, CollectionState]{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
+	if err := ValidateCollectionID(collectionID); err != nil {
+		return infer.ReadResponse[CollectionArgs, CollectionState]{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
 
-	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[CollectionArgs, CollectionState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API to get collection details
 	response, err := GetCollection(ctx, client, collectionID)
 	if err != nil {
-		// Resource not found - return empty ID to signal deletion
-		if strings.Contains(err.Error(), "not found") {
-			return infer.ReadResponse[CollectionArgs, CollectionState]{
-				ID: "",
-			}, nil
+		if IsNotFound(err) {
+			// Resource no longer exists - return empty ID to signal deletion
+			return infer.ReadResponse[CollectionArgs, CollectionState]{}, nil
 		}
 		return infer.ReadResponse[CollectionArgs, CollectionState]{}, fmt.Errorf("failed to read collection: %w", err)
 	}
 
-	// Build current state from API response
 	currentInputs := CollectionArgs{
 		SiteID:       siteID,
 		DisplayName:  response.DisplayName,
 		SingularName: response.SingularName,
-		Slug:         response.Slug,
+		// An omitted slug input stays omitted; only an explicit slug is refreshed from the API.
+		Slug: req.Inputs.Slug,
 	}
+	if req.Inputs.Slug != "" {
+		currentInputs.Slug = response.Slug
+	}
+
 	currentState := CollectionState{
 		CollectionArgs: currentInputs,
 		CollectionID:   collectionID,
 		CreatedOn:      response.CreatedOn,
 		LastUpdated:    response.LastUpdated,
 	}
+	currentState.Slug = response.Slug
 
 	return infer.ReadResponse[CollectionArgs, CollectionState]{
 		ID:     req.ID,
@@ -282,36 +291,90 @@ func (c *CollectionResource) Read(
 	}, nil
 }
 
-// Update is not supported for Webflow collections.
-// The Webflow API does not provide an update endpoint for collections.
-// All changes require replacement (delete + recreate).
+// Update changes the display name, singular name and/or slug of the collection in place
+// through PATCH /v2/collections/{collection_id}. An omitted slug is not sent, so the
+// Webflow-assigned slug is kept.
 func (c *CollectionResource) Update(
 	ctx context.Context, req infer.UpdateRequest[CollectionArgs, CollectionState],
 ) (infer.UpdateResponse[CollectionState], error) {
-	// This should never be called because Diff() always returns UpdateReplace for all changes
-	return infer.UpdateResponse[CollectionState]{}, errors.New(
-		"collection updates are not supported by the Webflow API. " +
-			"All changes require replacement (delete + recreate). " +
-			"This error should not occur - please report this as a bug")
+	state := CollectionState{
+		CollectionArgs: req.Inputs,
+		CollectionID:   req.State.CollectionID,
+		CreatedOn:      req.State.CreatedOn,
+		LastUpdated:    req.State.LastUpdated,
+	}
+	// Keep the Webflow-assigned slug when the user did not specify one.
+	if state.Slug == "" {
+		state.Slug = req.State.Slug
+	}
+
+	// During preview, return the expected state without making API calls.
+	if req.DryRun {
+		return infer.UpdateResponse[CollectionState]{Output: state}, nil
+	}
+
+	if err := validateCollectionArgs(req.Inputs); err != nil {
+		return infer.UpdateResponse[CollectionState]{}, err
+	}
+
+	_, collectionID, err := ExtractIDsFromCollectionResourceID(req.ID)
+	if err != nil {
+		return infer.UpdateResponse[CollectionState]{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
+	if err := ValidateCollectionID(collectionID); err != nil {
+		return infer.UpdateResponse[CollectionState]{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
+
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
+	if err != nil {
+		return infer.UpdateResponse[CollectionState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
+	}
+
+	response, err := PatchCollection(ctx, client, collectionID, CollectionUpdateRequest{
+		DisplayName:  req.Inputs.DisplayName,
+		SingularName: req.Inputs.SingularName,
+		Slug:         req.Inputs.Slug,
+	})
+	if err != nil {
+		return infer.UpdateResponse[CollectionState]{}, fmt.Errorf("failed to update collection: %w", err)
+	}
+
+	NewLogContext(ctx).WithField("collectionId", collectionID).Info("Collection updated successfully")
+
+	if state.CollectionID == "" {
+		state.CollectionID = collectionID
+	}
+	if response.Slug != "" {
+		state.Slug = response.Slug
+	}
+	if response.CreatedOn != "" {
+		state.CreatedOn = response.CreatedOn
+	}
+	if response.LastUpdated != "" {
+		state.LastUpdated = response.LastUpdated
+	}
+
+	return infer.UpdateResponse[CollectionState]{Output: state}, nil
 }
 
 // Delete removes a collection from the Webflow site.
 func (c *CollectionResource) Delete(
 	ctx context.Context, req infer.DeleteRequest[CollectionState],
 ) (infer.DeleteResponse, error) {
-	// Extract siteID and collectionID from resource ID
 	_, collectionID, err := ExtractIDsFromCollectionResourceID(req.ID)
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
+	if err := ValidateCollectionID(collectionID); err != nil {
+		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
 
-	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API (handles 404 gracefully for idempotency)
+	// 404 is treated as success so deletes are idempotent
 	if err := DeleteCollection(ctx, client, collectionID); err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("failed to delete collection: %w", err)
 	}

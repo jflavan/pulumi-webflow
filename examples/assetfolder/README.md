@@ -32,7 +32,7 @@ The Webflow API has specific limitations for asset folders:
 cd typescript
 npm install
 pulumi stack init dev
-pulumi config set webflow:siteId your-site-id --secret
+pulumi config set siteId your-site-id --secret
 pulumi up
 ```
 
@@ -94,7 +94,7 @@ Each example requires the following configuration:
 
 | Config Key        | Required | Description                              |
 |-------------------|----------|------------------------------------------|
-| `webflow:siteId`  | Yes      | Your Webflow site ID (stored as secret)  |
+| `siteId`  | Yes      | Your Webflow site ID (stored as secret)  |
 | `environment`     | No       | Deployment environment (default: development) |
 
 ## Expected Output
@@ -124,11 +124,11 @@ const imagesFolder = new webflow.AssetFolder("images", {
   displayName: "Images",
 });
 
-// Upload asset to folder
+// Upload asset to folder (the provider reads the file and uploads it)
 const logoAsset = new webflow.Asset("company-logo", {
   siteId: siteId,
   fileName: "logo.png",
-  fileHash: "d41d8cd98f00b204e9800998ecf8427e",
+  fileSource: "./assets/logo.png", // local path or http(s) URL
   parentFolder: imagesFolder.folderId, // Place in Images folder
 });
 ```

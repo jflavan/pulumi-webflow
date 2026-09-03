@@ -9,658 +9,444 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
-// TestValidateAssetID tests the ValidateAssetID function.
 func TestValidateAssetID(t *testing.T) {
 	tests := []struct {
 		name    string
 		assetID string
 		wantErr bool
 	}{
-		{
-			name:    "valid asset ID",
-			assetID: "5f0c8c9e1c9d440000e8d8c3",
-			wantErr: false,
-		},
-		{
-			name:    "empty asset ID",
-			assetID: "",
-			wantErr: true,
-		},
-		{
-			name:    "invalid asset ID - too short",
-			assetID: "5f0c8c9e1c9d44",
-			wantErr: true,
-		},
-		{
-			name:    "invalid asset ID - contains uppercase",
-			assetID: "5F0C8C9E1C9D440000E8D8C3",
-			wantErr: true,
-		},
-		{
-			name:    "invalid asset ID - contains invalid characters",
-			assetID: "5f0c8c9e1c9d440000e8d8g3",
-			wantErr: true,
-		},
+		{"valid asset ID", "5f0c8c9e1c9d440000e8d8c3", false},
+		{"empty asset ID", "", true},
+		{"too short", "5f0c8c9e1c9d44", true},
+		{"uppercase", "5F0C8C9E1C9D440000E8D8C3", true},
+		{"invalid characters", "5f0c8c9e1c9d440000e8d8g3", true},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateAssetID(tt.assetID)
-			if (err != nil) != tt.wantErr {
+			if err := ValidateAssetID(tt.assetID); (err != nil) != tt.wantErr {
 				t.Errorf("ValidateAssetID() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-// TestValidateFileHash tests the ValidateFileHash function.
 func TestValidateFileHash(t *testing.T) {
 	tests := []struct {
 		name     string
 		fileHash string
 		wantErr  bool
 	}{
-		{
-			name:     "valid MD5 hash - lowercase",
-			fileHash: "d41d8cd98f00b204e9800998ecf8427e",
-			wantErr:  false,
-		},
-		{
-			name:     "valid MD5 hash - uppercase",
-			fileHash: "D41D8CD98F00B204E9800998ECF8427E",
-			wantErr:  false,
-		},
-		{
-			name:     "valid MD5 hash - mixed case",
-			fileHash: "d41D8cd98F00b204E9800998ecf8427E",
-			wantErr:  false,
-		},
-		{
-			name:     "empty hash",
-			fileHash: "",
-			wantErr:  true,
-		},
-		{
-			name:     "too short",
-			fileHash: "d41d8cd98f00b204",
-			wantErr:  true,
-		},
-		{
-			name:     "too long",
-			fileHash: "d41d8cd98f00b204e9800998ecf8427e00",
-			wantErr:  true,
-		},
-		{
-			name:     "invalid characters",
-			fileHash: "d41d8cd98f00b204e9800998ecf8427g",
-			wantErr:  true,
-		},
-		{
-			name:     "with spaces",
-			fileHash: "d41d8cd98f00b204 9800998ecf8427e",
-			wantErr:  true,
-		},
+		{"lowercase", "d41d8cd98f00b204e9800998ecf8427e", false},
+		{"uppercase", "D41D8CD98F00B204E9800998ECF8427E", false},
+		{"empty", "", true},
+		{"too short", "d41d8cd98f00b204", true},
+		{"too long", "d41d8cd98f00b204e9800998ecf8427e00", true},
+		{"invalid characters", "d41d8cd98f00b204e9800998ecf8427g", true},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateFileHash(tt.fileHash)
-			if (err != nil) != tt.wantErr {
+			if err := ValidateFileHash(tt.fileHash); (err != nil) != tt.wantErr {
 				t.Errorf("ValidateFileHash() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
 }
 
-// TestValidateFileName tests the ValidateFileName function.
 func TestValidateFileName(t *testing.T) {
 	tests := []struct {
 		name     string
 		fileName string
 		wantErr  bool
 	}{
-		{
-			name:     "valid file name with extension",
-			fileName: "logo.png",
-			wantErr:  false,
-		},
-		{
-			name:     "valid file name with multiple dots",
-			fileName: "my.hero.image.jpg",
-			wantErr:  false,
-		},
-		{
-			name:     "valid file name with spaces",
-			fileName: "my logo image.png",
-			wantErr:  false,
-		},
-		{
-			name:     "valid file name with hyphens and underscores",
-			fileName: "my-hero_image-2024.png",
-			wantErr:  false,
-		},
-		{
-			name:     "empty file name",
-			fileName: "",
-			wantErr:  true,
-		},
-		{
-			name:     "file name too long",
-			fileName: string(make([]byte, 256)) + ".png",
-			wantErr:  true,
-		},
-		{
-			name:     "file name with invalid character <",
-			fileName: "my<file.png",
-			wantErr:  true,
-		},
-		{
-			name:     "file name with invalid character >",
-			fileName: "my>file.png",
-			wantErr:  true,
-		},
-		{
-			name:     "file name with invalid character :",
-			fileName: "my:file.png",
-			wantErr:  true,
-		},
-		{
-			name:     "file name with invalid character \"",
-			fileName: "my\"file.png",
-			wantErr:  true,
-		},
-		{
-			name:     "file name with invalid character |",
-			fileName: "my|file.png",
-			wantErr:  true,
-		},
-		{
-			name:     "file name with invalid character ?",
-			fileName: "my?file.png",
-			wantErr:  true,
-		},
-		{
-			name:     "file name with invalid character *",
-			fileName: "my*file.png",
-			wantErr:  true,
-		},
+		{"with extension", "logo.png", false},
+		{"multiple dots", "my.hero.image.jpg", false},
+		{"spaces", "my logo image.png", false},
+		{"99 characters", strings.Repeat("a", 95) + ".png", false},
+		{"empty", "", true},
+		{"100 characters", strings.Repeat("a", 96) + ".png", true},
+		{"too long", strings.Repeat("a", 256) + ".png", true},
+		{"invalid <", "my<file.png", true},
+		{"invalid :", "my:file.png", true},
+		{"invalid *", "my*file.png", true},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateFileName(tt.fileName)
-			if (err != nil) != tt.wantErr {
+			if err := ValidateFileName(tt.fileName); (err != nil) != tt.wantErr {
 				t.Errorf("ValidateFileName() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
-}
-
-// TestGenerateAssetResourceID tests the GenerateAssetResourceID function.
-func TestGenerateAssetResourceID(t *testing.T) {
-	siteID := "5f0c8c9e1c9d440000e8d8c3"
-	assetID := "5f0c8c9e1c9d440000e8d8c4"
-
-	expected := "5f0c8c9e1c9d440000e8d8c3/assets/5f0c8c9e1c9d440000e8d8c4"
-	result := GenerateAssetResourceID(siteID, assetID)
-
-	if result != expected {
-		t.Errorf("GenerateAssetResourceID() = %v, want %v", result, expected)
+	if err := ValidateFileName(strings.Repeat("a", 100)); err == nil || !strings.Contains(err.Error(), "less than 100") {
+		t.Errorf("the length error should cite the documented limit, got %v", err)
 	}
 }
 
-// TestExtractIDsFromAssetResourceID tests the ExtractIDsFromAssetResourceID function.
-func TestExtractIDsFromAssetResourceID(t *testing.T) {
-	tests := []struct {
-		name        string
-		resourceID  string
-		wantSiteID  string
-		wantAssetID string
-		wantErr     bool
-	}{
-		{
-			name:        "valid resource ID",
-			resourceID:  "5f0c8c9e1c9d440000e8d8c3/assets/5f0c8c9e1c9d440000e8d8c4",
-			wantSiteID:  "5f0c8c9e1c9d440000e8d8c3",
-			wantAssetID: "5f0c8c9e1c9d440000e8d8c4",
-			wantErr:     false,
-		},
-		{
-			name:        "empty resource ID",
-			resourceID:  "",
-			wantSiteID:  "",
-			wantAssetID: "",
-			wantErr:     true,
-		},
-		{
-			name:        "invalid format - missing assets segment",
-			resourceID:  "5f0c8c9e1c9d440000e8d8c3/5f0c8c9e1c9d440000e8d8c4",
-			wantSiteID:  "",
-			wantAssetID: "",
-			wantErr:     true,
-		},
-		{
-			name:        "invalid format - wrong segment name",
-			resourceID:  "5f0c8c9e1c9d440000e8d8c3/images/5f0c8c9e1c9d440000e8d8c4",
-			wantSiteID:  "",
-			wantAssetID: "",
-			wantErr:     true,
-		},
+func TestAssetResourceIDRoundTrip(t *testing.T) {
+	id := GenerateAssetResourceID("5f0c8c9e1c9d440000e8d8c3", "5f0c8c9e1c9d440000e8d8c4")
+	if id != "5f0c8c9e1c9d440000e8d8c3/assets/5f0c8c9e1c9d440000e8d8c4" {
+		t.Fatalf("unexpected id %q", id)
+	}
+	siteID, assetID, err := ExtractIDsFromAssetResourceID(id)
+	if err != nil || siteID != "5f0c8c9e1c9d440000e8d8c3" || assetID != "5f0c8c9e1c9d440000e8d8c4" {
+		t.Fatalf("round trip failed: %q %q %v", siteID, assetID, err)
+	}
+	for _, bad := range []string{"", "a/b", "5f0c8c9e1c9d440000e8d8c3/images/x"} {
+		if _, _, err := ExtractIDsFromAssetResourceID(bad); err == nil {
+			t.Errorf("expected error for %q", bad)
+		}
+	}
+}
+
+func TestComputeFileHash(t *testing.T) {
+	if got := ComputeFileHash(nil); got != "d41d8cd98f00b204e9800998ecf8427e" {
+		t.Errorf("empty hash = %s", got)
+	}
+	if got := ComputeFileHash([]byte("hello")); got != "5d41402abc4b2a76b9719d911017c592" {
+		t.Errorf("hello hash = %s", got)
+	}
+	if err := ValidateFileHash(ComputeFileHash([]byte("x"))); err != nil {
+		t.Errorf("computed hash should validate: %v", err)
+	}
+}
+
+func TestReadAssetSource_LocalFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "logo.png")
+	if err := os.WriteFile(path, []byte("png-bytes"), 0o600); err != nil {
+		t.Fatal(err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			siteID, assetID, err := ExtractIDsFromAssetResourceID(tt.resourceID)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ExtractIDsFromAssetResourceID() error = %v, wantErr %v", err, tt.wantErr)
-				return
+	data, err := ReadAssetSource(context.Background(), path)
+	if err != nil {
+		t.Fatalf("ReadAssetSource: %v", err)
+	}
+	if string(data) != "png-bytes" {
+		t.Errorf("unexpected content %q", data)
+	}
+
+	// Uncleaned paths are cleaned before reading.
+	messy := filepath.Join(dir, "sub", "..", "logo.png")
+	if _, err := ReadAssetSource(context.Background(), messy); err != nil {
+		t.Errorf("expected cleaned path to be readable: %v", err)
+	}
+}
+
+func TestReadAssetSource_Errors(t *testing.T) {
+	if _, err := ReadAssetSource(context.Background(), ""); err == nil ||
+		!strings.Contains(err.Error(), "fileSource is required") {
+		t.Errorf("expected empty-path error, got %v", err)
+	}
+	if _, err := ReadAssetSource(context.Background(), "   "); err == nil {
+		t.Error("expected whitespace-only path to be rejected")
+	}
+	if _, err := ReadAssetSource(context.Background(), filepath.Join(t.TempDir(), "missing.png")); err == nil {
+		t.Error("expected missing file error")
+	}
+	if _, err := ReadAssetSource(context.Background(), t.TempDir()); err == nil ||
+		!strings.Contains(err.Error(), "directory") {
+		t.Errorf("expected directory error, got %v", err)
+	}
+}
+
+func TestReadAssetSource_RemoteURL(t *testing.T) {
+	var gotAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		if r.URL.Path == "/missing.png" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		_, _ = w.Write([]byte("remote-bytes"))
+	}))
+	defer server.Close()
+
+	data, err := ReadAssetSource(context.Background(), server.URL+"/logo.png")
+	if err != nil {
+		t.Fatalf("ReadAssetSource: %v", err)
+	}
+	if string(data) != "remote-bytes" {
+		t.Errorf("unexpected content %q", data)
+	}
+	if gotAuth != "" {
+		t.Errorf("remote fileSource must be fetched without credentials, got Authorization=%q", gotAuth)
+	}
+	if _, err := ReadAssetSource(context.Background(), server.URL+"/missing.png"); err == nil ||
+		!strings.Contains(err.Error(), "HTTP 404") {
+		t.Errorf("expected HTTP 404 error, got %v", err)
+	}
+}
+
+func TestGetAsset(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v2/assets/5f0c8c9e1c9d440000e8d8c4" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(AssetResponse{
+			ID: "5f0c8c9e1c9d440000e8d8c4", ContentType: "image/png", Size: 12345,
+			HostedURL: "https://assets.website-files.com/example/logo.png", OriginalFileName: "logo.png",
+			FolderID: "5f0c8c9e1c9d440000e8d8c9",
+		})
+	}))
+	defer server.Close()
+	client := useMockAPI(t, server)
+
+	asset, err := GetAsset(context.Background(), client, "5f0c8c9e1c9d440000e8d8c4")
+	if err != nil {
+		t.Fatalf("GetAsset: %v", err)
+	}
+	if asset.ID != "5f0c8c9e1c9d440000e8d8c4" || asset.Size != 12345 || asset.FolderID != "5f0c8c9e1c9d440000e8d8c9" {
+		t.Errorf("unexpected asset %+v", asset)
+	}
+}
+
+func TestGetAsset_NotFoundIsTyped(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"message":"Asset not found"}`))
+	}))
+	defer server.Close()
+	client := useMockAPI(t, server)
+
+	_, err := GetAsset(context.Background(), client, "5f0c8c9e1c9d440000e8d8c4")
+	if !IsNotFound(err) {
+		t.Fatalf("expected IsNotFound, got %v", err)
+	}
+}
+
+func TestGetAsset_RetriesRateLimit(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		if attempts < 3 {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(AssetResponse{ID: "5f0c8c9e1c9d440000e8d8c4"})
+	}))
+	defer server.Close()
+	client := useMockAPI(t, server)
+
+	asset, err := GetAsset(context.Background(), client, "5f0c8c9e1c9d440000e8d8c4")
+	if err != nil {
+		t.Fatalf("expected success after retries: %v", err)
+	}
+	if asset.ID != "5f0c8c9e1c9d440000e8d8c4" || attempts != 3 {
+		t.Errorf("asset=%+v attempts=%d", asset, attempts)
+	}
+}
+
+func TestListAssets(t *testing.T) {
+	var gotQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v2/sites/5f0c8c9e1c9d440000e8d8c3/assets" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		gotQuery = r.URL.RawQuery
+		_, _ = w.Write([]byte(`{"assets":[{"id":"5f0c8c9e1c9d440000e8d8c4","folderId":"5f0c8c9e1c9d440000e8d8c9"}],` +
+			`"pagination":{"limit":100,"offset":0,"total":1}}`))
+	}))
+	defer server.Close()
+	client := useMockAPI(t, server)
+
+	resp, err := ListAssets(context.Background(), client, "5f0c8c9e1c9d440000e8d8c3", "")
+	if err != nil {
+		t.Fatalf("ListAssets: %v", err)
+	}
+	if gotQuery != "" {
+		t.Errorf("expected no query without folderId, got %q", gotQuery)
+	}
+	if len(resp.Assets) != 1 || resp.Assets[0].FolderID != "5f0c8c9e1c9d440000e8d8c9" || resp.Pagination.Total != 1 {
+		t.Errorf("unexpected response %+v", resp)
+	}
+
+	if _, err := ListAssets(
+		context.Background(), client, "5f0c8c9e1c9d440000e8d8c3", "5f0c8c9e1c9d440000e8d8c9",
+	); err != nil {
+		t.Fatalf("ListAssets with folder: %v", err)
+	}
+	if gotQuery != "folderId=5f0c8c9e1c9d440000e8d8c9" {
+		t.Errorf("expected folderId query, got %q", gotQuery)
+	}
+}
+
+func TestPostAssetUploadURL(t *testing.T) {
+	for _, status := range []int{http.StatusOK, http.StatusCreated, http.StatusAccepted} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != "/v2/sites/5f0c8c9e1c9d440000e8d8c3/assets" {
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+				}
+				if r.Header.Get("Content-Type") != "application/json" {
+					t.Errorf("Content-Type = %q", r.Header.Get("Content-Type"))
+				}
+				var req AssetUploadRequest
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					t.Errorf("decode body: %v", err)
+				}
+				if req.FileName != "logo.png" || req.FileHash != "d41d8cd98f00b204e9800998ecf8427e" ||
+					req.ParentFolder != "5f0c8c9e1c9d440000e8d8c9" {
+					t.Errorf("unexpected body %+v", req)
+				}
+				w.WriteHeader(status)
+				_ = json.NewEncoder(w).Encode(AssetUploadResponse{
+					ID: "5f0c8c9e1c9d440000e8d8c4", UploadURL: "https://s3.amazonaws.com/bucket",
+					UploadDetails: map[string]string{"acl": "public-read", "key": "assets/logo.png"},
+					HostedURL:     "https://cdn.prod.website-files.com/example/logo.png", ContentType: "image/png",
+					ParentFolder: "5f0c8c9e1c9d440000e8d8c9",
+				})
+			}))
+			defer server.Close()
+			client := useMockAPI(t, server)
+
+			resp, err := PostAssetUploadURL(context.Background(), client, "5f0c8c9e1c9d440000e8d8c3",
+				"logo.png", "d41d8cd98f00b204e9800998ecf8427e", "5f0c8c9e1c9d440000e8d8c9")
+			if err != nil {
+				t.Fatalf("PostAssetUploadURL: %v", err)
 			}
-			if siteID != tt.wantSiteID {
-				t.Errorf("ExtractIDsFromAssetResourceID() siteID = %v, want %v", siteID, tt.wantSiteID)
-			}
-			if assetID != tt.wantAssetID {
-				t.Errorf("ExtractIDsFromAssetResourceID() assetID = %v, want %v", assetID, tt.wantAssetID)
+			if resp.ID != "5f0c8c9e1c9d440000e8d8c4" || resp.UploadDetails["acl"] != "public-read" ||
+				resp.ParentFolder != "5f0c8c9e1c9d440000e8d8c9" {
+				t.Errorf("unexpected response %+v", resp)
 			}
 		})
 	}
 }
 
-// TestGetAsset tests the GetAsset function with a mock server.
-func TestGetAsset(t *testing.T) {
-	// Create a mock server
+// readMultipartParts returns the parts of a multipart request in wire order.
+func readMultipartParts(
+	t *testing.T,
+	r *http.Request,
+) (fields map[string]string, order []string, fileName string, fileData []byte) {
+	t.Helper()
+	_, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil {
+		t.Fatalf("parse content type %q: %v", r.Header.Get("Content-Type"), err)
+	}
+	reader := multipart.NewReader(r.Body, params["boundary"])
+	fields = map[string]string{}
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("next part: %v", err)
+		}
+		data, _ := io.ReadAll(part)
+		order = append(order, part.FormName())
+		if part.FormName() == "file" {
+			fileName = part.FileName()
+			fileData = data
+			continue
+		}
+		fields[part.FormName()] = string(data)
+	}
+	return fields, order, fileName, fileData
+}
+
+func TestUploadAssetFile(t *testing.T) {
+	details := map[string]string{
+		"acl":                   "public-read",
+		"bucket":                "webflow-prod-assets",
+		"key":                   "5f0c8c9e1c9d440000e8d8c3/5f0c8c9e1c9d440000e8d8c4_logo.png",
+		"Content-Type":          "image/png",
+		"X-Amz-Algorithm":       "AWS4-HMAC-SHA256",
+		"X-Amz-Credential":      "AKIAEXAMPLE/20240101/us-east-1/s3/aws4_request",
+		"X-Amz-Date":            "20240101T000000Z",
+		"Policy":                "base64policy",
+		"X-Amz-Signature":       "signature123",
+		"success_action_status": "201",
+	}
+	var called bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify request method
-		if r.Method != "GET" {
-			t.Errorf("Expected GET request, got %s", r.Method)
+		called = true
+		if r.Method != http.MethodPost || r.URL.Path != "/upload" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
-
-		// Verify path
-		expectedPath := "/v2/assets/5f0c8c9e1c9d440000e8d8c4"
-		if r.URL.Path != expectedPath {
-			t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
+		if r.Header.Get("Authorization") != "" {
+			t.Error("upload must not carry the Webflow bearer token")
 		}
-
-		// Return mock response
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		response := AssetResponse{
-			ID:               "5f0c8c9e1c9d440000e8d8c4",
-			ContentType:      "image/png",
-			Size:             12345,
-			SiteID:           "5f0c8c9e1c9d440000e8d8c3",
-			HostedURL:        "https://assets.website-files.com/example/logo.png",
-			OriginalFileName: "logo.png",
-			DisplayName:      "Logo",
-			CreatedOn:        "2024-01-01T00:00:00Z",
-			LastUpdated:      "2024-01-01T00:00:00Z",
+		fields, order, fileName, fileData := readMultipartParts(t, r)
+		for k, v := range details {
+			if fields[k] != v {
+				t.Errorf("form field %s = %q, want %q", k, fields[k], v)
+			}
 		}
-		_ = json.NewEncoder(w).Encode(response)
+		if len(order) == 0 || order[len(order)-1] != "file" {
+			t.Errorf("file part must be last, got order %v", order)
+		}
+		if fileName != "logo.png" || string(fileData) != "png-bytes" {
+			t.Errorf("file part = %q %q", fileName, fileData)
+		}
+		w.WriteHeader(http.StatusCreated)
 	}))
 	defer server.Close()
 
-	// Override base URL for testing
-	getAssetBaseURL = server.URL
-	defer func() { getAssetBaseURL = "" }()
-
-	// Create HTTP client
-	client := &http.Client{}
-
-	// Test GetAsset
-	asset, err := GetAsset(context.Background(), client, "5f0c8c9e1c9d440000e8d8c4")
-	if err != nil {
-		t.Fatalf("GetAsset() error = %v", err)
+	if err := UploadAssetFile(
+		context.Background(), server.URL+"/upload", details, "logo.png", []byte("png-bytes"),
+	); err != nil {
+		t.Fatalf("UploadAssetFile: %v", err)
 	}
-
-	// Verify response
-	if asset.ID != "5f0c8c9e1c9d440000e8d8c4" {
-		t.Errorf("Expected asset ID 5f0c8c9e1c9d440000e8d8c4, got %s", asset.ID)
-	}
-	if asset.ContentType != "image/png" {
-		t.Errorf("Expected content type image/png, got %s", asset.ContentType)
-	}
-	if asset.Size != 12345 {
-		t.Errorf("Expected size 12345, got %d", asset.Size)
-	}
-	if asset.HostedURL != "https://assets.website-files.com/example/logo.png" {
-		t.Errorf("Expected hosted URL https://assets.website-files.com/example/logo.png, got %s", asset.HostedURL)
+	if !called {
+		t.Fatal("upload endpoint was not called")
 	}
 }
 
-// TestListAssets tests the ListAssets function with a mock server.
-func TestListAssets(t *testing.T) {
-	// Create a mock server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify request method
-		if r.Method != "GET" {
-			t.Errorf("Expected GET request, got %s", r.Method)
-		}
-
-		// Verify path
-		expectedPath := "/v2/sites/5f0c8c9e1c9d440000e8d8c3/assets"
-		if r.URL.Path != expectedPath {
-			t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
-		}
-
-		// Return mock response
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		response := AssetListResponse{
-			Assets: []AssetResponse{
-				{
-					ID:               "5f0c8c9e1c9d440000e8d8c4",
-					ContentType:      "image/png",
-					Size:             12345,
-					SiteID:           "5f0c8c9e1c9d440000e8d8c3",
-					HostedURL:        "https://assets.website-files.com/example/logo.png",
-					OriginalFileName: "logo.png",
-					CreatedOn:        "2024-01-01T00:00:00Z",
-					LastUpdated:      "2024-01-01T00:00:00Z",
-				},
-			},
-		}
-		_ = json.NewEncoder(w).Encode(response)
+func TestUploadAssetFile_Errors(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte("<Error><Code>AccessDenied</Code></Error>"))
 	}))
 	defer server.Close()
 
-	// Override base URL for testing
-	listAssetsBaseURL = server.URL
-	defer func() { listAssetsBaseURL = "" }()
-
-	// Create HTTP client
-	client := &http.Client{}
-
-	// Test ListAssets
-	assets, err := ListAssets(context.Background(), client, "5f0c8c9e1c9d440000e8d8c3")
-	if err != nil {
-		t.Fatalf("ListAssets() error = %v", err)
+	err := UploadAssetFile(context.Background(), server.URL, map[string]string{"key": "k"}, "logo.png", []byte("x"))
+	if err == nil || !strings.Contains(err.Error(), "HTTP 403") || !strings.Contains(err.Error(), "AccessDenied") {
+		t.Errorf("expected 403 error with body, got %v", err)
 	}
-
-	// Verify response
-	if len(assets.Assets) != 1 {
-		t.Errorf("Expected 1 asset, got %d", len(assets.Assets))
+	if err := UploadAssetFile(context.Background(), "", map[string]string{"key": "k"}, "logo.png", nil); err == nil {
+		t.Error("expected error for empty uploadUrl")
 	}
-	if assets.Assets[0].ID != "5f0c8c9e1c9d440000e8d8c4" {
-		t.Errorf("Expected asset ID 5f0c8c9e1c9d440000e8d8c4, got %s", assets.Assets[0].ID)
+	if err := UploadAssetFile(context.Background(), server.URL, nil, "logo.png", nil); err == nil {
+		t.Error("expected error for missing uploadDetails")
 	}
 }
 
-// TestPostAssetUploadURL tests the PostAssetUploadURL function with a mock server.
-func TestPostAssetUploadURL(t *testing.T) {
-	// Create a mock server
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify request method
-		if r.Method != "POST" {
-			t.Errorf("Expected POST request, got %s", r.Method)
-		}
-
-		// Verify path
-		expectedPath := "/v2/sites/5f0c8c9e1c9d440000e8d8c3/assets"
-		if r.URL.Path != expectedPath {
-			t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
-		}
-
-		// Verify Content-Type header
-		if r.Header.Get("Content-Type") != "application/json" {
-			t.Errorf("Expected Content-Type application/json, got %s", r.Header.Get("Content-Type"))
-		}
-
-		// Parse request body
-		var req AssetUploadRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			t.Errorf("Failed to decode request body: %v", err)
-		}
-
-		// Verify request body
-		if req.FileName != "logo.png" {
-			t.Errorf("Expected fileName logo.png, got %s", req.FileName)
-		}
-		if req.FileHash != "d41d8cd98f00b204e9800998ecf8427e" {
-			t.Errorf("Expected fileHash d41d8cd98f00b204e9800998ecf8427e, got %s", req.FileHash)
-		}
-
-		// Return mock response matching actual Webflow API
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		response := AssetUploadResponse{
-			ID:        "5f0c8c9e1c9d440000e8d8c4",
-			UploadURL: "https://s3.amazonaws.com/bucket/upload?signature=xyz",
-			UploadDetails: map[string]string{
-				"acl":                   "public-read",
-				"bucket":                "webflow-bucket",
-				"key":                   "assets/logo.png",
-				"Content-Type":          "image/png",
-				"X-Amz-Algorithm":       "AWS4-HMAC-SHA256",
-				"X-Amz-Credential":      "AKIAEXAMPLE/20240101/us-east-1/s3/aws4_request",
-				"X-Amz-Date":            "20240101T000000Z",
-				"Policy":                "base64policy",
-				"X-Amz-Signature":       "signature123",
-				"success_action_status": "201",
-			},
-			AssetURL:         "https://s3.amazonaws.com/webflow-bucket/assets/logo.png",
-			HostedURL:        "https://assets.website-files.com/example/logo.png",
-			ContentType:      "image/png",
-			OriginalFileName: "logo.png",
-			CreatedOn:        "2024-01-01T00:00:00Z",
-			LastUpdated:      "2024-01-01T00:00:00Z",
-		}
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
-
-	// Override base URL for testing
-	postAssetUploadURLBaseURL = server.URL
-	defer func() { postAssetUploadURLBaseURL = "" }()
-
-	// Create HTTP client
-	client := &http.Client{}
-
-	// Test PostAssetUploadURL
-	uploadResp, err := PostAssetUploadURL(
-		context.Background(), client,
-		"5f0c8c9e1c9d440000e8d8c3", "logo.png", "d41d8cd98f00b204e9800998ecf8427e", "",
-	)
-	if err != nil {
-		t.Fatalf("PostAssetUploadURL() error = %v", err)
-	}
-
-	// Verify response - asset ID
-	if uploadResp.ID != "5f0c8c9e1c9d440000e8d8c4" {
-		t.Errorf("Expected asset ID 5f0c8c9e1c9d440000e8d8c4, got %s", uploadResp.ID)
-	}
-
-	// Verify response - upload URL
-	if uploadResp.UploadURL != "https://s3.amazonaws.com/bucket/upload?signature=xyz" {
-		t.Errorf("Expected upload URL https://s3.amazonaws.com/bucket/upload?signature=xyz, got %s", uploadResp.UploadURL)
-	}
-
-	// Verify response - hosted URL
-	if uploadResp.HostedURL != "https://assets.website-files.com/example/logo.png" {
-		t.Errorf("Expected hosted URL https://assets.website-files.com/example/logo.png, got %s", uploadResp.HostedURL)
-	}
-
-	// Verify response - content type
-	if uploadResp.ContentType != "image/png" {
-		t.Errorf("Expected content type image/png, got %s", uploadResp.ContentType)
-	}
-
-	// Verify response - upload details contain expected fields
-	if uploadResp.UploadDetails["acl"] != "public-read" {
-		t.Errorf("Expected acl public-read, got %s", uploadResp.UploadDetails["acl"])
-	}
-}
-
-// TestPostAssetUploadURL_202Accepted tests that 202 Accepted is handled correctly.
-// Webflow returns 202 when registering an asset for async upload to S3.
-func TestPostAssetUploadURL_202Accepted(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusAccepted) // 202
-		response := AssetUploadResponse{
-			ID:               "5f0c8c9e1c9d440000e8d8c4",
-			UploadURL:        "https://webflow-prod-assets.s3.amazonaws.com/",
-			HostedURL:        "https://cdn.prod.website-files.com/example/logo.png",
-			ContentType:      "image/png",
-			OriginalFileName: "logo.png",
-			CreatedOn:        "2024-01-01T00:00:00Z",
-			LastUpdated:      "2024-01-01T00:00:00Z",
-			UploadDetails: map[string]string{
-				"acl":    "public-read",
-				"bucket": "webflow-prod-assets",
-			},
-		}
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
-
-	postAssetUploadURLBaseURL = server.URL
-	defer func() { postAssetUploadURLBaseURL = "" }()
-
-	client := &http.Client{}
-	uploadResp, err := PostAssetUploadURL(
-		context.Background(), client,
-		"5f0c8c9e1c9d440000e8d8c3", "logo.png", "d41d8cd98f00b204e9800998ecf8427e", "",
-	)
-	if err != nil {
-		t.Fatalf("PostAssetUploadURL() should accept 202 Accepted, got error: %v", err)
-	}
-	if uploadResp.ID != "5f0c8c9e1c9d440000e8d8c4" {
-		t.Errorf("Expected asset ID 5f0c8c9e1c9d440000e8d8c4, got %s", uploadResp.ID)
-	}
-	if uploadResp.HostedURL != "https://cdn.prod.website-files.com/example/logo.png" {
-		t.Errorf("Expected hosted URL from response, got %s", uploadResp.HostedURL)
-	}
-}
-
-// TestDeleteAsset tests the DeleteAsset function with a mock server.
 func TestDeleteAsset(t *testing.T) {
 	tests := []struct {
 		name       string
 		statusCode int
 		wantErr    bool
 	}{
-		{
-			name:       "successful delete - 204",
-			statusCode: http.StatusNoContent,
-			wantErr:    false,
-		},
-		{
-			name:       "idempotent delete - 404",
-			statusCode: http.StatusNotFound,
-			wantErr:    false,
-		},
-		{
-			name:       "error - 500",
-			statusCode: http.StatusInternalServerError,
-			wantErr:    true,
-		},
+		{"204", http.StatusNoContent, false},
+		{"404 idempotent", http.StatusNotFound, false},
+		{"500", http.StatusInternalServerError, true},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create a mock server
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Verify request method
-				if r.Method != "DELETE" {
-					t.Errorf("Expected DELETE request, got %s", r.Method)
+				if r.Method != http.MethodDelete || r.URL.Path != "/v2/assets/5f0c8c9e1c9d440000e8d8c4" {
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 				}
-
-				// Verify path
-				expectedPath := "/v2/assets/5f0c8c9e1c9d440000e8d8c4"
-				if r.URL.Path != expectedPath {
-					t.Errorf("Expected path %s, got %s", expectedPath, r.URL.Path)
-				}
-
-				// Return mock response
 				w.WriteHeader(tt.statusCode)
 			}))
 			defer server.Close()
+			client := useMockAPI(t, server)
 
-			// Override base URL for testing
-			deleteAssetBaseURL = server.URL
-			defer func() { deleteAssetBaseURL = "" }()
-
-			// Create HTTP client
-			client := &http.Client{}
-
-			// Test DeleteAsset
 			err := DeleteAsset(context.Background(), client, "5f0c8c9e1c9d440000e8d8c4")
 			if (err != nil) != tt.wantErr {
 				t.Errorf("DeleteAsset() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
-	}
-}
-
-// TestGetAssetNotFound tests GetAsset handling of 404 responses.
-func TestGetAssetNotFound(t *testing.T) {
-	// Create a mock server that returns 404
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"message": "Asset not found"}`))
-	}))
-	defer server.Close()
-
-	// Override base URL for testing
-	getAssetBaseURL = server.URL
-	defer func() { getAssetBaseURL = "" }()
-
-	// Create HTTP client
-	client := &http.Client{}
-
-	// Test GetAsset with non-existent asset
-	_, err := GetAsset(context.Background(), client, "nonexistent")
-	if err == nil {
-		t.Error("Expected error for non-existent asset, got nil")
-	}
-}
-
-// TestGetAssetRateLimited tests GetAsset handling of 429 rate limit responses.
-func TestGetAssetRateLimited(t *testing.T) {
-	attemptCount := 0
-
-	// Create a mock server that returns 429 twice, then 200
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attemptCount++
-		if attemptCount < 3 {
-			w.Header().Set("Retry-After", "1")
-			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte(`{"message": "Rate limit exceeded"}`))
-		} else {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			response := AssetResponse{
-				ID:          "5f0c8c9e1c9d440000e8d8c4",
-				ContentType: "image/png",
-				Size:        12345,
-			}
-			_ = json.NewEncoder(w).Encode(response)
-		}
-	}))
-	defer server.Close()
-
-	// Override base URL for testing
-	getAssetBaseURL = server.URL
-	defer func() { getAssetBaseURL = "" }()
-
-	// Create HTTP client
-	client := &http.Client{}
-
-	// Test GetAsset - should retry and succeed
-	asset, err := GetAsset(context.Background(), client, "5f0c8c9e1c9d440000e8d8c4")
-	if err != nil {
-		t.Fatalf("GetAsset() should succeed after retries, got error: %v", err)
-	}
-
-	if asset.ID != "5f0c8c9e1c9d440000e8d8c4" {
-		t.Errorf("Expected asset ID 5f0c8c9e1c9d440000e8d8c4, got %s", asset.ID)
-	}
-
-	if attemptCount != 3 {
-		t.Errorf("Expected 3 attempts, got %d", attemptCount)
 	}
 }

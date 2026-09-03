@@ -6,21 +6,29 @@ const config = new pulumi.Config();
 
 // Get configuration values
 const pageId = config.requireSecret("pageId");
+// The Webflow API can only update the content of a *secondary* locale, so the
+// locale ID is required. Find it under Site settings -> Localization or via
+// GET /v2/sites/{site_id} (the `locales.secondary[].id` values).
+const localeId = config.require("localeId");
 
 /**
  * PageContent Example - Managing Static Text Content on Webflow Pages
  *
  * This example demonstrates how to manage static text content within existing DOM nodes
  * on a Webflow page. This is useful for:
- * - Programmatically updating text content across multiple pages
+ * - Programmatically updating localized text content across multiple pages
  * - Maintaining consistent messaging via infrastructure-as-code
  * - Automating content updates as part of deployments
  *
  * IMPORTANT NOTES:
  * - This resource does NOT manage page structure or layout
  * - It only updates text content within existing DOM nodes
+ * - `localeId` is required and must be a secondary locale; the primary locale's
+ *   content cannot be edited through the API
  * - Node IDs must be retrieved from the page's DOM structure first
- * - Use GET /pages/{page_id}/dom endpoint to find node IDs
+ *   (GET /v2/pages/{page_id}/dom?localeId=...)
+ * - `text` must be non-empty: an empty string does not clear a node
+ * - At most 1000 nodes can be updated per resource (one API request)
  * - Drift detection is limited: only verifies the page exists, not content
  */
 
@@ -32,6 +40,7 @@ const pageId = config.requireSecret("pageId");
  */
 const heroContent = new webflow.PageContent("hero-section-content", {
   pageId: pageId,
+  localeId: localeId,
   nodes: [
     {
       nodeId: "hero-heading-node-id",
@@ -52,6 +61,7 @@ const heroContent = new webflow.PageContent("hero-section-content", {
 const currentYear = new Date().getFullYear();
 const footerContent = new webflow.PageContent("footer-content", {
   pageId: pageId,
+  localeId: localeId,
   nodes: [
     {
       nodeId: "footer-copyright-node-id",
@@ -67,6 +77,7 @@ const footerContent = new webflow.PageContent("footer-content", {
  */
 const featureContent = new webflow.PageContent("feature-section-content", {
   pageId: pageId,
+  localeId: localeId,
   nodes: [
     {
       nodeId: "feature-1-title-node-id",
@@ -89,11 +100,12 @@ const featureContent = new webflow.PageContent("feature-section-content", {
 
 // Export resource information for reference
 export const deployedPageId = pageId;
+export const deployedLocaleId = localeId;
 export const heroContentId = heroContent.id;
-export const heroLastUpdated = heroContent.lastUpdated;
+export const heroNodeCount = heroContent.nodes.apply((nodes) => nodes.length);
 export const footerContentId = footerContent.id;
 export const featureContentId = featureContent.id;
 
 // Print deployment success message
-const message = pulumi.interpolate`✅ Successfully updated page content for page ${pageId}`;
+const message = pulumi.interpolate`✅ Successfully updated page content for page ${pageId} (locale ${localeId})`;
 message.apply((m) => console.log(m));

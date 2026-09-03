@@ -6,3 +6,5 @@ config:
   siteId:
     description: The Webflow site ID
     secret: true
+  heroImageUrl:
+    description: Optional - an http(s) URL uploaded as the hero-image asset (omit to skip it)

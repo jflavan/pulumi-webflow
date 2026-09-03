@@ -15,6 +15,12 @@ This directory contains examples demonstrating how to register and manage inline
 |------------|--------------|----------------|---------------------|
 | TypeScript | `typescript/`| `index.ts`     | `package.json`      |
 
+## Required Token
+
+The script registry endpoints are only available to **Data Client (OAuth app) tokens** with the
+`custom_code:read` and `custom_code:write` scopes; site API tokens receive `401`/`403`. Pass the
+app's access token as `webflow:apiToken` (or `WEBFLOW_API_TOKEN`).
+
 ## Quick Start
 
 ### TypeScript
@@ -23,9 +29,20 @@ This directory contains examples demonstrating how to register and manage inline
 cd typescript
 npm install
 pulumi stack init dev
-pulumi config set webflow:siteId your-site-id --secret
+pulumi config set siteId your-site-id --secret
 pulumi up
 ```
+
+## Registry Lifecycle
+
+Webflow's registry is append-only: there is **no unregister endpoint**.
+
+- `pulumi destroy` removes the resource from Pulumi state without calling the API; the
+  registration stays in Webflow. A site can hold at most **800** registered scripts (inline and
+  hosted combined).
+- `displayName` and `scriptVersion` identify a registration. Changing either - or the
+  `sourceCode` - registers a **new** script and leaves the previous one in place (Pulumi reports a
+  replacement; nothing is deleted).
 
 ## Examples Included
 
@@ -43,7 +60,7 @@ const analyticsSnippet = new webflow.InlineScript("analytics-snippet", {
   gtag('js', new Date());
   gtag('config', 'G-XXXXXXXXXX');
 })();`,
-  version: "1.0.0",
+  scriptVersion: "1.0.0",
   canCopy: true,
 });
 ```
@@ -59,7 +76,7 @@ const cookieConsent = new webflow.InlineScript("cookie-consent", {
   sourceCode: `document.addEventListener('DOMContentLoaded', function() {
   // ... cookie consent logic
 });`,
-  version: "1.2.0",
+  scriptVersion: "1.2.0",
   canCopy: true,
 });
 ```
@@ -75,7 +92,7 @@ const scrollToTop = new webflow.InlineScript("scroll-to-top", {
   sourceCode: `document.addEventListener('DOMContentLoaded', function() {
   // ... scroll-to-top logic
 });`,
-  version: "2.0.0",
+  scriptVersion: "2.0.0",
   canCopy: false,
 });
 ```
@@ -86,7 +103,7 @@ Each example requires the following configuration:
 
 | Config Key        | Required | Description                              |
 |-------------------|----------|------------------------------------------|
-| `webflow:siteId`  | Yes      | Your Webflow site ID (stored as secret)  |
+| `siteId`  | Yes      | Your Webflow site ID (stored as secret)  |
 | `environment`     | No       | Deployment environment (default: development) |
 
 ## Expected Output
@@ -153,14 +170,17 @@ See the `sitecustomcode` and `pagecustomcode` examples for usage.
 
 ## Cleanup
 
-To remove all inline scripts:
+To stop managing the inline scripts:
 
 ```bash
 pulumi destroy
 pulumi stack rm dev
 ```
 
-**Note:** Deleting a registered inline script will remove it from any pages or site-wide configurations where it's applied.
+**Note:** `pulumi destroy` does not call the Webflow API - the registry has no unregister
+endpoint, so the scripts remain registered (and still count toward the 800-per-site limit). Pages
+and site-wide configurations that reference the script keep working; remove those references with
+`SiteCustomCode` / `PageCustomCode` if the script should stop loading.
 
 ## Troubleshooting
 
@@ -176,11 +196,16 @@ Display names must be 1-50 alphanumeric characters only:
 - Valid: `AnalyticsSnippet`, `MyScript123`
 - Invalid: `my-script`, `Analytics Snippet`
 
-### "Invalid version" Error
+### "Invalid scriptVersion" Error
 
 Version must be valid SemVer:
 - Valid: `1.0.0`, `2.3.1`
 - Invalid: `v1.0.0`, `1.0`, `1.0.0-beta`
+
+### 401 / 403 From the Registry Endpoints
+
+The token is a site API token or lacks `custom_code:write`. Use a Data Client (OAuth app) token
+with `custom_code:read` and `custom_code:write`.
 
 ### Script Not Loading on Page
 

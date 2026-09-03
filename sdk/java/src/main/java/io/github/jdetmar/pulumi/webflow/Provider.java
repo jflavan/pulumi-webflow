@@ -17,14 +17,14 @@ import javax.annotation.Nullable;
 @ResourceType(type="pulumi:providers:webflow")
 public class Provider extends com.pulumi.resources.ProviderResource {
     /**
-     * Webflow API v2 bearer token for authentication. Can also be set via WEBFLOW_API_TOKEN environment variable.
+     * Webflow API v2 bearer token for authentication. Explicit configuration takes precedence over the WEBFLOW_API_TOKEN environment variable, which is used as a fallback when no token is configured.
      * 
      */
     @Export(name="apiToken", refs={String.class}, tree="[0]")
     private Output</* @Nullable */ String> apiToken;
 
     /**
-     * @return Webflow API v2 bearer token for authentication. Can also be set via WEBFLOW_API_TOKEN environment variable.
+     * @return Webflow API v2 bearer token for authentication. Explicit configuration takes precedence over the WEBFLOW_API_TOKEN environment variable, which is used as a fallback when no token is configured.
      * 
      */
     public Output<Optional<String>> apiToken() {

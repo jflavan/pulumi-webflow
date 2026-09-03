@@ -11,7 +11,7 @@ using Pulumi;
 namespace Community.Pulumi.Webflow
 {
     /// <summary>
-    /// Manages CMS collections for a Webflow site. Collections are containers for structured content items (blog posts, products, etc.). Note: Webflow collections do not support updates - any changes require replacement (delete + recreate).
+    /// Manages CMS collections for a Webflow site. Collections are containers for structured content items (blog posts, products, etc.). displayName, singularName and slug are updated in place (PATCH /v2/collections/{collection_id}); changing siteId requires replacement (delete + recreate).
     /// </summary>
     [WebflowResourceType("webflow:index:Collection")]
     public partial class Collection : global::Pulumi.CustomResource
@@ -53,7 +53,7 @@ namespace Community.Pulumi.Webflow
         public Output<string> SiteId { get; private set; } = null!;
 
         /// <summary>
-        /// The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName. The slug determines the URL path for collection items.
+        /// The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items; changing an explicit slug updates the collection in place, which changes the URLs of its items.
         /// </summary>
         [Output("slug")]
         public Output<string?> Slug { get; private set; } = null!;
@@ -123,7 +123,7 @@ namespace Community.Pulumi.Webflow
         public Input<string> SiteId { get; set; } = null!;
 
         /// <summary>
-        /// The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName. The slug determines the URL path for collection items.
+        /// The URL-friendly slug for the collection (optional, e.g., 'blog-posts', 'products'). If not provided, Webflow will auto-generate a slug from the displayName and the generated value is recorded in the resource outputs without causing a diff. The slug determines the URL path for collection items; changing an explicit slug updates the collection in place, which changes the URLs of its items.
         /// </summary>
         [Input("slug")]
         public Input<string>? Slug { get; set; }

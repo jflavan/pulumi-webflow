@@ -24,10 +24,10 @@ Thank you for your interest in contributing to the Pulumi Webflow provider!
 
 ### Prerequisites
 
-- Go 1.21+
+- Go 1.24.7+
 - Node.js 20.x
 - Python 3.11
-- .NET 8.0 (for C# examples)
+- .NET 10 SDK (builds the C# SDK for net8.0 and net10.0, and the C# examples)
 - Java 11 (for Java examples)
 
 **Recommended:** Use [mise](https://mise.jdx.dev/) - it will install all required versions automatically.
@@ -89,7 +89,10 @@ When adding a new resource, follow these steps:
 **Every resource MUST have at least:**
 - ✅ TypeScript example
 - ✅ README explaining what it does
-- ✅ Integration test
+- ✅ Unit tests in `provider/` (mocked HTTP, run with `make test_provider`)
+
+There is no automated integration-test harness for the examples; verify them manually with
+`pulumi preview` / `pulumi up` against a real Webflow site before submitting.
 
 See [EXAMPLES.md](EXAMPLES.md) for complete guidelines, templates, and current coverage status.
 
@@ -212,8 +215,8 @@ pulumi destroy  # Clean up
 
 ## Getting Help
 
-- **Issues:** Open a [GitHub issue](https://github.com/jdetmar/pulumi-webflow/issues)
-- **Discussions:** Start a [GitHub discussion](https://github.com/jdetmar/pulumi-webflow/discussions)
+- **Issues:** Open a [GitHub issue](https://github.com/JDetmar/pulumi-webflow/issues)
+- **Discussions:** Start a [GitHub discussion](https://github.com/JDetmar/pulumi-webflow/discussions)
 - **Documentation:** Check the [README.md](README.md)
 
 ## Code of Conduct

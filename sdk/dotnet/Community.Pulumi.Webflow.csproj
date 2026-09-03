@@ -2,16 +2,16 @@
 
   <PropertyGroup>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Authors>Pulumi Corp.</Authors>
-    <Company>Pulumi Corp.</Company>
-    <Description>Unofficial community-maintained Pulumi provider for managing Webflow sites, redirects, and robots.txt. Not affiliated with Pulumi Corporation or Webflow, Inc.</Description>
-    <PackageLicenseExpression></PackageLicenseExpression>
+    <Authors>Justin Detmar</Authors>
+    <Company>Justin Detmar</Company>
+    <Description>Unofficial community-maintained Pulumi provider for managing Webflow sites, pages, CMS collections, assets, redirects, robots.txt, custom code, webhooks, Google Tags, schema markup, and ecommerce settings. Not affiliated with Pulumi Corporation or Webflow, Inc.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/JDetmar/pulumi-webflow</PackageProjectUrl>
     <RepositoryUrl>https://github.com/JDetmar/pulumi-webflow</RepositoryUrl>
     <PackageIcon>logo.png</PackageIcon>
     <Version>1.0.0-alpha.0+dev</Version>
 
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 

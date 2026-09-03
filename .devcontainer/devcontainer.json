@@ -12,12 +12,12 @@
       "version": "3.11"
     },
     "ghcr.io/devcontainers/features/dotnet:2": {
-      "version": "6.0"
+      "version": "10.0"
     },
     "ghcr.io/devcontainers/features/java:1": {
       "version": "11",
       "installGradle": true,
-      "gradleVersion": "7.6"
+      "gradleVersion": "7.6.6"
     },
     "ghcr.io/devcontainers-extra/features/pulumi:1": {
       "version": "latest"

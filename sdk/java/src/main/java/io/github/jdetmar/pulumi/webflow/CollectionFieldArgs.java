@@ -80,29 +80,52 @@ public final class CollectionFieldArgs extends com.pulumi.resources.ResourceArgs
     }
 
     /**
-     * The URL-friendly slug for the field (optional, e.g., &#39;title&#39;, &#39;description&#39;). If not provided, Webflow will auto-generate a slug from the displayName. The slug is used in API requests and exports.
+     * Type-specific configuration (create-only). Required for Option fields: {&#34;options&#34;: [{&#34;name&#34;: &#34;Draft&#34;}, {&#34;name&#34;: &#34;Published&#34;}]}. Required for Reference and MultiReference fields: {&#34;collectionId&#34;: &#34;&lt;referenced collection ID&gt;&#34;}. Not accepted for other field types. Changing metadata requires replacement.
      * 
      */
+    @Import(name="metadata")
+    private @Nullable Output<Map<String,Object>> metadata;
+
+    /**
+     * @return Type-specific configuration (create-only). Required for Option fields: {&#34;options&#34;: [{&#34;name&#34;: &#34;Draft&#34;}, {&#34;name&#34;: &#34;Published&#34;}]}. Required for Reference and MultiReference fields: {&#34;collectionId&#34;: &#34;&lt;referenced collection ID&gt;&#34;}. Not accepted for other field types. Changing metadata requires replacement.
+     * 
+     */
+    public Optional<Output<Map<String,Object>>> metadata() {
+        return Optional.ofNullable(this.metadata);
+    }
+
+    /**
+     * Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.
+     * 
+     * @deprecated
+     * The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs.
+     * 
+     */
+    @Deprecated /* The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs. */
     @Import(name="slug")
     private @Nullable Output<String> slug;
 
     /**
-     * @return The URL-friendly slug for the field (optional, e.g., &#39;title&#39;, &#39;description&#39;). If not provided, Webflow will auto-generate a slug from the displayName. The slug is used in API requests and exports.
+     * @return Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.
+     * 
+     * @deprecated
+     * The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs.
      * 
      */
+    @Deprecated /* The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs. */
     public Optional<Output<String>> slug() {
         return Optional.ofNullable(this.slug);
     }
 
     /**
-     * The field type (e.g., &#39;PlainText&#39;, &#39;RichText&#39;, &#39;Image&#39;, &#39;Number&#39;). Supported types: PlainText, RichText, Image, MultiImage, Video, Link, Email, Phone, Number, DateTime, Switch, Color, Option, File, Reference, MultiReference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
+     * The field type (e.g., &#39;PlainText&#39;, &#39;RichText&#39;, &#39;Image&#39;, &#39;Number&#39;). Supported types: Color, DateTime, Email, File, Image, Link, MultiImage, Number, Phone, PlainText, RichText, Switch, VideoLink, Option, MultiReference, Reference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
      * 
      */
     @Import(name="type", required=true)
     private Output<String> type;
 
     /**
-     * @return The field type (e.g., &#39;PlainText&#39;, &#39;RichText&#39;, &#39;Image&#39;, &#39;Number&#39;). Supported types: PlainText, RichText, Image, MultiImage, Video, Link, Email, Phone, Number, DateTime, Switch, Color, Option, File, Reference, MultiReference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
+     * @return The field type (e.g., &#39;PlainText&#39;, &#39;RichText&#39;, &#39;Image&#39;, &#39;Number&#39;). Supported types: Color, DateTime, Email, File, Image, Link, MultiImage, Number, Phone, PlainText, RichText, Switch, VideoLink, Option, MultiReference, Reference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
      * 
      */
     public Output<String> type() {
@@ -110,16 +133,24 @@ public final class CollectionFieldArgs extends com.pulumi.resources.ResourceArgs
     }
 
     /**
-     * Type-specific validation rules (optional). Different field types support different validations. Example for Number type: {&#34;min&#34;: 0, &#34;max&#34;: 100}. Example for PlainText type: {&#34;maxLength&#34;: 500}. Refer to Webflow API documentation for validation options for each field type.
+     * Deprecated: the Webflow API does not accept validations when creating a field (&#34;field validation is currently not available through the API&#34;). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.
+     * 
+     * @deprecated
+     * The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs.
      * 
      */
+    @Deprecated /* The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs. */
     @Import(name="validations")
     private @Nullable Output<Map<String,Object>> validations;
 
     /**
-     * @return Type-specific validation rules (optional). Different field types support different validations. Example for Number type: {&#34;min&#34;: 0, &#34;max&#34;: 100}. Example for PlainText type: {&#34;maxLength&#34;: 500}. Refer to Webflow API documentation for validation options for each field type.
+     * @return Deprecated: the Webflow API does not accept validations when creating a field (&#34;field validation is currently not available through the API&#34;). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.
+     * 
+     * @deprecated
+     * The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs.
      * 
      */
+    @Deprecated /* The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs. */
     public Optional<Output<Map<String,Object>>> validations() {
         return Optional.ofNullable(this.validations);
     }
@@ -131,6 +162,7 @@ public final class CollectionFieldArgs extends com.pulumi.resources.ResourceArgs
         this.displayName = $.displayName;
         this.helpText = $.helpText;
         this.isRequired = $.isRequired;
+        this.metadata = $.metadata;
         this.slug = $.slug;
         this.type = $.type;
         this.validations = $.validations;
@@ -239,28 +271,57 @@ public final class CollectionFieldArgs extends com.pulumi.resources.ResourceArgs
         }
 
         /**
-         * @param slug The URL-friendly slug for the field (optional, e.g., &#39;title&#39;, &#39;description&#39;). If not provided, Webflow will auto-generate a slug from the displayName. The slug is used in API requests and exports.
+         * @param metadata Type-specific configuration (create-only). Required for Option fields: {&#34;options&#34;: [{&#34;name&#34;: &#34;Draft&#34;}, {&#34;name&#34;: &#34;Published&#34;}]}. Required for Reference and MultiReference fields: {&#34;collectionId&#34;: &#34;&lt;referenced collection ID&gt;&#34;}. Not accepted for other field types. Changing metadata requires replacement.
          * 
          * @return builder
          * 
          */
+        public Builder metadata(@Nullable Output<Map<String,Object>> metadata) {
+            $.metadata = metadata;
+            return this;
+        }
+
+        /**
+         * @param metadata Type-specific configuration (create-only). Required for Option fields: {&#34;options&#34;: [{&#34;name&#34;: &#34;Draft&#34;}, {&#34;name&#34;: &#34;Published&#34;}]}. Required for Reference and MultiReference fields: {&#34;collectionId&#34;: &#34;&lt;referenced collection ID&gt;&#34;}. Not accepted for other field types. Changing metadata requires replacement.
+         * 
+         * @return builder
+         * 
+         */
+        public Builder metadata(Map<String,Object> metadata) {
+            return metadata(Output.of(metadata));
+        }
+
+        /**
+         * @param slug Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.
+         * 
+         * @return builder
+         * 
+         * @deprecated
+         * The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs.
+         * 
+         */
+        @Deprecated /* The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs. */
         public Builder slug(@Nullable Output<String> slug) {
             $.slug = slug;
             return this;
         }
 
         /**
-         * @param slug The URL-friendly slug for the field (optional, e.g., &#39;title&#39;, &#39;description&#39;). If not provided, Webflow will auto-generate a slug from the displayName. The slug is used in API requests and exports.
+         * @param slug Deprecated: the Webflow Create Field endpoint does not accept a slug; Webflow generates the slug from displayName. This input is ignored - it is never sent to the API and never causes a diff. The generated slug (used in API requests and exports) is reported in the outputs.
          * 
          * @return builder
          * 
+         * @deprecated
+         * The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs.
+         * 
          */
+        @Deprecated /* The Webflow API does not accept a slug when creating a field; Webflow generates it from displayName. This input is ignored; read the generated slug from the outputs. */
         public Builder slug(String slug) {
             return slug(Output.of(slug));
         }
 
         /**
-         * @param type The field type (e.g., &#39;PlainText&#39;, &#39;RichText&#39;, &#39;Image&#39;, &#39;Number&#39;). Supported types: PlainText, RichText, Image, MultiImage, Video, Link, Email, Phone, Number, DateTime, Switch, Color, Option, File, Reference, MultiReference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
+         * @param type The field type (e.g., &#39;PlainText&#39;, &#39;RichText&#39;, &#39;Image&#39;, &#39;Number&#39;). Supported types: Color, DateTime, Email, File, Image, Link, MultiImage, Number, Phone, PlainText, RichText, Switch, VideoLink, Option, MultiReference, Reference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
          * 
          * @return builder
          * 
@@ -271,7 +332,7 @@ public final class CollectionFieldArgs extends com.pulumi.resources.ResourceArgs
         }
 
         /**
-         * @param type The field type (e.g., &#39;PlainText&#39;, &#39;RichText&#39;, &#39;Image&#39;, &#39;Number&#39;). Supported types: PlainText, RichText, Image, MultiImage, Video, Link, Email, Phone, Number, DateTime, Switch, Color, Option, File, Reference, MultiReference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
+         * @param type The field type (e.g., &#39;PlainText&#39;, &#39;RichText&#39;, &#39;Image&#39;, &#39;Number&#39;). Supported types: Color, DateTime, Email, File, Image, Link, MultiImage, Number, Phone, PlainText, RichText, Switch, VideoLink, Option, MultiReference, Reference. IMPORTANT: Cannot be changed after creation - changing this requires replacement.
          * 
          * @return builder
          * 
@@ -281,22 +342,30 @@ public final class CollectionFieldArgs extends com.pulumi.resources.ResourceArgs
         }
 
         /**
-         * @param validations Type-specific validation rules (optional). Different field types support different validations. Example for Number type: {&#34;min&#34;: 0, &#34;max&#34;: 100}. Example for PlainText type: {&#34;maxLength&#34;: 500}. Refer to Webflow API documentation for validation options for each field type.
+         * @param validations Deprecated: the Webflow API does not accept validations when creating a field (&#34;field validation is currently not available through the API&#34;). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.
          * 
          * @return builder
          * 
+         * @deprecated
+         * The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs.
+         * 
          */
+        @Deprecated /* The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs. */
         public Builder validations(@Nullable Output<Map<String,Object>> validations) {
             $.validations = validations;
             return this;
         }
 
         /**
-         * @param validations Type-specific validation rules (optional). Different field types support different validations. Example for Number type: {&#34;min&#34;: 0, &#34;max&#34;: 100}. Example for PlainText type: {&#34;maxLength&#34;: 500}. Refer to Webflow API documentation for validation options for each field type.
+         * @param validations Deprecated: the Webflow API does not accept validations when creating a field (&#34;field validation is currently not available through the API&#34;). This input is ignored - it is never sent to the API and never causes a diff. The validations Webflow reports for the field are available in the outputs.
          * 
          * @return builder
          * 
+         * @deprecated
+         * The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs.
+         * 
          */
+        @Deprecated /* The Webflow API does not accept field validations; this input is ignored. The validations Webflow reports are available in the outputs. */
         public Builder validations(Map<String,Object> validations) {
             return validations(Output.of(validations));
         }

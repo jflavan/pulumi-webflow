@@ -14,7 +14,8 @@ import (
 )
 
 // GetTokenInfo is a Pulumi Function that retrieves information about the current API token.
-// It calls the Webflow /token/introspect endpoint to get authorization details.
+// It calls the Webflow /token/introspect endpoint to get authorization details. The endpoint
+// only accepts Data Client App (OAuth) access tokens; a site API token receives a 4xx response.
 type GetTokenInfo struct{}
 
 // GetTokenInfoInput defines the input parameters for the GetTokenInfo function.
@@ -75,7 +76,11 @@ type GetTokenInfoOutput struct {
 func (f *GetTokenInfo) Annotate(a infer.Annotator) {
 	a.Describe(f, "Retrieves information about the current Webflow API token, "+
 		"including authorization details, scopes, rate limits, and the authorized resources. "+
-		"This is useful for validating your API token configuration and understanding what resources it can access.")
+		"This is useful for validating your API token configuration and understanding what resources it can access. "+
+		"IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access "+
+		"tokens. A site API token (Site settings > Apps & integrations > API access) receives a 4xx error from it, "+
+		"so this function requires the provider to be configured with an OAuth access token issued to a "+
+		"Data Client App.")
 }
 
 // Annotate adds descriptions to the GetTokenInfoInput fields.
@@ -121,7 +126,7 @@ func (f *GetTokenInfo) Invoke(
 	req infer.FunctionRequest[GetTokenInfoInput],
 ) (infer.FunctionResponse[GetTokenInfoOutput], error) {
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.FunctionResponse[GetTokenInfoOutput]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

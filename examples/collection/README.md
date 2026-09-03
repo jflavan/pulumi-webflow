@@ -7,7 +7,7 @@ This directory contains examples demonstrating how to create and manage CMS coll
 - Create CMS collections for structured content (blog posts, products, team members, etc.)
 - Use required properties: `siteId`, `displayName`, `singularName`
 - Control URL slugs with the optional `slug` property
-- Understand collection lifecycle (collections require replacement for any changes)
+- Understand the collection lifecycle (names and slug update in place; moving to another site replaces)
 - Access read-only timestamps: `createdOn`, `lastUpdated`
 
 ## Available Languages
@@ -28,7 +28,7 @@ This directory contains examples demonstrating how to create and manage CMS coll
 cd typescript
 npm install
 pulumi stack init dev
-pulumi config set webflow:siteId your-site-id --secret
+pulumi config set siteId your-site-id --secret
 pulumi up
 ```
 
@@ -40,7 +40,7 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 pulumi stack init dev
-pulumi config set webflow:siteId your-site-id --secret
+pulumi config set siteId your-site-id --secret
 pulumi up
 ```
 
@@ -50,7 +50,7 @@ pulumi up
 cd go
 go mod download
 pulumi stack init dev
-pulumi config set webflow:siteId your-site-id --secret
+pulumi config set siteId your-site-id --secret
 pulumi up
 ```
 
@@ -60,7 +60,7 @@ pulumi up
 cd csharp
 dotnet restore
 pulumi stack init dev
-pulumi config set webflow:siteId your-site-id --secret
+pulumi config set siteId your-site-id --secret
 pulumi up
 ```
 
@@ -70,7 +70,7 @@ pulumi up
 cd java
 mvn install
 pulumi stack init dev
-pulumi config set webflow:siteId your-site-id --secret
+pulumi config set siteId your-site-id --secret
 pulumi up
 ```
 
@@ -132,7 +132,7 @@ Each example requires the following configuration:
 
 | Config Key        | Required | Description                              |
 |-------------------|----------|------------------------------------------|
-| `webflow:siteId`  | Yes      | Your Webflow site ID (stored as secret)  |
+| `siteId`  | Yes      | Your Webflow site ID (stored as secret)  |
 | `environment`     | No       | Deployment environment (default: development) |
 
 ## Expected Output
@@ -155,25 +155,27 @@ Outputs:
 
 ## Important Notes
 
-### Collections Do Not Support Updates
+### In-Place Updates
 
-**CRITICAL**: Webflow's API does not provide an update endpoint for collections. Any changes to collection properties (`displayName`, `singularName`, `slug`, or `siteId`) will trigger a replacement (delete + recreate).
+`displayName`, `singularName` and `slug` are updated in place with `PATCH /collections/{id}`;
+existing collection items and fields are kept:
 
-This means:
-- Changing a collection's name will delete and recreate it
-- All collection items (blog posts, products, etc.) will be lost
-- Plan carefully before creating collections in production
+```bash
+~ webflow:index:Collection: (update)
+    [urn=urn:pulumi:dev::example::webflow:index/collection:Collection::blog-posts-collection]
+  ~ displayName: "Blog Posts" => "Articles"
+```
 
 ### Replacement Behavior
 
-When you modify any collection property:
+Only `siteId` forces a replacement (delete + recreate), because a collection cannot be moved
+between sites. **All items in the collection are lost** when it is replaced, so treat a `siteId`
+change as a migration and export your content first.
 
 ```bash
 ~ webflow:index:Collection: (replace)
     [urn=urn:pulumi:dev::example::webflow:index/collection:Collection::blog-posts-collection]
-    [id=site_abc123:collection_def456]
-  - displayName: "Blog Posts"
-  + displayName: "Articles"  # This change triggers replacement
+  ~ siteId: "..." => "..."  # This change triggers replacement
 ```
 
 ### Collection Items
@@ -218,8 +220,12 @@ Common validation issues:
 
 After creating collections, you'll typically want to:
 
-1. **Add Collection Fields**: Use `webflow.CollectionField` to define custom fields (title, body, images, etc.)
+1. **Add Collection Fields**: Use `webflow.CollectionField` to define custom fields (title, body, images, etc.).
+   `Option` fields take their choices and `Reference`/`MultiReference` fields their target collection
+   through the `metadata` input, and video fields use the `VideoLink` type (see the
+   [CollectionField examples](../collectionfield/)).
 2. **Add Collection Items**: Use `webflow.CollectionItem` to populate collections with content
+   (`live: true` publishes an item to the live site right after it is written)
 3. **Configure Collection Settings**: Adjust SEO, templates, and publishing options in Webflow Designer
 
 ## Related Resources

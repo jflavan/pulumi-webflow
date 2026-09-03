@@ -8,44 +8,32 @@ package provider
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
+
+	p "github.com/pulumi/pulumi-go-provider"
+	"github.com/pulumi/pulumi-go-provider/infer"
+	"github.com/pulumi/pulumi/sdk/v3/go/property"
 )
+
+const webhookTestID = "507f1f77bcf86cd799439011"
 
 // TestValidateWebhookID_Valid tests valid webhook IDs
 func TestValidateWebhookID_Valid(t *testing.T) {
-	tests := []struct {
-		name      string
-		webhookID string
-	}{
-		{"valid lowercase hex", "5f0c8c9e1c9d440000e8d8c3"},
-		{"another valid ID", "507f1f77bcf86cd799439011"},
-		{"all zeros", "000000000000000000000000"},
-		{"all fs", "ffffffffffffffffffffffff"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateWebhookID(tt.webhookID)
-			if err != nil {
-				t.Errorf("ValidateWebhookID(%q) = %v, want nil", tt.webhookID, err)
-			}
-		})
+	valid := []string{"5f0c8c9e1c9d440000e8d8c3", webhookTestID, "000000000000000000000000", "ffffffffffffffffffffffff"}
+	for _, id := range valid {
+		if err := ValidateWebhookID(id); err != nil {
+			t.Errorf("ValidateWebhookID(%q) = %v, want nil", id, err)
+		}
 	}
 }
 
 // TestValidateWebhookID_Empty tests empty webhook ID
 func TestValidateWebhookID_Empty(t *testing.T) {
 	err := ValidateWebhookID("")
-	if err == nil {
-		t.Error("ValidateWebhookID(\"\") = nil, want error")
-	}
-	if !strings.Contains(err.Error(), "required") {
-		t.Errorf("Expected error to mention 'required', got: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "required") {
+		t.Errorf("ValidateWebhookID(\"\") = %v, want 'required' error", err)
 	}
 }
 
@@ -62,139 +50,76 @@ func TestValidateWebhookID_InvalidFormat(t *testing.T) {
 		{"with spaces", "5f0c8c9e 1c9d440000e8d8c3"},
 		{"with hyphens", "5f0c8c9e-1c9d-4400-00e8-d8c3"},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidateWebhookID(tt.webhookID)
-			if err == nil {
-				t.Errorf("ValidateWebhookID(%q) = nil, want error", tt.webhookID)
-			}
-			if !strings.Contains(err.Error(), "invalid format") {
-				t.Errorf("Expected error to mention 'invalid format', got: %v", err)
+			if err == nil || !strings.Contains(err.Error(), "invalid format") {
+				t.Errorf("ValidateWebhookID(%q) = %v, want 'invalid format' error", tt.webhookID, err)
 			}
 		})
 	}
 }
 
-// TestValidateWebhookURL_Valid tests valid webhook URLs
-func TestValidateWebhookURL_Valid(t *testing.T) {
+// TestValidateWebhookURL tests webhook URL validation
+func TestValidateWebhookURL(t *testing.T) {
 	tests := []struct {
-		name string
-		url  string
+		name    string
+		url     string
+		wantErr string
 	}{
-		{"simple https", "https://example.com/webhook"},
-		{"with path", "https://api.example.com/webhooks/webflow"},
-		{"with port", "https://example.com:8443/webhook"},
-		{"with query", "https://example.com/webhook?source=webflow"},
-		{"subdomain", "https://webhooks.example.com/webflow"},
+		{"simple https", "https://example.com/webhook", ""},
+		{"with path", "https://api.example.com/webhooks/webflow", ""},
+		{"with port", "https://example.com:8443/webhook", ""},
+		{"with query", "https://example.com/webhook?source=webflow", ""},
+		{"subdomain", "https://webhooks.example.com/webflow", ""},
+		{"empty", "", "required"},
+		{"http", "http://example.com/webhook", "HTTPS"},
+		{"no protocol", "example.com/webhook", "HTTPS"},
+		{"ftp", "ftp://example.com/webhook", "HTTPS"},
+		{"no domain", "https://", "invalid"},
+		{"no tld", "https://example", "invalid"},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidateWebhookURL(tt.url)
-			if err != nil {
-				t.Errorf("ValidateWebhookURL(%q) = %v, want nil", tt.url, err)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("ValidateWebhookURL(%q) = %v, want nil", tt.url, err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("ValidateWebhookURL(%q) = %v, want error containing %q", tt.url, err, tt.wantErr)
 			}
 		})
 	}
 }
 
-// TestValidateWebhookURL_Empty tests empty webhook URL
-func TestValidateWebhookURL_Empty(t *testing.T) {
-	err := ValidateWebhookURL("")
-	if err == nil {
-		t.Error("ValidateWebhookURL(\"\") = nil, want error")
-	}
-	if !strings.Contains(err.Error(), "required") {
-		t.Errorf("Expected error to mention 'required', got: %v", err)
-	}
-}
-
-// TestValidateWebhookURL_NotHTTPS tests URLs that don't use HTTPS
-func TestValidateWebhookURL_NotHTTPS(t *testing.T) {
-	tests := []struct {
-		name string
-		url  string
-	}{
-		{"http", "http://example.com/webhook"},
-		{"no protocol", "example.com/webhook"},
-		{"ftp", "ftp://example.com/webhook"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateWebhookURL(tt.url)
-			if err == nil {
-				t.Errorf("ValidateWebhookURL(%q) = nil, want error", tt.url)
-			}
-			if !strings.Contains(err.Error(), "HTTPS") {
-				t.Errorf("Expected error to mention 'HTTPS', got: %v", err)
-			}
-		})
-	}
-}
-
-// TestValidateWebhookURL_Invalid tests invalid URL formats
-func TestValidateWebhookURL_Invalid(t *testing.T) {
-	tests := []struct {
-		name string
-		url  string
-	}{
-		{"no domain", "https://"},
-		{"no tld", "https://example"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateWebhookURL(tt.url)
-			if err == nil {
-				t.Errorf("ValidateWebhookURL(%q) = nil, want error", tt.url)
-			}
-		})
-	}
-}
-
-// TestValidateTriggerType_Valid tests valid trigger types
+// TestValidateTriggerType_Valid tests every documented trigger type
 func TestValidateTriggerType_Valid(t *testing.T) {
-	tests := []struct {
-		name        string
-		triggerType string
-	}{
-		{"form_submission", "form_submission"},
-		{"site_publish", "site_publish"},
-		{"page_created", "page_created"},
-		{"page_metadata_updated", "page_metadata_updated"},
-		{"page_deleted", "page_deleted"},
-		{"ecomm_new_order", "ecomm_new_order"},
-		{"ecomm_order_changed", "ecomm_order_changed"},
-		{"ecomm_inventory_changed", "ecomm_inventory_changed"},
-		{"memberships_user_account_added", "memberships_user_account_added"},
-		{"memberships_user_account_updated", "memberships_user_account_updated"},
-		{"memberships_user_account_deleted", "memberships_user_account_deleted"},
-		{"collection_item_created", "collection_item_created"},
-		{"collection_item_changed", "collection_item_changed"},
-		{"collection_item_deleted", "collection_item_deleted"},
-		{"collection_item_unpublished", "collection_item_unpublished"},
+	documented := []string{
+		"form_submission", "site_publish", "page_created", "page_metadata_updated", "page_deleted",
+		"ecomm_new_order", "ecomm_order_changed", "ecomm_inventory_changed",
+		"collection_item_created", "collection_item_changed", "collection_item_deleted",
+		"collection_item_published", "collection_item_unpublished", "comment_created",
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateTriggerType(tt.triggerType)
-			if err != nil {
-				t.Errorf("ValidateTriggerType(%q) = %v, want nil", tt.triggerType, err)
+	for _, triggerType := range documented {
+		t.Run(triggerType, func(t *testing.T) {
+			if err := ValidateTriggerType(triggerType); err != nil {
+				t.Errorf("ValidateTriggerType(%q) = %v, want nil", triggerType, err)
 			}
 		})
+	}
+	if len(validTriggerTypeList) != len(documented) {
+		t.Errorf("validTriggerTypeList has %d entries, documented list has %d", len(validTriggerTypeList), len(documented))
 	}
 }
 
 // TestValidateTriggerType_Empty tests empty trigger type
 func TestValidateTriggerType_Empty(t *testing.T) {
 	err := ValidateTriggerType("")
-	if err == nil {
-		t.Error("ValidateTriggerType(\"\") = nil, want error")
-	}
-	if !strings.Contains(err.Error(), "required") {
-		t.Errorf("Expected error to mention 'required', got: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "required") || !strings.Contains(err.Error(), "comment_created") {
+		t.Errorf("ValidateTriggerType(\"\") = %v, want 'required' error listing trigger types", err)
 	}
 }
 
@@ -208,16 +133,60 @@ func TestValidateTriggerType_Invalid(t *testing.T) {
 		{"typo", "form_submision"},
 		{"uppercase", "FORM_SUBMISSION"},
 		{"spaces", "form submission"},
+		{"undocumented memberships event", "memberships_user_account_added"},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidateTriggerType(tt.triggerType)
-			if err == nil {
-				t.Errorf("ValidateTriggerType(%q) = nil, want error", tt.triggerType)
+			if err == nil || !strings.Contains(err.Error(), "not a valid") {
+				t.Errorf("ValidateTriggerType(%q) = %v, want 'not a valid' error", tt.triggerType, err)
 			}
-			if !strings.Contains(err.Error(), "not a valid") {
-				t.Errorf("Expected error to mention 'not a valid', got: %v", err)
+		})
+	}
+}
+
+// TestValidateWebhookFilter tests the documented filter contract ({ name } for form_submission only)
+func TestValidateWebhookFilter(t *testing.T) {
+	tests := []struct {
+		name        string
+		triggerType string
+		filter      map[string]interface{}
+		wantErr     string
+	}{
+		{"nil filter", "site_publish", nil, ""},
+		{"empty filter", "collection_item_created", map[string]interface{}{}, ""},
+		{"form name filter", "form_submission", map[string]interface{}{"name": "Contact Form"}, ""},
+		{
+			"filter on another trigger",
+			"collection_item_created",
+			map[string]interface{}{"name": "x"},
+			"only supported for the 'form_submission' trigger",
+		},
+		{
+			"unsupported key",
+			"form_submission",
+			map[string]interface{}{"collectionId": "abc"},
+			"unsupported key 'collectionId'",
+		},
+		{
+			"name plus extra key",
+			"form_submission",
+			map[string]interface{}{"name": "x", "extra": true},
+			"unsupported key 'extra'",
+		},
+		{"name not a string", "form_submission", map[string]interface{}{"name": 42.0}, "must be a string"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateWebhookFilter(tt.triggerType, tt.filter)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("ValidateWebhookFilter() = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("ValidateWebhookFilter() = %v, want error containing %q", err, tt.wantErr)
 			}
 		})
 	}
@@ -225,397 +194,226 @@ func TestValidateTriggerType_Invalid(t *testing.T) {
 
 // TestGenerateWebhookResourceID tests resource ID generation
 func TestGenerateWebhookResourceID(t *testing.T) {
-	siteID := "5f0c8c9e1c9d440000e8d8c3"
-	webhookID := "507f1f77bcf86cd799439011"
-
-	resourceID := GenerateWebhookResourceID(siteID, webhookID)
-	expected := "5f0c8c9e1c9d440000e8d8c3/webhooks/507f1f77bcf86cd799439011"
-
-	if resourceID != expected {
-		t.Errorf("GenerateWebhookResourceID() = %q, want %q", resourceID, expected)
+	if got := GenerateWebhookResourceID(testSiteID, webhookTestID); got != testSiteID+"/webhooks/"+webhookTestID {
+		t.Errorf("GenerateWebhookResourceID() = %q", got)
 	}
 }
 
-// TestExtractIDsFromWebhookResourceID_Valid tests extracting IDs from valid resource ID
-func TestExtractIDsFromWebhookResourceID_Valid(t *testing.T) {
-	resourceID := "5f0c8c9e1c9d440000e8d8c3/webhooks/507f1f77bcf86cd799439011"
+// TestExtractIDsFromWebhookResourceID tests parsing of resource IDs
+func TestExtractIDsFromWebhookResourceID(t *testing.T) {
+	siteID, webhookID, err := ExtractIDsFromWebhookResourceID(testSiteID + "/webhooks/" + webhookTestID)
+	if err != nil || siteID != testSiteID || webhookID != webhookTestID {
+		t.Errorf("ExtractIDsFromWebhookResourceID() = %q, %q, %v", siteID, webhookID, err)
+	}
 
-	siteID, webhookID, err := ExtractIDsFromWebhookResourceID(resourceID)
-	if err != nil {
-		t.Errorf("ExtractIDsFromWebhookResourceID() error = %v, want nil", err)
-	}
-	if siteID != "5f0c8c9e1c9d440000e8d8c3" {
-		t.Errorf("ExtractIDsFromWebhookResourceID() siteID = %q, want %q", siteID, "5f0c8c9e1c9d440000e8d8c3")
-	}
-	if webhookID != "507f1f77bcf86cd799439011" {
-		t.Errorf("ExtractIDsFromWebhookResourceID() webhookID = %q, want %q", webhookID, "507f1f77bcf86cd799439011")
-	}
-}
-
-// TestExtractIDsFromWebhookResourceID_Empty tests empty resource ID
-func TestExtractIDsFromWebhookResourceID_Empty(t *testing.T) {
-	_, _, err := ExtractIDsFromWebhookResourceID("")
-	if err == nil {
-		t.Error("ExtractIDsFromWebhookResourceID(\"\") error = nil, want error")
-	}
-}
-
-// TestExtractIDsFromWebhookResourceID_InvalidFormat tests invalid format
-func TestExtractIDsFromWebhookResourceID_InvalidFormat(t *testing.T) {
-	tests := []struct {
+	invalid := []struct {
 		name       string
 		resourceID string
 	}{
-		{"missing webhooks part", "5f0c8c9e1c9d440000e8d8c3/507f1f77bcf86cd799439011"},
-		{"wrong middle part", "5f0c8c9e1c9d440000e8d8c3/redirects/507f1f77bcf86cd799439011"},
-		{"too few parts", "5f0c8c9e1c9d440000e8d8c3"},
+		{"empty", ""},
+		{"missing webhooks part", testSiteID + "/" + webhookTestID},
+		{"wrong middle part", testSiteID + "/redirects/" + webhookTestID},
+		{"too few parts", testSiteID},
+		{"empty site id", "/webhooks/" + webhookTestID},
+		{"empty webhook id", testSiteID + "/webhooks/"},
 	}
-
-	for _, tt := range tests {
+	for _, tt := range invalid {
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := ExtractIDsFromWebhookResourceID(tt.resourceID)
-			if err == nil {
+			if _, _, err := ExtractIDsFromWebhookResourceID(tt.resourceID); err == nil {
 				t.Errorf("ExtractIDsFromWebhookResourceID(%q) error = nil, want error", tt.resourceID)
 			}
 		})
 	}
 }
 
+func sampleWebhooks() []WebhookResponse {
+	return []WebhookResponse{
+		{
+			ID: "webhook1", TriggerType: "form_submission", URL: "https://example.com/webhook?token=secret",
+			SiteID: testSiteID, CreatedOn: "2024-01-01T00:00:00Z",
+		},
+		{
+			ID: webhookTestID, TriggerType: "collection_item_created", URL: "https://example.com/items", SiteID: testSiteID,
+			CreatedOn: "2024-01-02T00:00:00Z", LastTriggered: "2024-02-01T00:00:00Z",
+			Filter: map[string]interface{}{"collectionId": "abc", "nested": map[string]interface{}{"k": "v"}},
+		},
+	}
+}
+
 // TestGetWebhooks_Valid tests retrieving webhooks successfully
 func TestGetWebhooks_Valid(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Errorf("Expected GET, got %s", r.Method)
+	client := mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v2/sites/"+testSiteID+"/webhooks" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
-		if !strings.Contains(r.URL.Path, "/webhooks") {
-			t.Errorf("Expected /webhooks in path, got %s", r.URL.Path)
-		}
+		writeJSON(t, w, http.StatusOK, WebhooksListResponse{Webhooks: sampleWebhooks()})
+	})
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		response := WebhooksListResponse{
-			Webhooks: []WebhookResponse{
-				{
-					ID:          "webhook1",
-					TriggerType: "form_submission",
-					URL:         "https://example.com/webhook",
-					SiteID:      "5f0c8c9e1c9d440000e8d8c3",
-					CreatedOn:   "2024-01-01T00:00:00Z",
-				},
-				{
-					ID:          "webhook2",
-					TriggerType: "site_publish",
-					URL:         "https://example.com/publish",
-					SiteID:      "5f0c8c9e1c9d440000e8d8c3",
-					CreatedOn:   "2024-01-02T00:00:00Z",
-				},
-			},
-		}
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
-
-	// Override the API base URL for this test
-	oldURL := getWebhooksBaseURL
-	getWebhooksBaseURL = server.URL
-	defer func() { getWebhooksBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	result, err := GetWebhooks(ctx, client, "5f0c8c9e1c9d440000e8d8c3")
+	result, err := GetWebhooks(context.Background(), client, testSiteID)
 	if err != nil {
 		t.Fatalf("GetWebhooks failed: %v", err)
 	}
-
-	if len(result.Webhooks) != 2 {
-		t.Errorf("Expected 2 webhooks, got %d", len(result.Webhooks))
-	}
-	if result.Webhooks[0].ID != "webhook1" {
-		t.Errorf("Expected webhook1, got %s", result.Webhooks[0].ID)
-	}
-	if result.Webhooks[0].TriggerType != "form_submission" {
-		t.Errorf("Expected form_submission, got %s", result.Webhooks[0].TriggerType)
+	if len(result.Webhooks) != 2 || result.Webhooks[0].ID != "webhook1" ||
+		result.Webhooks[0].TriggerType != "form_submission" {
+		t.Errorf("GetWebhooks() = %+v", result.Webhooks)
 	}
 }
 
 // TestGetWebhooks_NotFound tests 404 handling
 func TestGetWebhooks_NotFound(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := mockAPI(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte("site not found"))
-	}))
-	defer server.Close()
-
-	oldURL := getWebhooksBaseURL
-	getWebhooksBaseURL = server.URL
-	defer func() { getWebhooksBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	_, err := GetWebhooks(ctx, client, "nonexistent")
-	if err == nil {
-		t.Error("Expected error for 404, got nil")
-	}
-	if !strings.Contains(err.Error(), "not found") {
-		t.Errorf("Expected 'not found' in error, got: %v", err)
+	})
+	_, err := GetWebhooks(context.Background(), client, testSiteID)
+	if !IsNotFound(err) {
+		t.Errorf("expected IsNotFound error, got %v", err)
 	}
 }
 
-// TestGetWebhook_Valid tests retrieving a single webhook successfully
-func TestGetWebhook_Valid(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Errorf("Expected GET, got %s", r.Method)
+// TestGetWebhook tests the documented single-webhook endpoint GET /v2/webhooks/{webhook_id}
+func TestGetWebhook(t *testing.T) {
+	t.Run("found", func(t *testing.T) {
+		client := mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet || r.URL.Path != "/v2/webhooks/"+webhookTestID {
+				t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			}
+			writeJSON(t, w, http.StatusOK, sampleWebhooks()[1])
+		})
+		found, err := GetWebhook(context.Background(), client, webhookTestID)
+		if err != nil || found.ID != webhookTestID || found.TriggerType != "collection_item_created" ||
+			found.SiteID != testSiteID || found.Filter["collectionId"] != "abc" {
+			t.Errorf("GetWebhook() = %+v, %v", found, err)
 		}
+	})
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		response := WebhookResponse{
-			ID:          "webhook1",
-			TriggerType: "form_submission",
-			URL:         "https://example.com/webhook",
-			SiteID:      "5f0c8c9e1c9d440000e8d8c3",
-			CreatedOn:   "2024-01-01T00:00:00Z",
+	t.Run("404 satisfies IsNotFound", func(t *testing.T) {
+		client := mockAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"Requested resource not found"}`))
+		})
+		if _, err := GetWebhook(context.Background(), client, "missing"); !IsNotFound(err) {
+			t.Errorf("GetWebhook(missing) error = %v, want IsNotFound", err)
 		}
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
+	})
 
-	oldURL := getWebhookBaseURL
-	getWebhookBaseURL = server.URL
-	defer func() { getWebhookBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	result, err := GetWebhook(ctx, client, "webhook1")
-	if err != nil {
-		t.Fatalf("GetWebhook failed: %v", err)
-	}
-
-	if result.ID != "webhook1" {
-		t.Errorf("Expected ID webhook1, got %s", result.ID)
-	}
-	if result.TriggerType != "form_submission" {
-		t.Errorf("Expected triggerType form_submission, got %s", result.TriggerType)
-	}
+	t.Run("other errors are not IsNotFound", func(t *testing.T) {
+		client := mockAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"message":"not found in body must not matter"}`))
+		})
+		_, err := GetWebhook(context.Background(), client, webhookTestID)
+		if err == nil || IsNotFound(err) {
+			t.Errorf("GetWebhook() error = %v, want a non-404 error", err)
+		}
+	})
 }
 
-// TestPostWebhook_Valid tests creating a webhook successfully
-func TestPostWebhook_Valid(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			t.Errorf("Expected POST, got %s", r.Method)
+// TestPostWebhook tests creating webhooks, asserting the request body
+func TestPostWebhook(t *testing.T) {
+	filter := map[string]interface{}{"collectionId": "test-collection"}
+	client := mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v2/sites/"+testSiteID+"/webhooks" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
-
+		if r.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("missing Content-Type header")
+		}
 		var req WebhookRequest
-		_ = json.NewDecoder(r.Body).Decode(&req)
-
-		if req.TriggerType != "form_submission" {
-			t.Errorf("Expected triggerType form_submission, got %s", req.TriggerType)
+		decodeJSONBody(t, r, &req)
+		if req.TriggerType != "collection_item_created" || req.URL != "https://example.com/webhook" ||
+			req.Filter["collectionId"] != "test-collection" {
+			t.Errorf("unexpected request body: %+v", req)
 		}
-		if req.URL != "https://example.com/webhook" {
-			t.Errorf("Expected url https://example.com/webhook, got %s", req.URL)
-		}
+		writeJSON(t, w, http.StatusCreated, WebhookResponse{
+			ID: "new-webhook-1", TriggerType: req.TriggerType, URL: req.URL, SiteID: testSiteID,
+			CreatedOn: "2024-01-01T00:00:00Z", Filter: req.Filter,
+		})
+	})
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		response := WebhookResponse{
-			ID:          "new-webhook-1",
-			TriggerType: "form_submission",
-			URL:         "https://example.com/webhook",
-			SiteID:      "5f0c8c9e1c9d440000e8d8c3",
-			CreatedOn:   "2024-01-01T00:00:00Z",
-		}
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
-
-	oldURL := postWebhookBaseURL
-	postWebhookBaseURL = server.URL
-	defer func() { postWebhookBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	result, err := PostWebhook(
-		ctx, client, "5f0c8c9e1c9d440000e8d8c3", "form_submission",
-		"https://example.com/webhook", nil,
-	)
+	result, err := PostWebhook(context.Background(), client, testSiteID, WebhookRequest{
+		TriggerType: "collection_item_created", URL: "https://example.com/webhook", Filter: filter,
+	})
 	if err != nil {
 		t.Fatalf("PostWebhook failed: %v", err)
 	}
-
-	if result.ID != "new-webhook-1" {
-		t.Errorf("Expected ID new-webhook-1, got %s", result.ID)
-	}
-	if result.TriggerType != "form_submission" {
-		t.Errorf("Expected triggerType form_submission, got %s", result.TriggerType)
+	if result.ID != "new-webhook-1" || result.Filter["collectionId"] != "test-collection" {
+		t.Errorf("PostWebhook() = %+v", result)
 	}
 }
 
-// TestPostWebhook_WithFilter tests creating a webhook with filter
-func TestPostWebhook_WithFilter(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req WebhookRequest
-		_ = json.NewDecoder(r.Body).Decode(&req)
-
-		if req.Filter == nil {
-			t.Error("Expected filter to be set")
-		}
-		if req.Filter["collectionId"] != "test-collection" {
-			t.Errorf("Expected filter.collectionId test-collection, got %v", req.Filter["collectionId"])
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		response := WebhookResponse{
-			ID:          "new-webhook-1",
-			TriggerType: "collection_item_created",
-			URL:         "https://example.com/webhook",
-			SiteID:      "5f0c8c9e1c9d440000e8d8c3",
-			CreatedOn:   "2024-01-01T00:00:00Z",
-			Filter:      req.Filter,
-		}
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
-
-	oldURL := postWebhookBaseURL
-	postWebhookBaseURL = server.URL
-	defer func() { postWebhookBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	filter := map[string]interface{}{
-		"collectionId": "test-collection",
-	}
-
-	result, err := PostWebhook(
-		ctx, client, "5f0c8c9e1c9d440000e8d8c3", "collection_item_created",
-		"https://example.com/webhook", filter,
-	)
+// TestPostWebhook_OmitsEmptyFilter verifies an absent filter is not sent as null/{}.
+func TestPostWebhook_OmitsEmptyFilter(t *testing.T) {
+	var raw map[string]interface{}
+	client := mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		decodeJSONBody(t, r, &raw)
+		writeJSON(t, w, http.StatusCreated, WebhookResponse{ID: "x"})
+	})
+	_, err := PostWebhook(context.Background(), client, testSiteID,
+		WebhookRequest{TriggerType: "site_publish", URL: "https://example.com/w"})
 	if err != nil {
 		t.Fatalf("PostWebhook failed: %v", err)
 	}
-
-	if result.Filter["collectionId"] != "test-collection" {
-		t.Errorf("Expected filter.collectionId test-collection, got %v", result.Filter["collectionId"])
+	if _, present := raw["filter"]; present {
+		t.Errorf("request body should omit filter when unset, got %v", raw)
 	}
 }
 
 // TestPostWebhook_ValidationError tests 400 handling
 func TestPostWebhook_ValidationError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := mockAPI(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		_, _ = w.Write([]byte("invalid webhook configuration"))
-	}))
-	defer server.Close()
-
-	oldURL := postWebhookBaseURL
-	postWebhookBaseURL = server.URL
-	defer func() { postWebhookBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	_, err := PostWebhook(ctx, client, "5f0c8c9e1c9d440000e8d8c3", "invalid", "https://example.com/webhook", nil)
-	if err == nil {
-		t.Error("Expected error for 400, got nil")
-	}
-	if !strings.Contains(err.Error(), "bad request") {
-		t.Errorf("Expected 'bad request' in error, got: %v", err)
+	})
+	_, err := PostWebhook(context.Background(), client, testSiteID,
+		WebhookRequest{TriggerType: "invalid", URL: "https://example.com/webhook"})
+	if err == nil || !strings.Contains(err.Error(), "bad request") {
+		t.Errorf("expected 'bad request' error, got: %v", err)
 	}
 }
 
-// TestDeleteWebhook_Valid tests deleting a webhook successfully
-func TestDeleteWebhook_Valid(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "DELETE" {
-			t.Errorf("Expected DELETE, got %s", r.Method)
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer server.Close()
-
-	oldURL := deleteWebhookBaseURL
-	deleteWebhookBaseURL = server.URL
-	defer func() { deleteWebhookBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	err := DeleteWebhook(ctx, client, "webhook1")
-	if err != nil {
-		t.Fatalf("DeleteWebhook failed: %v", err)
+// TestDeleteWebhook tests deletion outcomes
+func TestDeleteWebhook(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  int
+		wantErr string
+	}{
+		{"success", http.StatusNoContent, ""},
+		{"not found is idempotent", http.StatusNotFound, ""},
+		{"server error", http.StatusInternalServerError, "server error"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodDelete || r.URL.Path != "/v2/webhooks/"+webhookTestID {
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+				}
+				w.WriteHeader(tt.status)
+			})
+			err := DeleteWebhook(context.Background(), client, webhookTestID)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("DeleteWebhook() error = %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("DeleteWebhook() error = %v, want %q", err, tt.wantErr)
+			}
+		})
 	}
 }
 
-// TestDeleteWebhook_NotFound_Idempotent tests that 404 on delete is treated as success (idempotent)
-func TestDeleteWebhook_NotFound_Idempotent(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte("webhook not found"))
-	}))
-	defer server.Close()
-
-	oldURL := deleteWebhookBaseURL
-	deleteWebhookBaseURL = server.URL
-	defer func() { deleteWebhookBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	err := DeleteWebhook(ctx, client, "nonexistent")
-	if err != nil {
-		t.Errorf("DeleteWebhook should handle 404 as success (idempotent), got error: %v", err)
-	}
-}
-
-// TestDeleteWebhook_ServerError tests error handling
-func TestDeleteWebhook_ServerError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte("server error"))
-	}))
-	defer server.Close()
-
-	oldURL := deleteWebhookBaseURL
-	deleteWebhookBaseURL = server.URL
-	defer func() { deleteWebhookBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	err := DeleteWebhook(ctx, client, "webhook1")
-	if err == nil {
-		t.Error("Expected error for 500, got nil")
-	}
-	if !strings.Contains(err.Error(), "server error") {
-		t.Errorf("Expected 'server error' in error, got: %v", err)
-	}
-}
-
-// TestErrorMessagesAreActionable verifies error messages contain guidance
+// TestWebhookErrorMessagesAreActionable verifies error messages contain guidance
 func TestWebhookErrorMessagesAreActionable(t *testing.T) {
 	tests := []struct {
 		name     string
 		testFunc func() error
 		contains []string
 	}{
-		{
-			"ValidateWebhookID empty",
-			func() error { return ValidateWebhookID("") },
-			[]string{"required", "24-character"},
-		},
-		{
-			"ValidateWebhookURL empty",
-			func() error { return ValidateWebhookURL("") },
-			[]string{"required", "HTTPS"},
-		},
+		{"ValidateWebhookID empty", func() error { return ValidateWebhookID("") }, []string{"required", "24-character"}},
+		{"ValidateWebhookURL empty", func() error { return ValidateWebhookURL("") }, []string{"required", "HTTPS"}},
 		{
 			"ValidateWebhookURL not HTTPS",
 			func() error { return ValidateWebhookURL("http://example.com") },
@@ -632,156 +430,76 @@ func TestWebhookErrorMessagesAreActionable(t *testing.T) {
 			[]string{"not a valid", "form_submission"},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.testFunc()
 			if err == nil {
-				t.Errorf("%s: expected error, got nil", tt.name)
-				return
+				t.Fatalf("%s: expected error, got nil", tt.name)
 			}
-
-			errMsg := err.Error()
-			for _, expectedStr := range tt.contains {
-				if !strings.Contains(errMsg, expectedStr) {
-					t.Errorf("%s: error message missing %q. Got: %s", tt.name, expectedStr, errMsg)
+			for _, expected := range tt.contains {
+				if !strings.Contains(err.Error(), expected) {
+					t.Errorf("%s: error message missing %q. Got: %s", tt.name, expected, err)
 				}
 			}
 		})
 	}
 }
 
-// TestGetWebhooks_RateLimited tests 429 rate limiting with retry
-func TestGetWebhooks_RateLimited(t *testing.T) {
-	attempts := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attempts++
-		if attempts < 2 {
-			w.Header().Set("Retry-After", "0") // Use 0 seconds for fast test
-			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte("rate limited"))
-			return
+// TestWebhookAPI_RateLimited tests that 429 responses are retried for every operation
+func TestWebhookAPI_RateLimited(t *testing.T) {
+	newHandler := func(attempts *int, onSuccess func(w http.ResponseWriter)) http.HandlerFunc {
+		return func(w http.ResponseWriter, _ *http.Request) {
+			*attempts++
+			if *attempts < 2 {
+				w.Header().Set("Retry-After", "0")
+				w.WriteHeader(http.StatusTooManyRequests)
+				return
+			}
+			onSuccess(w)
 		}
-		// Succeed on second attempt
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		response := WebhooksListResponse{
-			Webhooks: []WebhookResponse{
-				{
-					ID:          "webhook1",
-					TriggerType: "form_submission",
-					URL:         "https://example.com/webhook",
-					SiteID:      "5f0c8c9e1c9d440000e8d8c3",
-					CreatedOn:   "2024-01-01T00:00:00Z",
-				},
-			},
+	}
+
+	t.Run("list", func(t *testing.T) {
+		attempts := 0
+		client := mockAPI(t, newHandler(&attempts, func(w http.ResponseWriter) {
+			writeJSON(t, w, http.StatusOK, WebhooksListResponse{Webhooks: sampleWebhooks()[:1]})
+		}))
+		result, err := GetWebhooks(context.Background(), client, testSiteID)
+		if err != nil || len(result.Webhooks) != 1 || attempts != 2 {
+			t.Fatalf("GetWebhooks() = %+v, %v after %d attempts", result, err, attempts)
 		}
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
-
-	oldURL := getWebhooksBaseURL
-	getWebhooksBaseURL = server.URL
-	defer func() { getWebhooksBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	result, err := GetWebhooks(ctx, client, "5f0c8c9e1c9d440000e8d8c3")
-	if err != nil {
-		t.Fatalf("GetWebhooks should succeed after rate limit retry, got error: %v", err)
-	}
-
-	if attempts != 2 {
-		t.Errorf("Expected 2 attempts (1 rate limited + 1 success), got %d", attempts)
-	}
-	if len(result.Webhooks) != 1 {
-		t.Errorf("Expected 1 webhook, got %d", len(result.Webhooks))
-	}
+	})
+	t.Run("get", func(t *testing.T) {
+		attempts := 0
+		client := mockAPI(t, newHandler(&attempts, func(w http.ResponseWriter) {
+			writeJSON(t, w, http.StatusOK, sampleWebhooks()[1])
+		}))
+		result, err := GetWebhook(context.Background(), client, webhookTestID)
+		if err != nil || result.ID != webhookTestID || attempts != 2 {
+			t.Fatalf("GetWebhook() = %+v, %v after %d attempts", result, err, attempts)
+		}
+	})
+	t.Run("post", func(t *testing.T) {
+		attempts := 0
+		client := mockAPI(t, newHandler(&attempts, func(w http.ResponseWriter) {
+			writeJSON(t, w, http.StatusCreated, WebhookResponse{ID: "newwebhook"})
+		}))
+		result, err := PostWebhook(context.Background(), client, testSiteID,
+			WebhookRequest{TriggerType: "form_submission", URL: "https://example.com/webhook"})
+		if err != nil || result.ID != "newwebhook" || attempts != 2 {
+			t.Fatalf("PostWebhook() = %+v, %v after %d attempts", result, err, attempts)
+		}
+	})
+	t.Run("delete", func(t *testing.T) {
+		attempts := 0
+		client := mockAPI(t, newHandler(&attempts, func(w http.ResponseWriter) { w.WriteHeader(http.StatusNoContent) }))
+		if err := DeleteWebhook(context.Background(), client, webhookTestID); err != nil || attempts != 2 {
+			t.Fatalf("DeleteWebhook() = %v after %d attempts", err, attempts)
+		}
+	})
 }
 
-// TestPostWebhook_RateLimited tests 429 rate limiting with retry
-func TestPostWebhook_RateLimited(t *testing.T) {
-	attempts := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attempts++
-		if attempts < 2 {
-			w.Header().Set("Retry-After", "0")
-			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte("rate limited"))
-			return
-		}
-		// Succeed on second attempt
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		response := WebhookResponse{
-			ID:          "newwebhook",
-			TriggerType: "form_submission",
-			URL:         "https://example.com/webhook",
-			SiteID:      "5f0c8c9e1c9d440000e8d8c3",
-			CreatedOn:   "2024-01-01T00:00:00Z",
-		}
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
-
-	oldURL := postWebhookBaseURL
-	postWebhookBaseURL = server.URL
-	defer func() { postWebhookBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	result, err := PostWebhook(
-		ctx, client, "5f0c8c9e1c9d440000e8d8c3", "form_submission",
-		"https://example.com/webhook", nil,
-	)
-	if err != nil {
-		t.Fatalf("PostWebhook should succeed after rate limit retry, got error: %v", err)
-	}
-
-	if attempts != 2 {
-		t.Errorf("Expected 2 attempts (1 rate limited + 1 success), got %d", attempts)
-	}
-	if result.ID != "newwebhook" {
-		t.Errorf("Expected ID newwebhook, got %s", result.ID)
-	}
-}
-
-// TestDeleteWebhook_RateLimited tests 429 rate limiting with retry
-func TestDeleteWebhook_RateLimited(t *testing.T) {
-	attempts := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		attempts++
-		if attempts < 2 {
-			w.Header().Set("Retry-After", "0")
-			w.WriteHeader(http.StatusTooManyRequests)
-			_, _ = w.Write([]byte("rate limited"))
-			return
-		}
-		// Succeed on second attempt
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer server.Close()
-
-	oldURL := deleteWebhookBaseURL
-	deleteWebhookBaseURL = server.URL
-	defer func() { deleteWebhookBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	err := DeleteWebhook(ctx, client, "webhook1")
-	if err != nil {
-		t.Fatalf("DeleteWebhook should succeed after rate limit retry, got error: %v", err)
-	}
-
-	if attempts != 2 {
-		t.Errorf("Expected 2 attempts (1 rate limited + 1 success), got %d", attempts)
-	}
-}
-
-// TestMapsEqual tests the map comparison utility
+// TestMapsEqual tests the filter comparison utility
 func TestMapsEqual(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -790,8 +508,9 @@ func TestMapsEqual(t *testing.T) {
 		equal bool
 	}{
 		{"both nil", nil, nil, true},
-		{"one nil", nil, map[string]interface{}{"key": "value"}, false},
+		{"nil and empty are equal", nil, map[string]interface{}{}, true},
 		{"empty maps", map[string]interface{}{}, map[string]interface{}{}, true},
+		{"one nil", nil, map[string]interface{}{"key": "value"}, false},
 		{"same content", map[string]interface{}{"key": "value"}, map[string]interface{}{"key": "value"}, true},
 		{"different values", map[string]interface{}{"key": "value1"}, map[string]interface{}{"key": "value2"}, false},
 		{"different keys", map[string]interface{}{"key1": "value"}, map[string]interface{}{"key2": "value"}, false},
@@ -801,14 +520,484 @@ func TestMapsEqual(t *testing.T) {
 			map[string]interface{}{"key": "value", "key2": "value2"},
 			false,
 		},
+		{
+			"nested equal",
+			map[string]interface{}{"n": map[string]interface{}{"a": []interface{}{1.0, "x"}}},
+			map[string]interface{}{"n": map[string]interface{}{"a": []interface{}{1.0, "x"}}},
+			true,
+		},
+		{
+			"nested differ",
+			map[string]interface{}{"n": map[string]interface{}{"a": []interface{}{1.0, "x"}}},
+			map[string]interface{}{"n": map[string]interface{}{"a": []interface{}{2.0, "x"}}},
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := mapsEqual(tt.a, tt.b); got != tt.equal {
+				t.Errorf("mapsEqual(%v, %v) = %v, want %v", tt.a, tt.b, got, tt.equal)
+			}
+		})
+	}
+}
+
+// =============================================================================
+// Webhook Diff Tests
+// =============================================================================
+
+func TestWebhookDiff(t *testing.T) {
+	resource := &Webhook{}
+	base := WebhookArgs{
+		SiteID: testSiteID, TriggerType: "collection_item_created", URL: "https://example.com/hook",
+		Filter: map[string]interface{}{"collectionId": "abc", "nested": map[string]interface{}{"k": "v"}},
+	}
+	// modified returns a deep copy of base with fn applied, so tests never share filter maps.
+	modified := func(fn func(a *WebhookArgs)) WebhookArgs {
+		a := base
+		a.Filter = map[string]interface{}{"collectionId": "abc", "nested": map[string]interface{}{"k": "v"}}
+		fn(&a)
+		return a
+	}
+	noFilter := modified(func(a *WebhookArgs) { a.Filter = nil })
+	emptyFilter := modified(func(a *WebhookArgs) { a.Filter = map[string]interface{}{} })
+
+	tests := []struct {
+		name    string
+		inputs  WebhookArgs
+		state   WebhookArgs
+		wantKey string
+	}{
+		{"no change", base, base, ""},
+		{"nested filter values equal", modified(func(*WebhookArgs) {}), base, ""},
+		{"nil filter equals empty filter", noFilter, emptyFilter, ""},
+		{"empty filter equals nil filter", emptyFilter, noFilter, ""},
+		{"siteId change", modified(func(a *WebhookArgs) { a.SiteID = "5f0c8c9e1c9d440000e8d8c4" }), base, "siteId"},
+		{"triggerType change", modified(func(a *WebhookArgs) { a.TriggerType = "site_publish" }), base, "triggerType"},
+		{"url change", modified(func(a *WebhookArgs) { a.URL = "https://example.com/other" }), base, "url"},
+		{"filter value change", modified(func(a *WebhookArgs) { a.Filter["collectionId"] = "def" }), base, "filter"},
+		{
+			"nested filter value change",
+			modified(func(a *WebhookArgs) { a.Filter["nested"].(map[string]interface{})["k"] = "w" }),
+			base,
+			"filter",
+		},
+		{"filter removed", noFilter, base, "filter"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := mapsEqual(tt.a, tt.b)
-			if result != tt.equal {
-				t.Errorf("mapsEqual(%v, %v) = %v, want %v", tt.a, tt.b, result, tt.equal)
+			resp, err := resource.Diff(context.Background(), infer.DiffRequest[WebhookArgs, WebhookState]{
+				ID:     GenerateWebhookResourceID(testSiteID, webhookTestID),
+				Inputs: tt.inputs,
+				State:  WebhookState{WebhookArgs: tt.state},
+			})
+			if err != nil {
+				t.Fatalf("Diff() error = %v", err)
+			}
+			if tt.wantKey == "" {
+				if resp.HasChanges {
+					t.Errorf("Diff() should report no changes, got %+v", resp.DetailedDiff)
+				}
+				return
+			}
+			if !resp.HasChanges {
+				t.Errorf("Diff() should require replacement for %s: %+v", tt.wantKey, resp)
+			}
+			// Create-then-delete: the new webhook exists before the old one is removed.
+			if resp.DeleteBeforeReplace {
+				t.Errorf("Diff() must not set DeleteBeforeReplace: %+v", resp)
+			}
+			if d, ok := resp.DetailedDiff[tt.wantKey]; !ok || d.Kind != p.UpdateReplace {
+				t.Errorf("Diff() DetailedDiff[%s] = %+v (present=%v), want UpdateReplace", tt.wantKey, d, ok)
+			}
+			if len(resp.DetailedDiff) != 1 {
+				t.Errorf("Diff() should only flag %s, got %+v", tt.wantKey, resp.DetailedDiff)
 			}
 		})
 	}
+}
+
+// =============================================================================
+// Webhook resource-level CRUD tests
+// =============================================================================
+
+func TestWebhookCreate(t *testing.T) {
+	var got WebhookRequest
+	mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v2/sites/"+testSiteID+"/webhooks" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		decodeJSONBody(t, r, &got)
+		writeJSON(t, w, http.StatusCreated, WebhookResponse{
+			ID: webhookTestID, TriggerType: got.TriggerType, URL: got.URL, SiteID: testSiteID, Filter: got.Filter,
+			CreatedOn: "2024-01-01T00:00:00Z",
+		})
+	})
+
+	resource := &Webhook{}
+	resp, err := resource.Create(context.Background(), infer.CreateRequest[WebhookArgs]{Inputs: WebhookArgs{
+		SiteID: testSiteID, TriggerType: "form_submission", URL: "https://example.com/hook?token=secret",
+		Filter: map[string]interface{}{"name": "Email Form"},
+	}})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if resp.ID != testSiteID+"/webhooks/"+webhookTestID || resp.Output.CreatedOn != "2024-01-01T00:00:00Z" {
+		t.Errorf("Create() = %+v", resp)
+	}
+	if got.TriggerType != "form_submission" || got.URL != "https://example.com/hook?token=secret" ||
+		got.Filter["name"] != "Email Form" {
+		t.Errorf("request body = %+v", got)
+	}
+}
+
+func TestWebhookCreate_ValidationErrors(t *testing.T) {
+	resource := &Webhook{}
+	tests := []struct {
+		name   string
+		inputs WebhookArgs
+		want   string
+	}{
+		{
+			"invalid siteId",
+			WebhookArgs{SiteID: "bad", TriggerType: "form_submission", URL: "https://example.com/h"},
+			"validation failed",
+		},
+		{
+			"preview placeholder siteId",
+			WebhookArgs{SiteID: "preview-123", TriggerType: "form_submission", URL: "https://example.com/h"},
+			"validation failed",
+		},
+		{
+			"invalid triggerType",
+			WebhookArgs{SiteID: testSiteID, TriggerType: "nope", URL: "https://example.com/h"},
+			"not a valid",
+		},
+		{
+			"http url",
+			WebhookArgs{SiteID: testSiteID, TriggerType: "form_submission", URL: "http://example.com/h"},
+			"HTTPS",
+		},
+		{
+			"filter on non-form trigger",
+			WebhookArgs{
+				SiteID: testSiteID, TriggerType: "comment_created", URL: "https://example.com/h",
+				Filter: map[string]interface{}{"name": "Email Form"},
+			},
+			"only supported for the 'form_submission' trigger",
+		},
+		{
+			"filter with unsupported key",
+			WebhookArgs{
+				SiteID: testSiteID, TriggerType: "form_submission", URL: "https://example.com/h",
+				Filter: map[string]interface{}{"collectionId": "abc"},
+			},
+			"unsupported key",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// No server and no token: validation must fail before any API call.
+			resp, err := resource.Create(context.Background(), infer.CreateRequest[WebhookArgs]{Inputs: tt.inputs})
+			if err == nil || !strings.Contains(err.Error(), tt.want) || resp.ID != "" {
+				t.Fatalf("Create() = (%q, %v), want error containing %q", resp.ID, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestWebhookCreate_DryRun(t *testing.T) {
+	resource := &Webhook{}
+	for name, inputs := range map[string]WebhookArgs{
+		"valid":                 {SiteID: testSiteID, TriggerType: "form_submission", URL: "https://example.com/h"},
+		"unknown inputs":        {},
+		"invalid site deferred": {SiteID: "bad", TriggerType: "nope", URL: "http://x"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp, err := resource.Create(context.Background(), infer.CreateRequest[WebhookArgs]{Inputs: inputs, DryRun: true})
+			if err != nil {
+				t.Fatalf("Create() dry-run should succeed (validation is deferred): %v", err)
+			}
+			// An empty ID makes the framework present the ID and all outputs as unknown.
+			if resp.ID != "" {
+				t.Errorf("Create() dry-run must not fabricate an ID: %+v", resp)
+			}
+			if resp.Output.CreatedOn != "" || resp.Output.LastTriggered != "" {
+				t.Errorf("Create() dry-run must not fabricate timestamps: %+v", resp.Output)
+			}
+			if resp.Output.SiteID != inputs.SiteID || resp.Output.URL != inputs.URL {
+				t.Errorf("Create() dry-run must echo the inputs: %+v", resp.Output)
+			}
+		})
+	}
+}
+
+func TestWebhookCheck(t *testing.T) {
+	resource := &Webhook{}
+	failuresByProperty := func(resp infer.CheckResponse[WebhookArgs]) map[string]string {
+		got := map[string]string{}
+		for _, f := range resp.Failures {
+			got[f.Property] = f.Reason
+		}
+		return got
+	}
+
+	t.Run("known invalid values fail", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"siteId":      property.New("preview-123"),
+				"triggerType": property.New("memberships_user_account_added"),
+				"url":         property.New("http://example.com/h"),
+			}),
+		})
+		if err != nil {
+			t.Fatalf("Check: %v", err)
+		}
+		got := failuresByProperty(resp)
+		if len(got) != 3 || !containsStr(got["siteId"], "24-character") ||
+			!containsStr(got["triggerType"], "not a valid") || !containsStr(got["url"], "HTTPS") {
+			t.Errorf("unexpected failures: %+v", resp.Failures)
+		}
+	})
+
+	t.Run("filter on a non-form trigger fails", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"siteId":      property.New(testSiteID),
+				"triggerType": property.New("collection_item_created"),
+				"url":         property.New("https://example.com/h"),
+				"filter":      property.New(property.NewMap(map[string]property.Value{"name": property.New("x")})),
+			}),
+		})
+		if err != nil {
+			t.Fatalf("Check: %v", err)
+		}
+		got := failuresByProperty(resp)
+		if len(got) != 1 || !containsStr(got["filter"], "only supported for the 'form_submission' trigger") {
+			t.Errorf("unexpected failures: %+v", resp.Failures)
+		}
+	})
+
+	t.Run("filter with unsupported key fails", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"siteId":      property.New(testSiteID),
+				"triggerType": property.New("form_submission"),
+				"url":         property.New("https://example.com/h"),
+				"filter": property.New(property.NewMap(map[string]property.Value{
+					"name":         property.New("Contact"),
+					"collectionId": property.New("abc"),
+				})),
+			}),
+		})
+		if err != nil {
+			t.Fatalf("Check: %v", err)
+		}
+		got := failuresByProperty(resp)
+		if len(got) != 1 || !containsStr(got["filter"], "unsupported key 'collectionId'") {
+			t.Errorf("unexpected failures: %+v", resp.Failures)
+		}
+	})
+
+	t.Run("unknown values are skipped", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"siteId":      property.New(property.Computed),
+				"triggerType": property.New(property.Computed),
+				"url":         property.New(property.Computed),
+				// A filter whose trigger type is still unknown cannot be checked yet.
+				"filter": property.New(property.NewMap(map[string]property.Value{"name": property.New("x")})),
+			}),
+		})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Errorf("unknown inputs must not fail Check: failures=%+v err=%v", resp.Failures, err)
+		}
+		resp, err = resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"siteId":      property.New(testSiteID),
+				"triggerType": property.New("site_publish"),
+				"url":         property.New("https://example.com/h"),
+				// A filter with an unknown value is skipped as well.
+				"filter": property.New(property.NewMap(map[string]property.Value{"name": property.New(property.Computed)})),
+			}),
+		})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Errorf("filter with unknown values must not fail Check: failures=%+v err=%v", resp.Failures, err)
+		}
+	})
+
+	t.Run("valid values pass", func(t *testing.T) {
+		resp, err := resource.Check(context.Background(), infer.CheckRequest{
+			NewInputs: property.NewMap(map[string]property.Value{
+				"siteId":      property.New(testSiteID),
+				"triggerType": property.New("form_submission"),
+				"url":         property.New("https://example.com/h"),
+				"filter":      property.New(property.NewMap(map[string]property.Value{"name": property.New("Contact")})),
+			}),
+		})
+		if err != nil || len(resp.Failures) != 0 {
+			t.Errorf("valid inputs must pass Check: failures=%+v err=%v", resp.Failures, err)
+		}
+		if resp.Inputs.TriggerType != "form_submission" || resp.Inputs.Filter["name"] != "Contact" {
+			t.Errorf("inputs not decoded: %+v", resp.Inputs)
+		}
+	})
+}
+
+func TestWebhookRead(t *testing.T) {
+	resource := &Webhook{}
+	readReq := infer.ReadRequest[WebhookArgs, WebhookState]{ID: GenerateWebhookResourceID(testSiteID, webhookTestID)}
+
+	// serveWebhook answers the documented single-webhook endpoint with the second sample webhook.
+	serveWebhook := func(t *testing.T) {
+		t.Helper()
+		mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet || r.URL.Path != "/v2/webhooks/"+webhookTestID {
+				t.Errorf("unexpected request %s %s (Read must use GET /v2/webhooks/{webhook_id})", r.Method, r.URL.Path)
+			}
+			writeJSON(t, w, http.StatusOK, sampleWebhooks()[1])
+		})
+	}
+
+	t.Run("found via GET by id, import ignores the API filter", func(t *testing.T) {
+		serveWebhook(t)
+		resp, err := resource.Read(context.Background(), readReq)
+		if err != nil {
+			t.Fatalf("Read() error = %v", err)
+		}
+		if resp.ID != readReq.ID || resp.Inputs.SiteID != testSiteID ||
+			resp.Inputs.TriggerType != "collection_item_created" || resp.Inputs.URL != "https://example.com/items" {
+			t.Errorf("Read() inputs = %+v", resp.Inputs)
+		}
+		// Neither the program nor the state set a filter: the one Webflow reports is don't-care.
+		if len(resp.Inputs.Filter) != 0 || len(resp.State.Filter) != 0 {
+			t.Errorf("Read() must not copy an unrequested filter into inputs: %+v", resp.Inputs.Filter)
+		}
+		if resp.State.CreatedOn != "2024-01-02T00:00:00Z" || resp.State.LastTriggered != "2024-02-01T00:00:00Z" {
+			t.Errorf("Read() state = %+v", resp.State)
+		}
+	})
+
+	t.Run("filter is tracked when the program set one", func(t *testing.T) {
+		serveWebhook(t)
+		req := readReq
+		req.Inputs = WebhookArgs{
+			SiteID: testSiteID, TriggerType: "collection_item_created", URL: "https://example.com/items",
+			Filter: map[string]interface{}{"collectionId": "old"},
+		}
+		resp, err := resource.Read(context.Background(), req)
+		if err != nil {
+			t.Fatalf("Read() error = %v", err)
+		}
+		if resp.Inputs.Filter["collectionId"] != "abc" {
+			t.Errorf("Read() must report the API filter when the program set one: %+v", resp.Inputs.Filter)
+		}
+	})
+
+	t.Run("filter is tracked when the state has one", func(t *testing.T) {
+		serveWebhook(t)
+		req := readReq
+		req.State = WebhookState{WebhookArgs: WebhookArgs{Filter: map[string]interface{}{"collectionId": "old"}}}
+		resp, err := resource.Read(context.Background(), req)
+		if err != nil {
+			t.Fatalf("Read() error = %v", err)
+		}
+		if resp.Inputs.Filter["collectionId"] != "abc" {
+			t.Errorf("Read() must report the API filter when the state had one: %+v", resp.Inputs.Filter)
+		}
+	})
+
+	t.Run("webhook 404 signals deletion", func(t *testing.T) {
+		mockAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"Requested resource not found"}`))
+		})
+		resp, err := resource.Read(context.Background(), readReq)
+		if err != nil || resp.ID != "" {
+			t.Fatalf("Read() = (%q, %v), want empty ID and nil error", resp.ID, err)
+		}
+	})
+
+	t.Run("webhook of another site is an error", func(t *testing.T) {
+		mockAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+			other := sampleWebhooks()[1]
+			other.SiteID = testOtherSiteID
+			writeJSON(t, w, http.StatusOK, other)
+		})
+		if _, err := resource.Read(context.Background(), readReq); err == nil ||
+			!strings.Contains(err.Error(), "belongs to site") {
+			t.Fatalf("Read() error = %v, want site mismatch error", err)
+		}
+	})
+
+	t.Run("500 is an error", func(t *testing.T) {
+		mockAPI(t, func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"message":"webhook not found upstream"}`))
+		})
+		if _, err := resource.Read(context.Background(), readReq); err == nil {
+			t.Fatal("Read() should return an error for 500")
+		}
+	})
+
+	t.Run("invalid site id in resource id", func(t *testing.T) {
+		mockAPI(t, func(_ http.ResponseWriter, _ *http.Request) { t.Error("no API call expected") })
+		_, err := resource.Read(context.Background(),
+			infer.ReadRequest[WebhookArgs, WebhookState]{ID: "bad/webhooks/" + webhookTestID})
+		if err == nil || !strings.Contains(err.Error(), "invalid resource ID") {
+			t.Fatalf("Read() error = %v", err)
+		}
+	})
+}
+
+func TestWebhookUpdate_ReturnsError(t *testing.T) {
+	resource := &Webhook{}
+	if _, err := resource.Update(context.Background(), infer.UpdateRequest[WebhookArgs, WebhookState]{}); err == nil ||
+		!strings.Contains(err.Error(), "cannot be updated in-place") {
+		t.Fatalf("Update() error = %v", err)
+	}
+}
+
+func TestWebhookDelete(t *testing.T) {
+	tests := []struct {
+		name      string
+		webhookID string
+		status    int
+	}{
+		{"success", webhookTestID, http.StatusNoContent},
+		{"not found is idempotent", webhookTestID, http.StatusNotFound},
+		// Create accepts whatever ID Webflow assigns, so Delete must not reject non-hex IDs.
+		{"non-hex id assigned by the API", "wh_custom-format", http.StatusNoContent},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			calls := 0
+			mockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				if r.Method != http.MethodDelete || r.URL.Path != "/v2/webhooks/"+tt.webhookID {
+					t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+				}
+				w.WriteHeader(tt.status)
+			})
+			resource := &Webhook{}
+			if _, err := resource.Delete(context.Background(), infer.DeleteRequest[WebhookState]{
+				ID: GenerateWebhookResourceID(testSiteID, tt.webhookID),
+			}); err != nil {
+				t.Fatalf("Delete() error = %v", err)
+			}
+			if calls != 1 {
+				t.Errorf("expected 1 API call, got %d", calls)
+			}
+		})
+	}
+
+	t.Run("malformed resource id", func(t *testing.T) {
+		mockAPI(t, func(_ http.ResponseWriter, _ *http.Request) { t.Error("no API call expected") })
+		resource := &Webhook{}
+		_, err := resource.Delete(context.Background(), infer.DeleteRequest[WebhookState]{ID: testSiteID + "/webhooks/"})
+		if err == nil {
+			t.Error("Delete() should reject a resource ID without a webhook ID")
+		}
+	})
 }

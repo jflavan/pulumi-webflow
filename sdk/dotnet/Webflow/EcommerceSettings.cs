@@ -26,7 +26,7 @@ namespace Community.Pulumi.Webflow
         /// The three-letter ISO 4217 currency code for the site (e.g., 'USD', 'EUR', 'GBP'). This is the default currency used for ecommerce transactions on this site. This value is set in the Webflow dashboard and is read-only.
         /// </summary>
         [Output("defaultCurrency")]
-        public Output<string> DefaultCurrency { get; private set; } = null!;
+        public Output<string?> DefaultCurrency { get; private set; } = null!;
 
         /// <summary>
         /// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). The site must have ecommerce enabled through the Webflow dashboard. You can find your site ID in the Webflow dashboard under Site Settings.

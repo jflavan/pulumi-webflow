@@ -8,10 +8,7 @@ package provider
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
-	"time"
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
@@ -62,9 +59,29 @@ type SiteCustomCodeState struct {
 // Annotate adds descriptions and constraints to the SiteCustomCode resource.
 func (r *SiteCustomCode) Annotate(a infer.Annotator) {
 	a.SetToken("index", "SiteCustomCode")
-	a.Describe(r, "Manages custom JavaScript code applied to a Webflow site. "+
+	a.Describe(r, "Manages custom JavaScript code applied to a Webflow site "+
+		"(PUT /v2/sites/{site_id}/custom_code). "+
 		"This resource allows you to apply registered custom scripts to a site and control where they are placed "+
-		"(header or footer). Custom scripts must be registered to the site first via the RegisterScript resource.")
+		"(header or footer). Custom scripts must be registered to the site first via the RegisteredScript "+
+		"or InlineScript resource. The full list is sent on every update, so scripts omitted from the list "+
+		"are removed from the site; destroying the resource removes all applied code "+
+		"(DELETE /v2/sites/{site_id}/custom_code) but leaves the scripts registered.\n\n"+
+		customCodeScopesNote+appliedCodeScopesNote)
+}
+
+// Check validates the known inputs at preview time. Unknown values (for example a script id
+// taken from a RegisteredScript output) are skipped and validated again at apply time.
+func (r *SiteCustomCode) Check(
+	ctx context.Context, req infer.CheckRequest,
+) (infer.CheckResponse[SiteCustomCodeArgs], error) {
+	inputs, failures, err := checkStrings[SiteCustomCodeArgs](ctx, req.NewInputs,
+		stringValidator{"siteId", ValidateSiteID},
+	)
+	if err != nil {
+		return infer.CheckResponse[SiteCustomCodeArgs]{Inputs: inputs, Failures: failures}, err
+	}
+	failures = append(failures, checkCustomCodeScripts(req.NewInputs)...)
+	return infer.CheckResponse[SiteCustomCodeArgs]{Inputs: inputs, Failures: failures}, nil
 }
 
 // Annotate adds descriptions to the SiteCustomCodeArgs fields.
@@ -135,8 +152,9 @@ func (r *SiteCustomCode) Diff(
 		return diff, nil
 	}
 
-	// Scripts changes trigger update (not replace)
-	if !siteCustomCodeScriptsEqual(req.State.Scripts, req.Inputs.Scripts) {
+	// Scripts changes trigger update (not replace). The comparison is order-insensitive
+	// (scripts are matched by id + location) and compares attributes structurally.
+	if !scriptListsEqual(req.State.Scripts, req.Inputs.Scripts) {
 		diff.HasChanges = true
 		diff.DetailedDiff = map[string]p.PropertyDiff{
 			"scripts": {Kind: p.Update},
@@ -147,59 +165,19 @@ func (r *SiteCustomCode) Diff(
 	return diff, nil
 }
 
-// siteCustomCodeScriptsEqual compares two script slices for equality.
-// This is a deep comparison that checks all fields.
-func siteCustomCodeScriptsEqual(a, b []CustomScriptArgs) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i].ID != b[i].ID || a[i].Version != b[i].Version || a[i].Location != b[i].Location {
-			return false
-		}
-		if !siteCustomCodeAttributesEqual(a[i].Attributes, b[i].Attributes) {
-			return false
-		}
-	}
-	return true
-}
-
-// siteCustomCodeAttributesEqual compares two attribute maps for equality.
-func siteCustomCodeAttributesEqual(a, b map[string]interface{}) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for key, val := range a {
-		if b[key] != val {
-			return false
-		}
-	}
-	return true
-}
-
 // Create creates new custom code on the Webflow site.
 func (r *SiteCustomCode) Create(
 	ctx context.Context, req infer.CreateRequest[SiteCustomCodeArgs],
 ) (infer.CreateResponse[SiteCustomCodeState], error) {
-	state := SiteCustomCodeState{
-		SiteCustomCodeArgs: req.Inputs,
-		LastUpdated:        "",
-		CreatedOn:          "",
-	}
+	state := SiteCustomCodeState{SiteCustomCodeArgs: req.Inputs}
 
-	// During preview, return expected state without making API calls.
-	// Validation is deferred to apply-time because inputs may contain Pulumi unknowns
+	// During preview, return the inputs without calling the API. The ID and the timestamps
+	// are unknown until apply, so an empty ID is returned and nothing is fabricated.
+	// Full validation is deferred to apply time because inputs may contain Pulumi unknowns
 	// (e.g., scripts[].id from a RegisteredScript output) which the infer framework
-	// deserializes as zero values. Validating during preview would incorrectly reject these.
+	// deserializes as zero values; Check already validated the known values.
 	if req.DryRun {
-		// Set preview timestamps
-		now := time.Now().Format(time.RFC3339)
-		state.LastUpdated = now
-		state.CreatedOn = now
-		return infer.CreateResponse[SiteCustomCodeState]{
-			ID:     GenerateSiteCustomCodeResourceID(req.Inputs.SiteID),
-			Output: state,
-		}, nil
+		return infer.CreateResponse[SiteCustomCodeState]{Output: state}, nil
 	}
 
 	// Validate inputs BEFORE making API calls (all values are resolved at apply-time)
@@ -208,50 +186,23 @@ func (r *SiteCustomCode) Create(
 			fmt.Errorf("validation failed for SiteCustomCode resource: %w", err)
 	}
 
-	// Validate each script
-	for i, script := range req.Inputs.Scripts {
-		if err := ValidateScriptID(script.ID); err != nil {
-			return infer.CreateResponse[SiteCustomCodeState]{},
-				fmt.Errorf("validation failed for SiteCustomCode resource at scripts[%d]: %w", i, err)
-		}
-		if err := ValidateScriptVersion(script.Version); err != nil {
-			return infer.CreateResponse[SiteCustomCodeState]{},
-				fmt.Errorf("validation failed for SiteCustomCode resource at scripts[%d]: %w", i, err)
-		}
-		if err := ValidateScriptLocation(script.Location); err != nil {
-			return infer.CreateResponse[SiteCustomCodeState]{},
-				fmt.Errorf("validation failed for SiteCustomCode resource at scripts[%d]: %w", i, err)
-		}
+	if err := validateCustomCodeScripts("SiteCustomCode", req.Inputs.Scripts); err != nil {
+		return infer.CreateResponse[SiteCustomCodeState]{}, err
 	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.CreateResponse[SiteCustomCodeState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Convert input scripts to API format
-	apiScripts := make([]CustomScript, len(req.Inputs.Scripts))
-	for i, script := range req.Inputs.Scripts {
-		attrs := make(map[string]interface{})
-		for k, v := range script.Attributes {
-			attrs[k] = v
-		}
-		apiScripts[i] = CustomScript{
-			ID:         script.ID,
-			Version:    script.Version,
-			Location:   script.Location,
-			Attributes: attrs,
-		}
-	}
-
 	// Call Webflow API
-	response, err := PutSiteCustomCode(ctx, client, req.Inputs.SiteID, apiScripts)
+	response, err := PutSiteCustomCode(ctx, client, req.Inputs.SiteID, toAPIScripts(req.Inputs.Scripts))
 	if err != nil {
 		return infer.CreateResponse[SiteCustomCodeState]{}, fmt.Errorf("failed to create site custom code: %w", err)
 	}
 
-	// Set response timestamps
+	// Timestamps come from the API response only.
 	state.LastUpdated = response.LastUpdated
 	state.CreatedOn = response.CreatedOn
 
@@ -271,9 +222,12 @@ func (r *SiteCustomCode) Read(
 	if err != nil {
 		return infer.ReadResponse[SiteCustomCodeArgs, SiteCustomCodeState]{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
+	if err := ValidateSiteID(siteID); err != nil {
+		return infer.ReadResponse[SiteCustomCodeArgs, SiteCustomCodeState]{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[SiteCustomCodeArgs, SiteCustomCodeState]{},
 			fmt.Errorf("failed to create HTTP client: %w", err)
@@ -282,32 +236,19 @@ func (r *SiteCustomCode) Read(
 	// Call Webflow API
 	response, err := GetSiteCustomCode(ctx, client, siteID)
 	if err != nil {
-		// Propagate context cancellation errors
-		if errors.Is(err, context.Canceled) {
-			return infer.ReadResponse[SiteCustomCodeArgs, SiteCustomCodeState]{}, err
+		// Only a 404 means the resource is gone; every other failure (network,
+		// auth, rate limiting, 5xx) is propagated so it never looks like a deletion.
+		if IsNotFound(err) {
+			return infer.ReadResponse[SiteCustomCodeArgs, SiteCustomCodeState]{ID: ""}, nil
 		}
-		// Only treat "not found" errors as resource deletion
-		// This prevents transient API failures from incorrectly triggering resource deletion
-		if strings.Contains(strings.ToLower(err.Error()), "not found") {
-			return infer.ReadResponse[SiteCustomCodeArgs, SiteCustomCodeState]{
-				ID: "",
-			}, nil
-		}
-		// For other errors (network issues, rate limiting, etc.), propagate the error
 		return infer.ReadResponse[SiteCustomCodeArgs, SiteCustomCodeState]{},
 			fmt.Errorf("failed to read site custom code: %w", err)
-	}
-
-	// Convert API scripts to input format
-	scripts := make([]CustomScriptArgs, len(response.Scripts))
-	for i, apiScript := range response.Scripts {
-		scripts[i] = CustomScriptArgs(apiScript)
 	}
 
 	// Build current state from API response
 	currentInputs := SiteCustomCodeArgs{
 		SiteID:  siteID,
-		Scripts: scripts,
+		Scripts: fromAPIScripts[CustomScriptArgs](response.Scripts),
 	}
 	currentState := SiteCustomCodeState{
 		SiteCustomCodeArgs: currentInputs,
@@ -332,13 +273,11 @@ func (r *SiteCustomCode) Update(
 		CreatedOn:          req.State.CreatedOn,
 	}
 
-	// During preview, return expected state without making API calls.
-	// Validation is deferred to apply-time because inputs may contain Pulumi unknowns.
+	// During preview, return the expected state without calling the API. The timestamps
+	// recorded in state are carried over rather than fabricated; the real values come
+	// from the API at apply time. Validation is deferred because inputs may be unknown.
 	if req.DryRun {
-		state.LastUpdated = time.Now().Format(time.RFC3339)
-		return infer.UpdateResponse[SiteCustomCodeState]{
-			Output: state,
-		}, nil
+		return infer.UpdateResponse[SiteCustomCodeState]{Output: state}, nil
 	}
 
 	// Validate inputs BEFORE making API calls (all values are resolved at apply-time)
@@ -347,52 +286,29 @@ func (r *SiteCustomCode) Update(
 			fmt.Errorf("validation failed for SiteCustomCode resource: %w", err)
 	}
 
-	// Validate each script
-	for i, script := range req.Inputs.Scripts {
-		if err := ValidateScriptID(script.ID); err != nil {
-			return infer.UpdateResponse[SiteCustomCodeState]{},
-				fmt.Errorf("validation failed for SiteCustomCode resource at scripts[%d]: %w", i, err)
-		}
-		if err := ValidateScriptVersion(script.Version); err != nil {
-			return infer.UpdateResponse[SiteCustomCodeState]{},
-				fmt.Errorf("validation failed for SiteCustomCode resource at scripts[%d]: %w", i, err)
-		}
-		if err := ValidateScriptLocation(script.Location); err != nil {
-			return infer.UpdateResponse[SiteCustomCodeState]{},
-				fmt.Errorf("validation failed for SiteCustomCode resource at scripts[%d]: %w", i, err)
-		}
+	if err := validateCustomCodeScripts("SiteCustomCode", req.Inputs.Scripts); err != nil {
+		return infer.UpdateResponse[SiteCustomCodeState]{}, err
 	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.UpdateResponse[SiteCustomCodeState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Convert input scripts to API format
-	apiScripts := make([]CustomScript, len(req.Inputs.Scripts))
-	for i, script := range req.Inputs.Scripts {
-		attrs := make(map[string]interface{})
-		for k, v := range script.Attributes {
-			attrs[k] = v
-		}
-		apiScripts[i] = CustomScript{
-			ID:         script.ID,
-			Version:    script.Version,
-			Location:   script.Location,
-			Attributes: attrs,
-		}
-	}
-
 	// Call Webflow API
-	response, err := PutSiteCustomCode(ctx, client, req.Inputs.SiteID, apiScripts)
+	response, err := PutSiteCustomCode(ctx, client, req.Inputs.SiteID, toAPIScripts(req.Inputs.Scripts))
 	if err != nil {
 		return infer.UpdateResponse[SiteCustomCodeState]{}, fmt.Errorf("failed to update site custom code: %w", err)
 	}
 
-	// Update response timestamps
-	state.LastUpdated = response.LastUpdated
-	state.CreatedOn = response.CreatedOn
+	// Timestamps come from the API response; a value the response omits keeps the recorded one.
+	if response.LastUpdated != "" {
+		state.LastUpdated = response.LastUpdated
+	}
+	if response.CreatedOn != "" {
+		state.CreatedOn = response.CreatedOn
+	}
 
 	return infer.UpdateResponse[SiteCustomCodeState]{
 		Output: state,
@@ -408,9 +324,12 @@ func (r *SiteCustomCode) Delete(
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
+	if err := ValidateSiteID(siteID); err != nil {
+		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

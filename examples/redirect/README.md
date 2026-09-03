@@ -4,10 +4,14 @@ This directory contains examples demonstrating how to create and manage URL redi
 
 ## What You'll Learn
 
-- Create permanent redirects (301) for SEO-friendly content moves
-- Create temporary redirects (302) for seasonal content or A/B testing
+- Create permanent (301) redirects for SEO-friendly content moves
+- Keep short campaign paths pointing at the current landing page
 - Set up external domain redirects
 - Implement bulk redirect patterns for URL migrations
+
+> **Webflow redirects are always HTTP 301.** The API has no status-code setting, so the provider's
+> `statusCode` input is deprecated and ignored; omit it. Temporary (302) redirects cannot be created
+> through Webflow.
 
 ## Available Languages
 
@@ -27,7 +31,7 @@ This directory contains examples demonstrating how to create and manage URL redi
 cd typescript
 npm install
 pulumi stack init dev
-pulumi config set webflow:siteId your-site-id --secret
+pulumi config set siteId your-site-id --secret
 pulumi up
 ```
 
@@ -39,7 +43,7 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 pulumi stack init dev
-pulumi config set webflow:siteId your-site-id --secret
+pulumi config set siteId your-site-id --secret
 pulumi up
 ```
 
@@ -49,7 +53,7 @@ pulumi up
 cd go
 go mod download
 pulumi stack init dev
-pulumi config set webflow:siteId your-site-id --secret
+pulumi config set siteId your-site-id --secret
 pulumi up
 ```
 
@@ -59,7 +63,7 @@ pulumi up
 cd csharp
 dotnet restore
 pulumi stack init dev
-pulumi config set webflow:siteId your-site-id --secret
+pulumi config set siteId your-site-id --secret
 pulumi up
 ```
 
@@ -69,13 +73,13 @@ pulumi up
 cd java
 mvn install
 pulumi stack init dev
-pulumi config set webflow:siteId your-site-id --secret
+pulumi config set siteId your-site-id --secret
 pulumi up
 ```
 
 ## Examples Included
 
-### 1. Permanent Redirect (301)
+### 1. Content Move Redirect
 
 Best for content that has permanently moved. Preserves SEO value by telling search engines the new location.
 
@@ -83,9 +87,10 @@ Best for content that has permanently moved. Preserves SEO value by telling sear
 /blog/old-article → /blog/articles/updated-article
 ```
 
-### 2. Temporary Redirect (302)
+### 2. Campaign Redirect
 
-Use for seasonal content, A/B testing, or temporary maintenance. Search engines keep indexing the original URL.
+A short, memorable path that always points at the current campaign page. Because
+`destinationPath` updates in place, retargeting the path for the next campaign is a one-line change.
 
 ```
 /old-campaign → /new-campaign-2025
@@ -115,8 +120,18 @@ Each example requires the following configuration:
 
 | Config Key        | Required | Description                              |
 |-------------------|----------|------------------------------------------|
-| `webflow:siteId`  | Yes      | Your Webflow site ID (stored as secret)  |
+| `siteId`  | Yes      | Your Webflow site ID (stored as secret)  |
 | `environment`     | No       | Deployment environment (default: development) |
+
+## Updating Redirects
+
+Changing `destinationPath` updates the redirect in place (no replacement); changing `sourcePath` or
+`siteId` replaces it. `statusCode` is deprecated and ignored: every Webflow redirect is a 301.
+
+## Required Scopes
+
+Webflow's endpoint reference lists `sites:read` / `sites:write` for the redirect endpoints while
+the scopes page lists `site_config:read` / `site_config:write`; grant both pairs to be safe.
 
 ## Expected Output
 
@@ -126,10 +141,12 @@ After successful deployment, you'll see exports like:
 Outputs:
     deployedSiteId        : [secret]
     permanentRedirectId   : "abc123..."
-    temporaryRedirectId   : "def456..."
+    campaignRedirectId    : "def456..."
     externalRedirectId    : "ghi789..."
     bulkRedirectIds       : ["jkl...", "mno...", "pqr..."]
 ```
+
+Redirect IDs are assigned by Webflow on creation; `pulumi preview` shows them as `output<string>`.
 
 ## Cleanup
 

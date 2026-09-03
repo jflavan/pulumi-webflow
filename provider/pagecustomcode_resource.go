@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
@@ -58,10 +57,47 @@ type PageCustomCodeState struct {
 // Annotate adds descriptions and constraints to the PageCustomCode resource.
 func (r *PageCustomCode) Annotate(a infer.Annotator) {
 	a.SetToken("index", "PageCustomCode")
-	a.Describe(r, "Manages custom code (JavaScript) scripts applied to a Webflow page. "+
+	a.Describe(r, "Manages custom code (JavaScript) scripts applied to a Webflow page "+
+		"(PUT /v2/pages/{page_id}/custom_code). "+
 		"This resource allows you to apply registered custom code scripts to specific pages. "+
-		"Scripts must first be registered using the RegisteredScript resource before they can be applied. "+
-		"All scripts in the configuration will be applied to the page; scripts not listed will be removed.")
+		"Scripts must first be registered using the RegisteredScript or InlineScript resource before they "+
+		"can be applied. All scripts in the configuration will be applied to the page; scripts not listed "+
+		"will be removed. Destroying the resource removes all applied code "+
+		"(DELETE /v2/pages/{page_id}/custom_code) but leaves the scripts registered.\n\n"+
+		customCodeScopesNote+appliedCodeScopesNote)
+}
+
+// errPageCustomCodeNoScripts is returned when the scripts list is empty.
+var errPageCustomCodeNoScripts = errors.New("at least one script is required. " +
+	"Please provide a list of scripts with id, scriptVersion, and location fields")
+
+// Check validates the known inputs at preview time. Unknown values (for example a script id
+// taken from a RegisteredScript output) are skipped and validated again at apply time.
+func (r *PageCustomCode) Check(
+	ctx context.Context, req infer.CheckRequest,
+) (infer.CheckResponse[PageCustomCodeArgs], error) {
+	inputs, failures, err := checkStrings[PageCustomCodeArgs](ctx, req.NewInputs,
+		stringValidator{"pageId", ValidatePageID},
+	)
+	if err != nil {
+		return infer.CheckResponse[PageCustomCodeArgs]{Inputs: inputs, Failures: failures}, err
+	}
+	if n, known := knownScriptCount(req.NewInputs); known && n == 0 {
+		failures = append(failures, checkFailure("scripts", errPageCustomCodeNoScripts))
+	}
+	failures = append(failures, checkCustomCodeScripts(req.NewInputs)...)
+	return infer.CheckResponse[PageCustomCodeArgs]{Inputs: inputs, Failures: failures}, nil
+}
+
+// validatePageCustomCodeArgs validates fully-resolved inputs at apply time.
+func validatePageCustomCodeArgs(args PageCustomCodeArgs) error {
+	if err := ValidatePageID(args.PageID); err != nil {
+		return fmt.Errorf("validation failed for PageCustomCode resource: %w", err)
+	}
+	if len(args.Scripts) == 0 {
+		return fmt.Errorf("validation failed for PageCustomCode resource: %w", errPageCustomCodeNoScripts)
+	}
+	return validateCustomCodeScripts("PageCustomCode", args.Scripts)
 }
 
 // Annotate adds descriptions to the PageCustomCodeArgs fields.
@@ -131,8 +167,9 @@ func (r *PageCustomCode) Diff(
 		return diff, nil
 	}
 
-	// Check if scripts list has changed
-	if !pageCustomCodeScriptsEqual(req.State.Scripts, req.Inputs.Scripts) {
+	// Scripts changes trigger update (not replace). The comparison is order-insensitive
+	// (scripts are matched by id + location) and compares attributes structurally.
+	if !scriptListsEqual(req.State.Scripts, req.Inputs.Scripts) {
 		diff.HasChanges = true
 		diff.DetailedDiff = map[string]p.PropertyDiff{
 			"scripts": {Kind: p.Update},
@@ -143,139 +180,51 @@ func (r *PageCustomCode) Diff(
 	return diff, nil
 }
 
-// pageCustomCodeScriptsEqual checks if two script lists are equal.
-func pageCustomCodeScriptsEqual(stateScripts, inputScripts []PageCustomCodeScript) bool {
-	if len(stateScripts) != len(inputScripts) {
-		return false
-	}
-
-	// Create maps for easier comparison
-	stateMap := make(map[string]PageCustomCodeScript)
-	for _, s := range stateScripts {
-		stateMap[s.ID] = s
-	}
-
-	// Check if all input scripts exist in state with same values
-	for _, inputScript := range inputScripts {
-		stateScript, exists := stateMap[inputScript.ID]
-		if !exists {
-			return false
-		}
-		if stateScript.Version != inputScript.Version ||
-			stateScript.Location != inputScript.Location {
-			return false
-		}
-		// Compare attributes maps
-		if !pageCustomCodeAttributesEqual(stateScript.Attributes, inputScript.Attributes) {
-			return false
-		}
-	}
-
-	return true
-}
-
-// pageCustomCodeAttributesEqual checks if two attribute maps are equal.
-func pageCustomCodeAttributesEqual(stateAttrs, inputAttrs map[string]interface{}) bool {
-	if len(stateAttrs) != len(inputAttrs) {
-		return false
-	}
-	for key, value := range stateAttrs {
-		if inputAttrs[key] != value {
-			return false
-		}
-	}
-	return true
-}
-
 // Create applies custom code scripts to a page.
 // Note: PageCustomCode is a configuration resource - "create" means "apply this configuration".
 func (r *PageCustomCode) Create(
 	ctx context.Context, req infer.CreateRequest[PageCustomCodeArgs],
 ) (infer.CreateResponse[PageCustomCodeState], error) {
-	state := PageCustomCodeState{
-		PageCustomCodeArgs: req.Inputs,
-		LastUpdated:        "",
-		CreatedOn:          "",
-	}
+	state := PageCustomCodeState{PageCustomCodeArgs: req.Inputs}
 
-	// During preview, return expected state without making API calls.
-	// Validation is deferred to apply-time because inputs may contain Pulumi unknowns
+	// During preview, return the inputs without calling the API. The ID and the timestamps
+	// are unknown until apply, so an empty ID is returned and nothing is fabricated.
+	// Full validation is deferred to apply time because inputs may contain Pulumi unknowns
 	// (e.g., scripts[].id from a RegisteredScript output) which the infer framework
-	// deserializes as zero values. Validating during preview would incorrectly reject these.
+	// deserializes as zero values; Check already validated the known values.
 	if req.DryRun {
-		now := time.Now().Format(time.RFC3339)
-		state.LastUpdated = now
-		state.CreatedOn = now
-		resourceID := GeneratePageCustomCodeResourceID(req.Inputs.PageID)
-		return infer.CreateResponse[PageCustomCodeState]{
-			ID:     resourceID,
-			Output: state,
-		}, nil
+		return infer.CreateResponse[PageCustomCodeState]{Output: state}, nil
 	}
 
 	// Validate inputs BEFORE making API calls (all values are resolved at apply-time)
-	if err := ValidatePageID(req.Inputs.PageID); err != nil {
-		return infer.CreateResponse[PageCustomCodeState]{},
-			fmt.Errorf("validation failed for PageCustomCode resource: %w", err)
-	}
-
-	// Validate scripts
-	if len(req.Inputs.Scripts) == 0 {
-		return infer.CreateResponse[PageCustomCodeState]{}, errors.New(
-			"validation failed for PageCustomCode resource: " +
-				"at least one script is required. " +
-				"Please provide a list of scripts with id, version, and location fields")
-	}
-
-	for i, script := range req.Inputs.Scripts {
-		if err := ValidateScriptID(script.ID); err != nil {
-			return infer.CreateResponse[PageCustomCodeState]{}, fmt.Errorf(
-				"validation failed for PageCustomCode resource, scripts[%d]: %w", i, err)
-		}
-		if err := ValidateScriptVersion(script.Version); err != nil {
-			return infer.CreateResponse[PageCustomCodeState]{}, fmt.Errorf(
-				"validation failed for PageCustomCode resource, scripts[%d]: %w", i, err)
-		}
-		if err := ValidateScriptLocation(script.Location); err != nil {
-			return infer.CreateResponse[PageCustomCodeState]{}, fmt.Errorf(
-				"validation failed for PageCustomCode resource, scripts[%d]: %w", i, err)
-		}
+	if err := validatePageCustomCodeArgs(req.Inputs); err != nil {
+		return infer.CreateResponse[PageCustomCodeState]{}, err
 	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.CreateResponse[PageCustomCodeState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Convert input scripts to API format
-	apiScripts := make([]CustomCodeScript, len(req.Inputs.Scripts))
-	for i, script := range req.Inputs.Scripts {
-		apiScripts[i] = CustomCodeScript(script)
-	}
-
 	// Call Webflow API to apply scripts
-	response, err := PutPageCustomCode(ctx, client, req.Inputs.PageID, &PageCustomCodeRequest{
-		Scripts: apiScripts,
-	})
+	response, err := PutPageCustomCode(ctx, client, req.Inputs.PageID, toAPIScripts(req.Inputs.Scripts))
 	if err != nil {
 		return infer.CreateResponse[PageCustomCodeState]{}, fmt.Errorf("failed to apply custom code to page: %w", err)
 	}
 
-	// Populate timestamps from response
+	// Timestamps come from the API response only.
 	state.LastUpdated = response.LastUpdated
 	state.CreatedOn = response.CreatedOn
 
-	resourceID := GeneratePageCustomCodeResourceID(req.Inputs.PageID)
-
 	return infer.CreateResponse[PageCustomCodeState]{
-		ID:     resourceID,
+		ID:     GeneratePageCustomCodeResourceID(req.Inputs.PageID),
 		Output: state,
 	}, nil
 }
 
 // Read retrieves the current state of page custom code from Webflow.
-// Used for drift detection and refresh operations.
+// Used for drift detection, refresh, and import operations.
 func (r *PageCustomCode) Read(
 	ctx context.Context, req infer.ReadRequest[PageCustomCodeArgs, PageCustomCodeState],
 ) (infer.ReadResponse[PageCustomCodeArgs, PageCustomCodeState], error) {
@@ -284,9 +233,12 @@ func (r *PageCustomCode) Read(
 	if err != nil {
 		return infer.ReadResponse[PageCustomCodeArgs, PageCustomCodeState]{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
+	if err := ValidatePageID(pageID); err != nil {
+		return infer.ReadResponse[PageCustomCodeArgs, PageCustomCodeState]{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[PageCustomCodeArgs, PageCustomCodeState]{},
 			fmt.Errorf("failed to create HTTP client: %w", err)
@@ -295,29 +247,24 @@ func (r *PageCustomCode) Read(
 	// Call Webflow API to get current custom code
 	response, err := GetPageCustomCode(ctx, client, pageID)
 	if err != nil {
-		// If page not found, return empty ID to signal deletion
-		return infer.ReadResponse[PageCustomCodeArgs, PageCustomCodeState]{
-			ID: "",
-		}, nil
+		// Only a 404 means the resource is gone; every other failure (network,
+		// auth, rate limiting, 5xx) is propagated so it never looks like a deletion.
+		if IsNotFound(err) {
+			return infer.ReadResponse[PageCustomCodeArgs, PageCustomCodeState]{ID: ""}, nil
+		}
+		return infer.ReadResponse[PageCustomCodeArgs, PageCustomCodeState]{},
+			fmt.Errorf("failed to read page custom code: %w", err)
 	}
 
-	// Build current state - preserve configured scripts from state instead of reading from API
-	// This is intentional: we want to track what we configured, not what might have been added externally
+	// Build current state from the API response so drift is detected and import works.
 	currentInputs := PageCustomCodeArgs{
 		PageID:  pageID,
-		Scripts: req.State.Scripts, // Preserve configured scripts (NOT read from API)
+		Scripts: fromAPIScripts[PageCustomCodeScript](response.Scripts),
 	}
 	currentState := PageCustomCodeState{
 		PageCustomCodeArgs: currentInputs,
 		LastUpdated:        response.LastUpdated,
 		CreatedOn:          response.CreatedOn,
-	}
-
-	// Verify the page still exists (basic check)
-	if pageID == "" {
-		return infer.ReadResponse[PageCustomCodeArgs, PageCustomCodeState]{
-			ID: "",
-		}, nil
 	}
 
 	return infer.ReadResponse[PageCustomCodeArgs, PageCustomCodeState]{
@@ -333,70 +280,41 @@ func (r *PageCustomCode) Update(
 ) (infer.UpdateResponse[PageCustomCodeState], error) {
 	state := PageCustomCodeState{
 		PageCustomCodeArgs: req.Inputs,
-		LastUpdated:        "",
+		LastUpdated:        req.State.LastUpdated,
 		CreatedOn:          req.State.CreatedOn, // Preserve original creation time
 	}
 
-	// During preview, return expected state without making API calls.
-	// Validation is deferred to apply-time because inputs may contain Pulumi unknowns.
+	// During preview, return the expected state without calling the API. The timestamps
+	// recorded in state are carried over rather than fabricated; the real values come
+	// from the API at apply time. Validation is deferred because inputs may be unknown.
 	if req.DryRun {
-		state.LastUpdated = time.Now().Format(time.RFC3339)
-		return infer.UpdateResponse[PageCustomCodeState]{
-			Output: state,
-		}, nil
+		return infer.UpdateResponse[PageCustomCodeState]{Output: state}, nil
 	}
 
 	// Validate inputs BEFORE making API calls (all values are resolved at apply-time)
-	if err := ValidatePageID(req.Inputs.PageID); err != nil {
-		return infer.UpdateResponse[PageCustomCodeState]{},
-			fmt.Errorf("validation failed for PageCustomCode resource: %w", err)
-	}
-
-	// Validate scripts
-	if len(req.Inputs.Scripts) == 0 {
-		return infer.UpdateResponse[PageCustomCodeState]{}, errors.New(
-			"validation failed for PageCustomCode resource: " +
-				"at least one script is required. " +
-				"Please provide a list of scripts with id, version, and location fields")
-	}
-
-	for i, script := range req.Inputs.Scripts {
-		if err := ValidateScriptID(script.ID); err != nil {
-			return infer.UpdateResponse[PageCustomCodeState]{}, fmt.Errorf(
-				"validation failed for PageCustomCode resource, scripts[%d]: %w", i, err)
-		}
-		if err := ValidateScriptVersion(script.Version); err != nil {
-			return infer.UpdateResponse[PageCustomCodeState]{}, fmt.Errorf(
-				"validation failed for PageCustomCode resource, scripts[%d]: %w", i, err)
-		}
-		if err := ValidateScriptLocation(script.Location); err != nil {
-			return infer.UpdateResponse[PageCustomCodeState]{}, fmt.Errorf(
-				"validation failed for PageCustomCode resource, scripts[%d]: %w", i, err)
-		}
+	if err := validatePageCustomCodeArgs(req.Inputs); err != nil {
+		return infer.UpdateResponse[PageCustomCodeState]{}, err
 	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.UpdateResponse[PageCustomCodeState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Convert input scripts to API format
-	apiScripts := make([]CustomCodeScript, len(req.Inputs.Scripts))
-	for i, script := range req.Inputs.Scripts {
-		apiScripts[i] = CustomCodeScript(script)
-	}
-
 	// Call Webflow API to update scripts
-	response, err := PutPageCustomCode(ctx, client, req.Inputs.PageID, &PageCustomCodeRequest{
-		Scripts: apiScripts,
-	})
+	response, err := PutPageCustomCode(ctx, client, req.Inputs.PageID, toAPIScripts(req.Inputs.Scripts))
 	if err != nil {
 		return infer.UpdateResponse[PageCustomCodeState]{}, fmt.Errorf("failed to update custom code on page: %w", err)
 	}
 
-	// Update timestamp
-	state.LastUpdated = response.LastUpdated
+	// Timestamps come from the API response; a value the response omits keeps the recorded one.
+	if response.LastUpdated != "" {
+		state.LastUpdated = response.LastUpdated
+	}
+	if response.CreatedOn != "" {
+		state.CreatedOn = response.CreatedOn
+	}
 
 	return infer.UpdateResponse[PageCustomCodeState]{
 		Output: state,
@@ -413,9 +331,12 @@ func (r *PageCustomCode) Delete(
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
+	if err := ValidatePageID(pageID); err != nil {
+		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
+	}
 
 	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}

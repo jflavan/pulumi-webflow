@@ -9,10 +9,12 @@ package provider
 import (
 	"crypto/tls"
 	"errors"
+	"io"
 	"math"
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -60,23 +62,28 @@ func ValidateToken(token string) error {
 // RedactToken returns a redacted version of the token for logging.
 // Always returns "[REDACTED]" to prevent token leakage in logs.
 func RedactToken(token string) string {
-	if token == "" {
-		return "<empty>"
-	}
-	return "[REDACTED]"
+	return RedactSensitiveData(token)
 }
 
-// Default retry configuration for rate limit handling.
+// Default retry configuration for rate-limit and transient-failure handling.
 const (
-	// DefaultMaxRetries is the maximum number of retry attempts for rate-limited requests.
+	// DefaultMaxRetries is the maximum number of retry attempts for retryable responses.
 	DefaultMaxRetries = 3
 	// DefaultBaseDelay is the initial delay before the first retry.
 	DefaultBaseDelay = 1 * time.Second
 	// DefaultMaxDelay caps the maximum delay between retries.
-	DefaultMaxDelay = 30 * time.Second
+	DefaultMaxDelay = 60 * time.Second
 )
 
-// retryTransport is an http.RoundTripper that handles rate limiting with exponential backoff.
+// retryBaseDelay and retryMaxDelay are the delays used by clients built with CreateHTTPClient.
+// Tests lower them so retry paths run in milliseconds.
+var (
+	retryBaseDelay = DefaultBaseDelay
+	retryMaxDelay  = DefaultMaxDelay
+)
+
+// retryTransport is an http.RoundTripper that retries rate-limited (429) and transient
+// server-error (502, 503, 504) responses with exponential backoff, honouring Retry-After.
 type retryTransport struct {
 	transport  http.RoundTripper // Underlying transport for actual HTTP requests
 	maxRetries int               // Maximum number of retry attempts
@@ -84,93 +91,100 @@ type retryTransport struct {
 	maxDelay   time.Duration     // Maximum delay between retries
 }
 
-// RoundTrip implements http.RoundTripper with retry logic for rate-limited requests.
+// isIdempotentMethod reports whether a request may be repeated without risking a duplicate
+// side effect. POST and PATCH are excluded: a gateway error returned after Webflow already
+// committed a create would otherwise be re-sent and create a second resource.
+func isIdempotentMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete, http.MethodOptions:
+		return true
+	}
+	return false
+}
+
+// isRetryableStatus reports whether a response status should be retried for the given method.
+// 429 is retried for every method because the request was never processed. Transient
+// server errors (502, 503, 504) are retried only for idempotent methods.
+func isRetryableStatus(method string, status int) bool {
+	switch status {
+	case http.StatusTooManyRequests:
+		return true
+	case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return isIdempotentMethod(method)
+	}
+	return false
+}
+
+// RoundTrip implements http.RoundTripper with retry logic.
+//
+// A request body can only be read once, so each retry rewinds it through req.GetBody.
+// http.NewRequest sets GetBody for bytes and strings readers, which is what doRequest uses;
+// a request with a body but no GetBody is sent once and never retried.
 func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	var resp *http.Response
-	var err error
 	ctx := req.Context()
+	log := NewLogContext(ctx).
+		WithField("method", req.Method).
+		WithField("url", req.URL.Path)
 
-	for attempt := 0; attempt <= t.maxRetries; attempt++ {
-		// Clone the request for each attempt (body may have been consumed)
-		clonedReq := req.Clone(ctx)
+	canRewind := req.Body == nil || req.Body == http.NoBody || req.GetBody != nil
 
-		resp, err = t.transport.RoundTrip(clonedReq)
+	for attempt := 0; ; attempt++ {
+		attemptReq := req
+		if attempt > 0 && req.GetBody != nil {
+			body, err := req.GetBody()
+			if err != nil {
+				return nil, err
+			}
+			attemptReq = req.Clone(ctx)
+			attemptReq.Body = body
+		}
+
+		resp, err := t.transport.RoundTrip(attemptReq)
 		if err != nil {
-			// Log API request error
-			NewLogContext(ctx).
-				WithField("method", req.Method).
-				WithField("url", req.URL.Path).
-				WithField("attempt", attempt+1).
-				Errorf("HTTP request failed: %v", err)
+			log.WithField("attempt", attempt+1).Debugf("HTTP request failed: %v", err)
 			return nil, err
 		}
 
-		// Log API request at debug level
-		NewLogContext(ctx).
-			WithField("method", req.Method).
-			WithField("url", req.URL.Path).
-			WithField("status", resp.StatusCode).
-			WithField("attempt", attempt+1).
-			Debug("HTTP request completed")
+		log.WithField("status", resp.StatusCode).WithField("attempt", attempt+1).Debug("HTTP request completed")
 
-		// If not rate limited, return immediately
-		if resp.StatusCode != http.StatusTooManyRequests {
+		retryable := isRetryableStatus(req.Method, resp.StatusCode)
+		if !retryable || attempt >= t.maxRetries || !canRewind {
+			if retryable {
+				log.WithField("status", resp.StatusCode).WithField("maxRetries", t.maxRetries).
+					Warn("Retryable response, max retries exhausted")
+			}
 			return resp, nil
 		}
 
-		// Don't retry if we've exhausted attempts
-		if attempt == t.maxRetries {
-			NewLogContext(ctx).
-				WithField("method", req.Method).
-				WithField("url", req.URL.Path).
-				WithField("maxRetries", t.maxRetries).
-				Warn("Rate limit exceeded, max retries exhausted")
-			return resp, nil
-		}
-
-		// Close the response body before retrying
+		delay := t.calculateDelay(resp, attempt)
+		// Drain and close so the connection can be reused for the retry.
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64*1024))
 		_ = resp.Body.Close()
 
-		// Calculate delay with exponential backoff
-		delay := t.calculateDelay(resp, attempt)
+		log.WithField("status", resp.StatusCode).WithField("attempt", attempt+1).WithField("retryAfter", delay.String()).
+			Warnf("Retrying after %v", delay)
 
-		// Log retry attempt
-		NewLogContext(ctx).
-			WithField("method", req.Method).
-			WithField("url", req.URL.Path).
-			WithField("attempt", attempt+1).
-			WithField("retryAfter", delay.String()).
-			Warnf("Rate limited, retrying after %v", delay)
-
-		// Check if context is cancelled before sleeping
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case <-time.After(delay):
-			// Continue to next retry attempt
 		}
 	}
-
-	return resp, nil
 }
 
 // calculateDelay determines how long to wait before the next retry.
-// It respects the Retry-After header if present, otherwise uses exponential backoff.
+// It respects a Retry-After header in seconds if present, otherwise uses exponential backoff.
 func (t *retryTransport) calculateDelay(resp *http.Response, attempt int) time.Duration {
-	// Check for Retry-After header (can be seconds or HTTP-date)
 	if retryAfter := resp.Header.Get("Retry-After"); retryAfter != "" {
-		// Try parsing as seconds first
-		if seconds, err := strconv.ParseInt(retryAfter, 10, 64); err == nil {
-			delay := time.Duration(seconds) * time.Second
-			if delay > t.maxDelay {
+		if seconds, err := strconv.ParseInt(retryAfter, 10, 64); err == nil && seconds >= 0 {
+			// Clamp before multiplying so a huge header value cannot overflow to a negative delay.
+			if seconds >= int64(t.maxDelay/time.Second) {
 				return t.maxDelay
 			}
-			return delay
+			return time.Duration(seconds) * time.Second
 		}
-		// Could also parse HTTP-date format, but seconds is more common for APIs
 	}
 
-	// Exponential backoff: baseDelay * 2^attempt
 	delay := time.Duration(float64(t.baseDelay) * math.Pow(2, float64(attempt)))
 	if delay > t.maxDelay {
 		return t.maxDelay
@@ -190,63 +204,58 @@ func (t *authenticatedTransport) RoundTrip(req *http.Request) (*http.Response, e
 	// Clone the request to avoid modifying the original
 	clonedReq := req.Clone(req.Context())
 
-	// Add authentication header
-	authHeader := "Bearer " + t.token
-	clonedReq.Header.Set("Authorization", authHeader)
-
-	// Add user agent
+	clonedReq.Header.Set("Authorization", "Bearer "+t.token)
 	clonedReq.Header.Set("User-Agent", "pulumi-webflow/"+t.version)
-
-	// Add API version header for Webflow API v2
 	clonedReq.Header.Set("Accept-Version", "2.0.0")
 
-	// Execute the request
 	return t.transport.RoundTrip(clonedReq)
 }
 
+var (
+	baseTransportOnce sync.Once
+	baseTransport     *http.Transport
+)
+
+// sharedBaseTransport returns the process-wide TLS transport used by every client.
+// It is a clone of http.DefaultTransport, so proxies (HTTPS_PROXY, NO_PROXY), dial and
+// TLS-handshake timeouts, and idle-connection reaping all behave as in the standard library,
+// with TLS 1.2 enforced as the minimum version.
+func sharedBaseTransport() *http.Transport {
+	baseTransportOnce.Do(func() {
+		baseTransport = http.DefaultTransport.(*http.Transport).Clone()
+		baseTransport.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+		baseTransport.ResponseHeaderTimeout = 60 * time.Second
+		baseTransport.MaxIdleConnsPerHost = 8
+	})
+	return baseTransport
+}
+
 // CreateHTTPClient creates an HTTP client configured for Webflow API v2.
-// The client enforces HTTPS/TLS, includes authentication headers, has appropriate timeouts,
-// and automatically retries rate-limited requests with exponential backoff.
+// The client enforces TLS 1.2, adds authentication headers, retries rate-limited and
+// transient server-error responses with exponential backoff, and shares one connection
+// pool across all clients created in the process.
 //
-// Note: This client does not set a base URL. In Pulumi provider architecture, resource
-// implementations construct full URLs (e.g., "https://api.webflow.com/v2/sites/{id}")
-// when making requests using this client.
+// The client sets no overall timeout: Pulumi's request context controls cancellation, and
+// a per-response header timeout guards against a hung server. This keeps long Retry-After
+// waits from being misreported as network timeouts.
 func CreateHTTPClient(token, version string) (*http.Client, error) {
 	if token == "" {
 		return nil, errors.New("[" + ErrCodeAuthEmpty + "] cannot create HTTP client with empty token. " +
 			"See: https://github.com/jdetmar/pulumi-webflow/blob/main/docs/troubleshooting.md#api-token-not-configured")
 	}
 
-	// Create TLS config with secure defaults
-	tlsConfig := &tls.Config{
-		MinVersion: tls.VersionTLS12, // Enforce TLS 1.2 minimum
-	}
-
-	// Create base transport with TLS config
-	baseTransport := &http.Transport{
-		TLSClientConfig: tlsConfig,
-	}
-
-	// Wrap with authentication transport
 	authTransport := &authenticatedTransport{
 		token:     token,
 		version:   version,
-		transport: baseTransport,
+		transport: sharedBaseTransport(),
 	}
 
-	// Wrap with retry transport for rate limit handling
-	retryTransport := &retryTransport{
+	retry := &retryTransport{
 		transport:  authTransport,
 		maxRetries: DefaultMaxRetries,
-		baseDelay:  DefaultBaseDelay,
-		maxDelay:   DefaultMaxDelay,
+		baseDelay:  retryBaseDelay,
+		maxDelay:   retryMaxDelay,
 	}
 
-	// Create HTTP client with timeout
-	client := &http.Client{
-		Timeout:   30 * time.Second,
-		Transport: retryTransport,
-	}
-
-	return client, nil
+	return &http.Client{Transport: retry}, nil
 }

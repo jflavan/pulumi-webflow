@@ -16,14 +16,550 @@ from . import _utilities
 from . import outputs
 
 __all__ = [
+    'AnalyticsAverageSecondsPoint',
+    'AnalyticsBucketing',
+    'AnalyticsCmsContext',
+    'AnalyticsComponentContext',
+    'AnalyticsCountPoint',
+    'AnalyticsDimensionFilter',
+    'AnalyticsDimensionRow',
+    'AnalyticsPageviewPoint',
+    'AnalyticsTopEventRow',
+    'AnalyticsTopPageRow',
+    'AnalyticsWindow',
     'CustomScriptArgs',
     'GetTokenInfoApplication',
     'GetTokenInfoAuthorization',
     'GetTokenInfoAuthorizedTo',
     'NodeContentUpdate',
     'PageCustomCodeScript',
-    'PageInfo',
+    'PageOpenGraphArgs',
+    'PageOpenGraphRecord',
+    'PageRecord',
+    'PageSEOArgs',
+    'PageSEORecord',
 ]
+
+@pulumi.output_type
+class AnalyticsAverageSecondsPoint(dict):
+    def __init__(__self__, *,
+                 average_seconds: _builtins.float,
+                 timestamp: _builtins.str):
+        """
+        :param _builtins.float average_seconds: Average time spent on the page in seconds.
+        :param _builtins.str timestamp: Start of the bucket as a UTC instant in ISO 8601 / RFC 3339 format.
+        """
+        pulumi.set(__self__, "average_seconds", average_seconds)
+        pulumi.set(__self__, "timestamp", timestamp)
+
+    @_builtins.property
+    @pulumi.getter(name="averageSeconds")
+    def average_seconds(self) -> _builtins.float:
+        """
+        Average time spent on the page in seconds.
+        """
+        return pulumi.get(self, "average_seconds")
+
+    @_builtins.property
+    @pulumi.getter
+    def timestamp(self) -> _builtins.str:
+        """
+        Start of the bucket as a UTC instant in ISO 8601 / RFC 3339 format.
+        """
+        return pulumi.get(self, "timestamp")
+
+
+@pulumi.output_type
+class AnalyticsBucketing(dict):
+    def __init__(__self__, *,
+                 bucket_time_zone: _builtins.str,
+                 granularity_period: _builtins.str):
+        """
+        :param _builtins.str bucket_time_zone: The IANA time zone used to align bucket boundaries (e.g., 'UTC', 'America/New_York').
+        :param _builtins.str granularity_period: The size of each time bucket: 'day' or 'week'.
+        """
+        pulumi.set(__self__, "bucket_time_zone", bucket_time_zone)
+        pulumi.set(__self__, "granularity_period", granularity_period)
+
+    @_builtins.property
+    @pulumi.getter(name="bucketTimeZone")
+    def bucket_time_zone(self) -> _builtins.str:
+        """
+        The IANA time zone used to align bucket boundaries (e.g., 'UTC', 'America/New_York').
+        """
+        return pulumi.get(self, "bucket_time_zone")
+
+    @_builtins.property
+    @pulumi.getter(name="granularityPeriod")
+    def granularity_period(self) -> _builtins.str:
+        """
+        The size of each time bucket: 'day' or 'week'.
+        """
+        return pulumi.get(self, "granularity_period")
+
+
+@pulumi.output_type
+class AnalyticsCmsContext(dict):
+    def __init__(__self__, *,
+                 collection_id: _builtins.str,
+                 item_id: _builtins.str):
+        """
+        :param _builtins.str collection_id: The CMS collection ID.
+        :param _builtins.str item_id: The CMS item ID.
+        """
+        pulumi.set(__self__, "collection_id", collection_id)
+        pulumi.set(__self__, "item_id", item_id)
+
+    @_builtins.property
+    @pulumi.getter(name="collectionId")
+    def collection_id(self) -> _builtins.str:
+        """
+        The CMS collection ID.
+        """
+        return pulumi.get(self, "collection_id")
+
+    @_builtins.property
+    @pulumi.getter(name="itemId")
+    def item_id(self) -> _builtins.str:
+        """
+        The CMS item ID.
+        """
+        return pulumi.get(self, "item_id")
+
+
+@pulumi.output_type
+class AnalyticsComponentContext(dict):
+    def __init__(__self__, *,
+                 component_id: _builtins.str,
+                 instance_id: _builtins.str):
+        """
+        :param _builtins.str component_id: The Webflow component ID the event is attached to.
+        :param _builtins.str instance_id: The ID of the component instance the event fired from.
+        """
+        pulumi.set(__self__, "component_id", component_id)
+        pulumi.set(__self__, "instance_id", instance_id)
+
+    @_builtins.property
+    @pulumi.getter(name="componentId")
+    def component_id(self) -> _builtins.str:
+        """
+        The Webflow component ID the event is attached to.
+        """
+        return pulumi.get(self, "component_id")
+
+    @_builtins.property
+    @pulumi.getter(name="instanceId")
+    def instance_id(self) -> _builtins.str:
+        """
+        The ID of the component instance the event fired from.
+        """
+        return pulumi.get(self, "instance_id")
+
+
+@pulumi.output_type
+class AnalyticsCountPoint(dict):
+    def __init__(__self__, *,
+                 count: _builtins.int,
+                 timestamp: _builtins.str):
+        """
+        :param _builtins.int count: Number of sessions, users, pageviews or events in the bucket, per the report's metric scope.
+        :param _builtins.str timestamp: Start of the time bucket as a UTC instant in ISO 8601 / RFC 3339 format.
+        """
+        pulumi.set(__self__, "count", count)
+        pulumi.set(__self__, "timestamp", timestamp)
+
+    @_builtins.property
+    @pulumi.getter
+    def count(self) -> _builtins.int:
+        """
+        Number of sessions, users, pageviews or events in the bucket, per the report's metric scope.
+        """
+        return pulumi.get(self, "count")
+
+    @_builtins.property
+    @pulumi.getter
+    def timestamp(self) -> _builtins.str:
+        """
+        Start of the time bucket as a UTC instant in ISO 8601 / RFC 3339 format.
+        """
+        return pulumi.get(self, "timestamp")
+
+
+@pulumi.output_type
+class AnalyticsDimensionFilter(dict):
+    def __init__(__self__, *,
+                 eq: Optional[_builtins.str] = None,
+                 in_: Optional[Sequence[_builtins.str]] = None,
+                 ne: Optional[_builtins.str] = None,
+                 nin: Optional[Sequence[_builtins.str]] = None):
+        """
+        :param _builtins.str eq: Keep only rows whose dimension value equals this value.
+        :param Sequence[_builtins.str] in_: Keep only rows whose dimension value is one of these values.
+        :param _builtins.str ne: Exclude rows whose dimension value equals this value.
+        :param Sequence[_builtins.str] nin: Exclude rows whose dimension value is one of these values.
+        """
+        if eq is not None:
+            pulumi.set(__self__, "eq", eq)
+        if in_ is not None:
+            pulumi.set(__self__, "in_", in_)
+        if ne is not None:
+            pulumi.set(__self__, "ne", ne)
+        if nin is not None:
+            pulumi.set(__self__, "nin", nin)
+
+    @_builtins.property
+    @pulumi.getter
+    def eq(self) -> Optional[_builtins.str]:
+        """
+        Keep only rows whose dimension value equals this value.
+        """
+        return pulumi.get(self, "eq")
+
+    @_builtins.property
+    @pulumi.getter(name="in")
+    def in_(self) -> Optional[Sequence[_builtins.str]]:
+        """
+        Keep only rows whose dimension value is one of these values.
+        """
+        return pulumi.get(self, "in_")
+
+    @_builtins.property
+    @pulumi.getter
+    def ne(self) -> Optional[_builtins.str]:
+        """
+        Exclude rows whose dimension value equals this value.
+        """
+        return pulumi.get(self, "ne")
+
+    @_builtins.property
+    @pulumi.getter
+    def nin(self) -> Optional[Sequence[_builtins.str]]:
+        """
+        Exclude rows whose dimension value is one of these values.
+        """
+        return pulumi.get(self, "nin")
+
+
+@pulumi.output_type
+class AnalyticsDimensionRow(dict):
+    def __init__(__self__, *,
+                 attribute_key: _builtins.str,
+                 count: _builtins.int,
+                 name: _builtins.str):
+        """
+        :param _builtins.str attribute_key: The raw value of the dimension (e.g., 'US-CA' for a region, 'SO' for a traffic source).
+        :param _builtins.int count: Number of sessions or users with this value, per the requested metric scope.
+        :param _builtins.str name: A human-readable label for the value (e.g., 'California, United States').
+        """
+        pulumi.set(__self__, "attribute_key", attribute_key)
+        pulumi.set(__self__, "count", count)
+        pulumi.set(__self__, "name", name)
+
+    @_builtins.property
+    @pulumi.getter(name="attributeKey")
+    def attribute_key(self) -> _builtins.str:
+        """
+        The raw value of the dimension (e.g., 'US-CA' for a region, 'SO' for a traffic source).
+        """
+        return pulumi.get(self, "attribute_key")
+
+    @_builtins.property
+    @pulumi.getter
+    def count(self) -> _builtins.int:
+        """
+        Number of sessions or users with this value, per the requested metric scope.
+        """
+        return pulumi.get(self, "count")
+
+    @_builtins.property
+    @pulumi.getter
+    def name(self) -> _builtins.str:
+        """
+        A human-readable label for the value (e.g., 'California, United States').
+        """
+        return pulumi.get(self, "name")
+
+
+@pulumi.output_type
+class AnalyticsPageviewPoint(dict):
+    def __init__(__self__, *,
+                 pageview_count: _builtins.int,
+                 timestamp: _builtins.str):
+        """
+        :param _builtins.int pageview_count: Number of pageviews in the bucket.
+        :param _builtins.str timestamp: Start of the daily bucket as a UTC instant in ISO 8601 / RFC 3339 format.
+        """
+        pulumi.set(__self__, "pageview_count", pageview_count)
+        pulumi.set(__self__, "timestamp", timestamp)
+
+    @_builtins.property
+    @pulumi.getter(name="pageviewCount")
+    def pageview_count(self) -> _builtins.int:
+        """
+        Number of pageviews in the bucket.
+        """
+        return pulumi.get(self, "pageview_count")
+
+    @_builtins.property
+    @pulumi.getter
+    def timestamp(self) -> _builtins.str:
+        """
+        Start of the daily bucket as a UTC instant in ISO 8601 / RFC 3339 format.
+        """
+        return pulumi.get(self, "timestamp")
+
+
+@pulumi.output_type
+class AnalyticsTopEventRow(dict):
+    def __init__(__self__, *,
+                 count: _builtins.int,
+                 event_id: _builtins.str,
+                 cms_context: Optional[Sequence['outputs.AnalyticsCmsContext']] = None,
+                 collection_id: Optional[_builtins.str] = None,
+                 component_context: Optional[Sequence['outputs.AnalyticsComponentContext']] = None,
+                 item_slug: Optional[_builtins.str] = None,
+                 name: Optional[_builtins.str] = None,
+                 page_id: Optional[_builtins.str] = None,
+                 page_name: Optional[_builtins.str] = None,
+                 timeseries: Optional[Sequence['outputs.AnalyticsCountPoint']] = None):
+        """
+        :param _builtins.int count: Number of times the event fired in the window.
+        :param _builtins.str event_id: The event identifier.
+        :param Sequence['AnalyticsCmsContext'] cms_context: CMS items the event fired from, when applicable.
+        :param _builtins.str collection_id: The CMS collection ID, for events on collection template pages.
+        :param Sequence['AnalyticsComponentContext'] component_context: Component instances the event fired from, when applicable.
+        :param _builtins.str item_slug: The CMS item slug, for events on collection template pages.
+        :param _builtins.str name: The event name, when available.
+        :param _builtins.str page_id: The ID of the page the event is attached to, when available.
+        :param _builtins.str page_name: The name of the page the event is attached to, when available.
+        :param Sequence['AnalyticsCountPoint'] timeseries: Daily event counts; present only when 'timeseries' was requested.
+        """
+        pulumi.set(__self__, "count", count)
+        pulumi.set(__self__, "event_id", event_id)
+        if cms_context is not None:
+            pulumi.set(__self__, "cms_context", cms_context)
+        if collection_id is not None:
+            pulumi.set(__self__, "collection_id", collection_id)
+        if component_context is not None:
+            pulumi.set(__self__, "component_context", component_context)
+        if item_slug is not None:
+            pulumi.set(__self__, "item_slug", item_slug)
+        if name is not None:
+            pulumi.set(__self__, "name", name)
+        if page_id is not None:
+            pulumi.set(__self__, "page_id", page_id)
+        if page_name is not None:
+            pulumi.set(__self__, "page_name", page_name)
+        if timeseries is not None:
+            pulumi.set(__self__, "timeseries", timeseries)
+
+    @_builtins.property
+    @pulumi.getter
+    def count(self) -> _builtins.int:
+        """
+        Number of times the event fired in the window.
+        """
+        return pulumi.get(self, "count")
+
+    @_builtins.property
+    @pulumi.getter(name="eventId")
+    def event_id(self) -> _builtins.str:
+        """
+        The event identifier.
+        """
+        return pulumi.get(self, "event_id")
+
+    @_builtins.property
+    @pulumi.getter(name="cmsContext")
+    def cms_context(self) -> Optional[Sequence['outputs.AnalyticsCmsContext']]:
+        """
+        CMS items the event fired from, when applicable.
+        """
+        return pulumi.get(self, "cms_context")
+
+    @_builtins.property
+    @pulumi.getter(name="collectionId")
+    def collection_id(self) -> Optional[_builtins.str]:
+        """
+        The CMS collection ID, for events on collection template pages.
+        """
+        return pulumi.get(self, "collection_id")
+
+    @_builtins.property
+    @pulumi.getter(name="componentContext")
+    def component_context(self) -> Optional[Sequence['outputs.AnalyticsComponentContext']]:
+        """
+        Component instances the event fired from, when applicable.
+        """
+        return pulumi.get(self, "component_context")
+
+    @_builtins.property
+    @pulumi.getter(name="itemSlug")
+    def item_slug(self) -> Optional[_builtins.str]:
+        """
+        The CMS item slug, for events on collection template pages.
+        """
+        return pulumi.get(self, "item_slug")
+
+    @_builtins.property
+    @pulumi.getter
+    def name(self) -> Optional[_builtins.str]:
+        """
+        The event name, when available.
+        """
+        return pulumi.get(self, "name")
+
+    @_builtins.property
+    @pulumi.getter(name="pageId")
+    def page_id(self) -> Optional[_builtins.str]:
+        """
+        The ID of the page the event is attached to, when available.
+        """
+        return pulumi.get(self, "page_id")
+
+    @_builtins.property
+    @pulumi.getter(name="pageName")
+    def page_name(self) -> Optional[_builtins.str]:
+        """
+        The name of the page the event is attached to, when available.
+        """
+        return pulumi.get(self, "page_name")
+
+    @_builtins.property
+    @pulumi.getter
+    def timeseries(self) -> Optional[Sequence['outputs.AnalyticsCountPoint']]:
+        """
+        Daily event counts; present only when 'timeseries' was requested.
+        """
+        return pulumi.get(self, "timeseries")
+
+
+@pulumi.output_type
+class AnalyticsTopPageRow(dict):
+    def __init__(__self__, *,
+                 page_id: _builtins.str,
+                 pageview_count: _builtins.int,
+                 session_count: _builtins.int,
+                 title: _builtins.str,
+                 user_count: _builtins.int,
+                 collection_id: Optional[_builtins.str] = None,
+                 item_slug: Optional[_builtins.str] = None,
+                 timeseries: Optional[Sequence['outputs.AnalyticsPageviewPoint']] = None):
+        """
+        :param _builtins.str page_id: The Webflow page ID.
+        :param _builtins.int pageview_count: Number of pageviews of this page.
+        :param _builtins.int session_count: Number of sessions that included a view of this page.
+        :param _builtins.str title: The page title.
+        :param _builtins.int user_count: Number of unique users who viewed this page.
+        :param _builtins.str collection_id: The CMS collection ID, for collection template pages.
+        :param _builtins.str item_slug: The CMS item slug, for collection template pages.
+        :param Sequence['AnalyticsPageviewPoint'] timeseries: Daily pageview counts for this page; present only when 'timeseries' was requested.
+        """
+        pulumi.set(__self__, "page_id", page_id)
+        pulumi.set(__self__, "pageview_count", pageview_count)
+        pulumi.set(__self__, "session_count", session_count)
+        pulumi.set(__self__, "title", title)
+        pulumi.set(__self__, "user_count", user_count)
+        if collection_id is not None:
+            pulumi.set(__self__, "collection_id", collection_id)
+        if item_slug is not None:
+            pulumi.set(__self__, "item_slug", item_slug)
+        if timeseries is not None:
+            pulumi.set(__self__, "timeseries", timeseries)
+
+    @_builtins.property
+    @pulumi.getter(name="pageId")
+    def page_id(self) -> _builtins.str:
+        """
+        The Webflow page ID.
+        """
+        return pulumi.get(self, "page_id")
+
+    @_builtins.property
+    @pulumi.getter(name="pageviewCount")
+    def pageview_count(self) -> _builtins.int:
+        """
+        Number of pageviews of this page.
+        """
+        return pulumi.get(self, "pageview_count")
+
+    @_builtins.property
+    @pulumi.getter(name="sessionCount")
+    def session_count(self) -> _builtins.int:
+        """
+        Number of sessions that included a view of this page.
+        """
+        return pulumi.get(self, "session_count")
+
+    @_builtins.property
+    @pulumi.getter
+    def title(self) -> _builtins.str:
+        """
+        The page title.
+        """
+        return pulumi.get(self, "title")
+
+    @_builtins.property
+    @pulumi.getter(name="userCount")
+    def user_count(self) -> _builtins.int:
+        """
+        Number of unique users who viewed this page.
+        """
+        return pulumi.get(self, "user_count")
+
+    @_builtins.property
+    @pulumi.getter(name="collectionId")
+    def collection_id(self) -> Optional[_builtins.str]:
+        """
+        The CMS collection ID, for collection template pages.
+        """
+        return pulumi.get(self, "collection_id")
+
+    @_builtins.property
+    @pulumi.getter(name="itemSlug")
+    def item_slug(self) -> Optional[_builtins.str]:
+        """
+        The CMS item slug, for collection template pages.
+        """
+        return pulumi.get(self, "item_slug")
+
+    @_builtins.property
+    @pulumi.getter
+    def timeseries(self) -> Optional[Sequence['outputs.AnalyticsPageviewPoint']]:
+        """
+        Daily pageview counts for this page; present only when 'timeseries' was requested.
+        """
+        return pulumi.get(self, "timeseries")
+
+
+@pulumi.output_type
+class AnalyticsWindow(dict):
+    def __init__(__self__, *,
+                 end_time: _builtins.str,
+                 start_time: _builtins.str):
+        """
+        :param _builtins.str end_time: Exclusive end of the reporting window, in ISO 8601 / RFC 3339 format.
+        :param _builtins.str start_time: Inclusive start of the reporting window, in ISO 8601 / RFC 3339 format.
+        """
+        pulumi.set(__self__, "end_time", end_time)
+        pulumi.set(__self__, "start_time", start_time)
+
+    @_builtins.property
+    @pulumi.getter(name="endTime")
+    def end_time(self) -> _builtins.str:
+        """
+        Exclusive end of the reporting window, in ISO 8601 / RFC 3339 format.
+        """
+        return pulumi.get(self, "end_time")
+
+    @_builtins.property
+    @pulumi.getter(name="startTime")
+    def start_time(self) -> _builtins.str:
+        """
+        Inclusive start of the reporting window, in ISO 8601 / RFC 3339 format.
+        """
+        return pulumi.get(self, "start_time")
+
 
 @pulumi.output_type
 class CustomScriptArgs(dict):
@@ -292,8 +828,8 @@ class NodeContentUpdate(dict):
                  node_id: _builtins.str,
                  text: _builtins.str):
         """
-        :param _builtins.str node_id: The unique identifier for the DOM node to update. This ID comes from the page's DOM structure and must exist on the page. Retrieve node IDs using GET /pages/{page_id}/dom endpoint.
-        :param _builtins.str text: The new text content for the node. This will replace the existing text content in the specified node. Only applicable to text nodes or elements containing text.
+        :param _builtins.str node_id: The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
+        :param _builtins.str text: The new HTML content for the node (required, non-empty). The HTML tags must match the node's current content as returned by GET /v2/pages/{page_id}/dom (e.g., '<h1>Hello</h1>' for a heading). An empty string does not clear the node; Webflow rejects it.
         """
         pulumi.set(__self__, "node_id", node_id)
         pulumi.set(__self__, "text", text)
@@ -302,7 +838,7 @@ class NodeContentUpdate(dict):
     @pulumi.getter(name="nodeId")
     def node_id(self) -> _builtins.str:
         """
-        The unique identifier for the DOM node to update. This ID comes from the page's DOM structure and must exist on the page. Retrieve node IDs using GET /pages/{page_id}/dom endpoint.
+        The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
         """
         return pulumi.get(self, "node_id")
 
@@ -310,7 +846,7 @@ class NodeContentUpdate(dict):
     @pulumi.getter
     def text(self) -> _builtins.str:
         """
-        The new text content for the node. This will replace the existing text content in the specified node. Only applicable to text nodes or elements containing text.
+        The new HTML content for the node (required, non-empty). The HTML tags must match the node's current content as returned by GET /v2/pages/{page_id}/dom (e.g., '<h1>Hello</h1>' for a heading). An empty string does not clear the node; Webflow rejects it.
         """
         return pulumi.get(self, "text")
 
@@ -385,106 +921,381 @@ class PageCustomCodeScript(dict):
 
 
 @pulumi.output_type
-class PageInfo(dict):
+class PageOpenGraphArgs(dict):
     @staticmethod
     def __key_warning(key: str):
         suggest = None
-        if key == "createdOn":
-            suggest = "created_on"
-        elif key == "lastUpdated":
-            suggest = "last_updated"
-        elif key == "pageId":
-            suggest = "page_id"
-        elif key == "siteId":
-            suggest = "site_id"
-        elif key == "collectionId":
-            suggest = "collection_id"
-        elif key == "parentId":
-            suggest = "parent_id"
+        if key == "descriptionCopied":
+            suggest = "description_copied"
+        elif key == "titleCopied":
+            suggest = "title_copied"
 
         if suggest:
-            pulumi.log.warn(f"Key '{key}' not found in PageInfo. Access the value via the '{suggest}' property getter instead.")
+            pulumi.log.warn(f"Key '{key}' not found in PageOpenGraphArgs. Access the value via the '{suggest}' property getter instead.")
 
     def __getitem__(self, key: str) -> Any:
-        PageInfo.__key_warning(key)
+        PageOpenGraphArgs.__key_warning(key)
         return super().__getitem__(key)
 
     def get(self, key: str, default = None) -> Any:
-        PageInfo.__key_warning(key)
+        PageOpenGraphArgs.__key_warning(key)
         return super().get(key, default)
 
     def __init__(__self__, *,
+                 description: Optional[_builtins.str] = None,
+                 description_copied: Optional[_builtins.bool] = None,
+                 title: Optional[_builtins.str] = None,
+                 title_copied: Optional[_builtins.bool] = None):
+        """
+        :param _builtins.str description: The Open Graph description of the page.
+        :param _builtins.bool description_copied: Whether the Open Graph description is copied from the SEO description.
+        :param _builtins.str title: The Open Graph title of the page.
+        :param _builtins.bool title_copied: Whether the Open Graph title is copied from the SEO title.
+        """
+        if description is not None:
+            pulumi.set(__self__, "description", description)
+        if description_copied is not None:
+            pulumi.set(__self__, "description_copied", description_copied)
+        if title is not None:
+            pulumi.set(__self__, "title", title)
+        if title_copied is not None:
+            pulumi.set(__self__, "title_copied", title_copied)
+
+    @_builtins.property
+    @pulumi.getter
+    def description(self) -> Optional[_builtins.str]:
+        """
+        The Open Graph description of the page.
+        """
+        return pulumi.get(self, "description")
+
+    @_builtins.property
+    @pulumi.getter(name="descriptionCopied")
+    def description_copied(self) -> Optional[_builtins.bool]:
+        """
+        Whether the Open Graph description is copied from the SEO description.
+        """
+        return pulumi.get(self, "description_copied")
+
+    @_builtins.property
+    @pulumi.getter
+    def title(self) -> Optional[_builtins.str]:
+        """
+        The Open Graph title of the page.
+        """
+        return pulumi.get(self, "title")
+
+    @_builtins.property
+    @pulumi.getter(name="titleCopied")
+    def title_copied(self) -> Optional[_builtins.bool]:
+        """
+        Whether the Open Graph title is copied from the SEO title.
+        """
+        return pulumi.get(self, "title_copied")
+
+
+@pulumi.output_type
+class PageOpenGraphRecord(dict):
+    def __init__(__self__, *,
+                 description: _builtins.str,
+                 description_copied: _builtins.bool,
+                 title: _builtins.str,
+                 title_copied: _builtins.bool):
+        """
+        :param _builtins.str description: The Open Graph description of the page.
+        :param _builtins.bool description_copied: Whether the Open Graph description is copied from the SEO description.
+        :param _builtins.str title: The Open Graph title of the page.
+        :param _builtins.bool title_copied: Whether the Open Graph title is copied from the SEO title.
+        """
+        pulumi.set(__self__, "description", description)
+        pulumi.set(__self__, "description_copied", description_copied)
+        pulumi.set(__self__, "title", title)
+        pulumi.set(__self__, "title_copied", title_copied)
+
+    @_builtins.property
+    @pulumi.getter
+    def description(self) -> _builtins.str:
+        """
+        The Open Graph description of the page.
+        """
+        return pulumi.get(self, "description")
+
+    @_builtins.property
+    @pulumi.getter(name="descriptionCopied")
+    def description_copied(self) -> _builtins.bool:
+        """
+        Whether the Open Graph description is copied from the SEO description.
+        """
+        return pulumi.get(self, "description_copied")
+
+    @_builtins.property
+    @pulumi.getter
+    def title(self) -> _builtins.str:
+        """
+        The Open Graph title of the page.
+        """
+        return pulumi.get(self, "title")
+
+    @_builtins.property
+    @pulumi.getter(name="titleCopied")
+    def title_copied(self) -> _builtins.bool:
+        """
+        Whether the Open Graph title is copied from the SEO title.
+        """
+        return pulumi.get(self, "title_copied")
+
+
+@pulumi.output_type
+class PageRecord(dict):
+    def __init__(__self__, *,
                  archived: _builtins.bool,
+                 branch_id: _builtins.str,
+                 can_branch: _builtins.bool,
+                 collection_id: _builtins.str,
                  created_on: _builtins.str,
                  draft: _builtins.bool,
+                 is_branch: _builtins.bool,
                  last_updated: _builtins.str,
+                 locale_id: _builtins.str,
+                 open_graph: 'outputs.PageOpenGraphRecord',
                  page_id: _builtins.str,
+                 parent_id: _builtins.str,
+                 published_path: _builtins.str,
+                 seo: 'outputs.PageSEORecord',
                  site_id: _builtins.str,
                  slug: _builtins.str,
-                 title: _builtins.str,
-                 collection_id: Optional[_builtins.str] = None,
-                 parent_id: Optional[_builtins.str] = None):
+                 title: _builtins.str):
+        """
+        :param _builtins.bool archived: Whether the page is archived.
+        :param _builtins.str branch_id: The ID of the parent branch, or empty.
+        :param _builtins.bool can_branch: Whether the page can be branched.
+        :param _builtins.str collection_id: The CMS collection ID for collection template pages, or empty.
+        :param _builtins.str created_on: The timestamp when the page was created (RFC3339 format).
+        :param _builtins.bool draft: Whether the page is a draft.
+        :param _builtins.bool is_branch: Whether the page is a branch of another page.
+        :param _builtins.str last_updated: The timestamp when the page was last updated (RFC3339 format).
+        :param _builtins.str locale_id: The locale ID of the returned page data, or empty for the primary locale.
+        :param 'PageOpenGraphRecord' open_graph: The Open Graph settings of the page.
+        :param _builtins.str page_id: The Webflow page ID.
+        :param _builtins.str parent_id: The ID of the parent folder, or empty when the page is at the root.
+        :param _builtins.str published_path: The relative URL path of the published page.
+        :param 'PageSEORecord' seo: The SEO title and description of the page.
+        :param _builtins.str site_id: The Webflow site ID this page belongs to.
+        :param _builtins.str slug: The URL slug of the page (e.g., 'about' for '/about').
+        :param _builtins.str title: The page title shown in browser tabs and search results.
+        """
         pulumi.set(__self__, "archived", archived)
+        pulumi.set(__self__, "branch_id", branch_id)
+        pulumi.set(__self__, "can_branch", can_branch)
+        pulumi.set(__self__, "collection_id", collection_id)
         pulumi.set(__self__, "created_on", created_on)
         pulumi.set(__self__, "draft", draft)
+        pulumi.set(__self__, "is_branch", is_branch)
         pulumi.set(__self__, "last_updated", last_updated)
+        pulumi.set(__self__, "locale_id", locale_id)
+        pulumi.set(__self__, "open_graph", open_graph)
         pulumi.set(__self__, "page_id", page_id)
+        pulumi.set(__self__, "parent_id", parent_id)
+        pulumi.set(__self__, "published_path", published_path)
+        pulumi.set(__self__, "seo", seo)
         pulumi.set(__self__, "site_id", site_id)
         pulumi.set(__self__, "slug", slug)
         pulumi.set(__self__, "title", title)
-        if collection_id is not None:
-            pulumi.set(__self__, "collection_id", collection_id)
-        if parent_id is not None:
-            pulumi.set(__self__, "parent_id", parent_id)
 
     @_builtins.property
     @pulumi.getter
     def archived(self) -> _builtins.bool:
+        """
+        Whether the page is archived.
+        """
         return pulumi.get(self, "archived")
+
+    @_builtins.property
+    @pulumi.getter(name="branchId")
+    def branch_id(self) -> _builtins.str:
+        """
+        The ID of the parent branch, or empty.
+        """
+        return pulumi.get(self, "branch_id")
+
+    @_builtins.property
+    @pulumi.getter(name="canBranch")
+    def can_branch(self) -> _builtins.bool:
+        """
+        Whether the page can be branched.
+        """
+        return pulumi.get(self, "can_branch")
+
+    @_builtins.property
+    @pulumi.getter(name="collectionId")
+    def collection_id(self) -> _builtins.str:
+        """
+        The CMS collection ID for collection template pages, or empty.
+        """
+        return pulumi.get(self, "collection_id")
 
     @_builtins.property
     @pulumi.getter(name="createdOn")
     def created_on(self) -> _builtins.str:
+        """
+        The timestamp when the page was created (RFC3339 format).
+        """
         return pulumi.get(self, "created_on")
 
     @_builtins.property
     @pulumi.getter
     def draft(self) -> _builtins.bool:
+        """
+        Whether the page is a draft.
+        """
         return pulumi.get(self, "draft")
+
+    @_builtins.property
+    @pulumi.getter(name="isBranch")
+    def is_branch(self) -> _builtins.bool:
+        """
+        Whether the page is a branch of another page.
+        """
+        return pulumi.get(self, "is_branch")
 
     @_builtins.property
     @pulumi.getter(name="lastUpdated")
     def last_updated(self) -> _builtins.str:
+        """
+        The timestamp when the page was last updated (RFC3339 format).
+        """
         return pulumi.get(self, "last_updated")
+
+    @_builtins.property
+    @pulumi.getter(name="localeId")
+    def locale_id(self) -> _builtins.str:
+        """
+        The locale ID of the returned page data, or empty for the primary locale.
+        """
+        return pulumi.get(self, "locale_id")
+
+    @_builtins.property
+    @pulumi.getter(name="openGraph")
+    def open_graph(self) -> 'outputs.PageOpenGraphRecord':
+        """
+        The Open Graph settings of the page.
+        """
+        return pulumi.get(self, "open_graph")
 
     @_builtins.property
     @pulumi.getter(name="pageId")
     def page_id(self) -> _builtins.str:
+        """
+        The Webflow page ID.
+        """
         return pulumi.get(self, "page_id")
+
+    @_builtins.property
+    @pulumi.getter(name="parentId")
+    def parent_id(self) -> _builtins.str:
+        """
+        The ID of the parent folder, or empty when the page is at the root.
+        """
+        return pulumi.get(self, "parent_id")
+
+    @_builtins.property
+    @pulumi.getter(name="publishedPath")
+    def published_path(self) -> _builtins.str:
+        """
+        The relative URL path of the published page.
+        """
+        return pulumi.get(self, "published_path")
+
+    @_builtins.property
+    @pulumi.getter
+    def seo(self) -> 'outputs.PageSEORecord':
+        """
+        The SEO title and description of the page.
+        """
+        return pulumi.get(self, "seo")
 
     @_builtins.property
     @pulumi.getter(name="siteId")
     def site_id(self) -> _builtins.str:
+        """
+        The Webflow site ID this page belongs to.
+        """
         return pulumi.get(self, "site_id")
 
     @_builtins.property
     @pulumi.getter
     def slug(self) -> _builtins.str:
+        """
+        The URL slug of the page (e.g., 'about' for '/about').
+        """
         return pulumi.get(self, "slug")
 
     @_builtins.property
     @pulumi.getter
     def title(self) -> _builtins.str:
+        """
+        The page title shown in browser tabs and search results.
+        """
         return pulumi.get(self, "title")
 
-    @_builtins.property
-    @pulumi.getter(name="collectionId")
-    def collection_id(self) -> Optional[_builtins.str]:
-        return pulumi.get(self, "collection_id")
+
+@pulumi.output_type
+class PageSEOArgs(dict):
+    def __init__(__self__, *,
+                 description: Optional[_builtins.str] = None,
+                 title: Optional[_builtins.str] = None):
+        """
+        :param _builtins.str description: The SEO meta description of the page.
+        :param _builtins.str title: The SEO title of the page.
+        """
+        if description is not None:
+            pulumi.set(__self__, "description", description)
+        if title is not None:
+            pulumi.set(__self__, "title", title)
 
     @_builtins.property
-    @pulumi.getter(name="parentId")
-    def parent_id(self) -> Optional[_builtins.str]:
-        return pulumi.get(self, "parent_id")
+    @pulumi.getter
+    def description(self) -> Optional[_builtins.str]:
+        """
+        The SEO meta description of the page.
+        """
+        return pulumi.get(self, "description")
+
+    @_builtins.property
+    @pulumi.getter
+    def title(self) -> Optional[_builtins.str]:
+        """
+        The SEO title of the page.
+        """
+        return pulumi.get(self, "title")
+
+
+@pulumi.output_type
+class PageSEORecord(dict):
+    def __init__(__self__, *,
+                 description: _builtins.str,
+                 title: _builtins.str):
+        """
+        :param _builtins.str description: The SEO meta description of the page.
+        :param _builtins.str title: The SEO title of the page.
+        """
+        pulumi.set(__self__, "description", description)
+        pulumi.set(__self__, "title", title)
+
+    @_builtins.property
+    @pulumi.getter
+    def description(self) -> _builtins.str:
+        """
+        The SEO meta description of the page.
+        """
+        return pulumi.get(self, "description")
+
+    @_builtins.property
+    @pulumi.getter
+    def title(self) -> _builtins.str:
+        """
+        The SEO title of the page.
+        """
+        return pulumi.get(self, "title")
 
 

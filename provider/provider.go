@@ -31,11 +31,14 @@ func Provider() p.Provider {
 	prov, err := infer.NewProviderBuilder().
 		WithDisplayName("Webflow (Unofficial)").
 		WithDescription(
-			"Unofficial community-maintained Pulumi provider for managing Webflow sites, "+
-				"redirects, and robots.txt. Not affiliated with Pulumi Corporation or Webflow, Inc.",
+			"Unofficial community-maintained Pulumi provider for managing Webflow sites, pages, CMS collections, "+
+				"assets, redirects, robots.txt, custom code, webhooks, Google Tags, schema markup, and ecommerce settings. "+
+				"Not affiliated with Pulumi Corporation or Webflow, Inc.",
 		).
 		WithHomepage("https://github.com/JDetmar/pulumi-webflow").
 		WithRepository("https://github.com/JDetmar/pulumi-webflow").
+		WithPublisher("Justin Detmar").
+		WithLicense("MIT").
 		WithPluginDownloadURL("github://api.github.com/JDetmar/pulumi-webflow").
 		WithNamespace(Name).
 		WithConfig(infer.Config(&Config{})).
@@ -46,7 +49,7 @@ func Provider() p.Provider {
 			infer.Resource(&CollectionResource{}),
 			infer.Resource(&CollectionField{}),
 			infer.Resource(&CollectionItemResource{}),
-			infer.Resource(&PageData{}),
+			infer.Resource(&PageMetadata{}),
 			infer.Resource(&Webhook{}),
 			infer.Resource(&Asset{}),
 			infer.Resource(&AssetFolder{}),
@@ -56,10 +59,20 @@ func Provider() p.Provider {
 			infer.Resource(&InlineScript{}),
 			infer.Resource(&PageCustomCode{}),
 			infer.Resource(&EcommerceSettings{}),
+			infer.Resource(&GoogleTag{}),
+			infer.Resource(&PageSchemaMarkup{}),
 		).
 		WithFunctions(
 			infer.Function(&GetTokenInfo{}),
 			infer.Function(&GetAuthorizedUser{}),
+			infer.Function(&GetPage{}),
+			infer.Function(&GetPages{}),
+			infer.Function(&GetPageSchemaMarkup{}),
+			infer.Function(&GetAnalyticsTraffic{}),
+			infer.Function(&GetAnalyticsTopPages{}),
+			infer.Function(&GetAnalyticsTopDimensions{}),
+			infer.Function(&GetAnalyticsTopEvents{}),
+			infer.Function(&GetAnalyticsTimeOnPage{}),
 		).
 		WithModuleMap(map[tokens.ModuleName]tokens.ModuleName{
 			"provider": "index",

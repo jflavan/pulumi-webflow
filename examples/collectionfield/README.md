@@ -4,11 +4,16 @@ This directory contains examples demonstrating how to create and manage fields f
 
 ## What You'll Learn
 
-- Create various field types (PlainText, RichText, Number, DateTime, Switch, Email, Image, Phone, Color)
-- Set up field validations (min/max for numbers, maxLength for text)
+- Create various field types (PlainText, RichText, Number, DateTime, Switch, Email, Image, Phone, Color, Option, VideoLink)
+- Configure Option fields with `metadata`
 - Configure required vs. optional fields
 - Add help text for content editors
-- Use auto-generated slugs vs. custom slugs
+- Read the slug Webflow generates from `displayName`
+
+> **Deprecated inputs.** The Webflow API accepts neither `slug` nor `validations` when creating a
+> field: the slug is always generated from `displayName`, and validation rules (min/max,
+> maxLength, ...) can only be set in the Designer. Both inputs are deprecated and ignored by the
+> provider; read the generated slug from the `slug` output.
 
 ## Available Languages
 
@@ -52,12 +57,11 @@ The collection ID is in the URL when editing a collection: `https://webflow.com/
 
 ### 1. Plain Text Field (Required)
 
-A single-line text input with character limit validation. Best for titles, names, and short descriptions.
+A single-line text input. Best for titles, names, and short descriptions.
 
 ```typescript
 type: "PlainText"
 isRequired: true
-validations: { maxLength: 100 }
 ```
 
 ### 2. Rich Text Field
@@ -69,13 +73,13 @@ type: "RichText"
 isRequired: true
 ```
 
-### 3. Number Field with Validations
+### 3. Number Field
 
-Numeric input with min/max constraints. Best for prices, quantities, ratings, or read times.
+Numeric input. Best for prices, quantities, ratings, or read times. Min/max and decimal-place
+rules are configured in the Designer; the API does not accept them.
 
 ```typescript
 type: "Number"
-validations: { min: 1, max: 120, decimalPlaces: 0 }
 ```
 
 ### 4. DateTime Field
@@ -128,13 +132,34 @@ Color picker. Best for theme colors or branding elements.
 type: "Color"
 ```
 
-### 10. Auto-Generated Slug
+### 10. Generated Slug
 
-When you don't specify a slug, Webflow automatically generates one from the displayName.
+Webflow always generates the field slug from `displayName`; read it from the `slug` output.
 
 ```typescript
 displayName: "Short Description"
-// slug will be auto-generated as "short-description"
+// field.slug resolves to "short-description"
+```
+
+### 11. Option Field with `metadata`
+
+Dropdown fields declare their choices through the `metadata` input (required for `Option`,
+`Reference` and `MultiReference` fields; create-only). The provider reads the options / referenced
+collection back from the API, so `pulumi refresh` reflects changes made in the Designer.
+
+```typescript
+type: "Option"
+metadata: {
+  options: [{ name: "Draft" }, { name: "In Review" }, { name: "Published" }],
+}
+```
+
+### 12. Video Link Field
+
+Embeds a video from a URL. The type is `VideoLink` (the former `Video` name is no longer accepted).
+
+```typescript
+type: "VideoLink"
 ```
 
 ## Configuration
@@ -163,7 +188,9 @@ Outputs:
     shortDescriptionFieldId    : "vwx234..."
     phoneFieldId               : "yza567..."
     accentColorFieldId         : "bcd890..."
-    summary                    : "✅ Successfully created 10 collection fields:
+    statusFieldId              : "efg123..."
+    videoFieldId               : "hij456..."
+    summary                    : "✅ Successfully created 12 collection fields:
                                    1. Article Title
                                    2. Article Content
                                    ..."
@@ -173,11 +200,11 @@ Outputs:
 
 The CollectionField resource supports the following field types:
 
-| Type            | Description                                  | Common Validations                |
+| Type            | Description                                  | Type-specific configuration       |
 |-----------------|----------------------------------------------|-----------------------------------|
-| PlainText       | Single-line text input                       | maxLength                         |
+| PlainText       | Single-line text input                       | -                                 |
 | RichText        | Rich text editor with formatting             | -                                 |
-| Number          | Numeric input                                | min, max, decimalPlaces           |
+| Number          | Numeric input                                | -                                 |
 | DateTime        | Date and time picker                         | -                                 |
 | Switch          | Boolean toggle (true/false)                  | -                                 |
 | Email           | Email address with validation                | -                                 |
@@ -185,12 +212,17 @@ The CollectionField resource supports the following field types:
 | Color           | Color picker                                 | -                                 |
 | Image           | Single image reference                       | -                                 |
 | MultiImage      | Multiple image references                    | -                                 |
-| Video           | Video embed or upload                        | -                                 |
+| VideoLink       | Video embed link (YouTube, Vimeo, ...)        | -                                 |
 | Link            | URL/link input                               | -                                 |
 | File            | File upload                                  | -                                 |
-| Option          | Dropdown/select field                        | options (array of choices)        |
-| Reference       | Reference to another collection item         | collectionId                      |
-| MultiReference  | Multiple references to collection items      | collectionId                      |
+| Option          | Dropdown/select field                        | `metadata: { options: [{ name }] }` (required) |
+| Reference       | Reference to another collection item         | `metadata: { collectionId }` (required) |
+| MultiReference  | Multiple references to collection items      | `metadata: { collectionId }` (required) |
+
+`metadata` is the type-specific configuration for `Option`, `Reference` and `MultiReference` fields;
+it is not accepted for other types and, like `type`, changing it replaces the field. The former
+`Video` type name is now `VideoLink`; if you still have `Video` fields in state, run
+`pulumi refresh` before `pulumi up` so the rename is not treated as a delete-before-replace.
 
 ## Important Notes
 
@@ -200,9 +232,15 @@ The CollectionField resource supports the following field types:
 
 ### Slug Generation
 
-- If you don't provide a `slug`, Webflow auto-generates one from `displayName`
-- Slugs are used in API requests and exports
-- Once created, slugs can be updated
+- Webflow generates the slug from `displayName`; the `slug` input is deprecated and ignored
+- Read the generated value from the `slug` output; slugs are used in item `fieldData` keys
+- Renaming a field (`displayName`) is an in-place update and does not change the slug
+
+### Validations
+
+- The API does not accept validation rules on create or update; the `validations` input is
+  deprecated and ignored
+- Configure min/max, character limits and similar rules in the Designer
 
 ### Field Editability
 
@@ -229,9 +267,9 @@ pulumi stack rm dev
 
 ### "Field already exists" Error
 
-A field with the same slug already exists. Either:
+A field whose slug (generated from `displayName`) already exists. Either:
 1. Import the existing field: `pulumi import webflow:index:CollectionField name collectionId/fieldId`
-2. Use a different slug
+2. Use a different `displayName`
 3. Delete the existing field in Webflow first
 
 ### "Invalid field type" Error
@@ -240,10 +278,11 @@ Ensure you're using one of the supported field types listed in the Field Type Re
 
 ### "Validation failed" Error
 
-Check that your validations match the field type:
-- Number fields: Use `min`, `max`, `decimalPlaces`
-- PlainText/RichText: Use `maxLength`
-- Option fields: Use `options` array
+Check the type-specific configuration:
+- Option fields: `metadata: { options: [...] }` is required
+- Reference/MultiReference fields: `metadata: { collectionId: "..." }` is required
+- Other types: `metadata` must be omitted
+- `validations` and `slug` are ignored; remove them to silence the deprecation warning
 
 ## Related Resources
 

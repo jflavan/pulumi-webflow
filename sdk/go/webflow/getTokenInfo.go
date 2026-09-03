@@ -11,7 +11,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-// Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+// Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings > Apps & integrations > API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
 func GetTokenInfo(ctx *pulumi.Context, args *GetTokenInfoArgs, opts ...pulumi.InvokeOption) (*GetTokenInfoResult, error) {
 	opts = internal.PkgInvokeDefaultOpts(opts)
 	var rv GetTokenInfoResult
@@ -33,12 +33,8 @@ type GetTokenInfoResult struct {
 }
 
 func GetTokenInfoOutput(ctx *pulumi.Context, args GetTokenInfoOutputArgs, opts ...pulumi.InvokeOption) GetTokenInfoResultOutput {
-	return pulumi.ToOutputWithContext(ctx.Context(), args).
-		ApplyT(func(v interface{}) (GetTokenInfoResultOutput, error) {
-			args := v.(GetTokenInfoArgs)
-			options := pulumi.InvokeOutputOptions{InvokeOptions: internal.PkgInvokeDefaultOpts(opts)}
-			return ctx.InvokeOutput("webflow:index:getTokenInfo", args, GetTokenInfoResultOutput{}, options).(GetTokenInfoResultOutput), nil
-		}).(GetTokenInfoResultOutput)
+	options := pulumi.InvokeOutputOptions{InvokeOptions: internal.PkgInvokeDefaultOpts(opts)}
+	return ctx.InvokeOutput("webflow:index:getTokenInfo", args, GetTokenInfoResultOutput{}, options).(GetTokenInfoResultOutput)
 }
 
 type GetTokenInfoOutputArgs struct {

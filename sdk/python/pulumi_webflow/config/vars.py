@@ -23,7 +23,7 @@ class _ExportableConfig(types.ModuleType):
     @_builtins.property
     def api_token(self) -> Optional[str]:
         """
-        Webflow API v2 bearer token for authentication. Can also be set via WEBFLOW_API_TOKEN environment variable.
+        Webflow API v2 bearer token for authentication. Explicit configuration takes precedence over the WEBFLOW_API_TOKEN environment variable, which is used as a fallback when no token is configured.
         """
-        return __config__.get('apiToken')
+        return __config__.get('apiToken') or _utilities.get_env('WEBFLOW_API_TOKEN')
 

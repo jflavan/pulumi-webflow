@@ -9,528 +9,266 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/pulumi/pulumi-go-provider/infer"
 )
 
-// TestValidatePageID_Valid tests valid page IDs
-func TestValidatePageID_Valid(t *testing.T) {
-	tests := []struct {
-		name   string
-		pageID string
-	}{
-		{"valid page ID", "5f0c8c9e1c9d440000e8d8c4"},
-		{"another valid ID", "507f1f77bcf86cd799439011"},
-		{"all lowercase hex", "abcdef0123456789abcdef01"},
-	}
+const (
+	testPageSiteID = "5f0c8c9e1c9d440000e8d8c3"
+	testPageID     = "5f0c8c9e1c9d440000e8d8c4"
+	testLocaleID   = "653fd9af6a07fc9cfd7a5e57"
+)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidatePageID(tt.pageID)
-			if err != nil {
-				t.Errorf("ValidatePageID(%q) = %v, want nil", tt.pageID, err)
-			}
-		})
-	}
-}
-
-// TestValidatePageID_Empty tests empty page ID
-func TestValidatePageID_Empty(t *testing.T) {
-	err := ValidatePageID("")
-	if err == nil {
-		t.Error("ValidatePageID(\"\") = nil, want error")
-	}
-	if !strings.Contains(err.Error(), "required") {
-		t.Errorf("Expected error to mention 'required', got: %v", err)
-	}
-}
-
-// TestValidatePageID_InvalidFormat tests invalid page ID formats
-func TestValidatePageID_InvalidFormat(t *testing.T) {
-	tests := []struct {
-		name   string
-		pageID string
-	}{
-		{"too short", "5f0c8c9e1c9d"},
-		{"too long", "5f0c8c9e1c9d440000e8d8c4000"},
-		{"uppercase letters", "5F0C8C9E1C9D440000E8D8C4"},
-		{"invalid characters", "5g0c8c9e1c9d440000e8d8c4"},
-		{"with spaces", "5f0c8c9e 1c9d440000e8d8c4"},
-		{"with dashes", "5f0c8c9e-1c9d-4400-00e8d8c4"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidatePageID(tt.pageID)
-			if err == nil {
-				t.Errorf("ValidatePageID(%q) = nil, want error", tt.pageID)
-			}
-			if !strings.Contains(err.Error(), "invalid format") {
-				t.Errorf("Expected error to mention 'invalid format', got: %v", err)
-			}
-		})
-	}
-}
-
-// TestGeneratePageResourceID tests resource ID generation
-func TestGeneratePageResourceID(t *testing.T) {
-	siteID := "5f0c8c9e1c9d440000e8d8c3"
-	pageID := "5f0c8c9e1c9d440000e8d8c4"
-
-	resourceID := GeneratePageResourceID(siteID, pageID)
-	expected := "5f0c8c9e1c9d440000e8d8c3/pages/5f0c8c9e1c9d440000e8d8c4"
-
-	if resourceID != expected {
-		t.Errorf("GeneratePageResourceID() = %q, want %q", resourceID, expected)
-	}
-}
-
-// TestExtractIDsFromPageResourceID_Valid tests extracting IDs from valid resource ID
-func TestExtractIDsFromPageResourceID_Valid(t *testing.T) {
-	resourceID := "5f0c8c9e1c9d440000e8d8c3/pages/5f0c8c9e1c9d440000e8d8c4"
-
-	siteID, pageID, err := ExtractIDsFromPageResourceID(resourceID)
-	if err != nil {
-		t.Errorf("ExtractIDsFromPageResourceID() error = %v, want nil", err)
-	}
-	if siteID != "5f0c8c9e1c9d440000e8d8c3" {
-		t.Errorf("ExtractIDsFromPageResourceID() siteID = %q, want %q", siteID, "5f0c8c9e1c9d440000e8d8c3")
-	}
-	if pageID != "5f0c8c9e1c9d440000e8d8c4" {
-		t.Errorf("ExtractIDsFromPageResourceID() pageID = %q, want %q", pageID, "5f0c8c9e1c9d440000e8d8c4")
-	}
-}
-
-// TestExtractIDsFromPageResourceID_Empty tests empty resource ID
-func TestExtractIDsFromPageResourceID_Empty(t *testing.T) {
-	_, _, err := ExtractIDsFromPageResourceID("")
-	if err == nil {
-		t.Error("ExtractIDsFromPageResourceID(\"\") error = nil, want error")
-	}
-}
-
-// TestExtractIDsFromPageResourceID_InvalidFormat tests invalid format
-func TestExtractIDsFromPageResourceID_InvalidFormat(t *testing.T) {
-	tests := []struct {
-		name       string
-		resourceID string
-	}{
-		{"missing pages part", "5f0c8c9e1c9d440000e8d8c3/5f0c8c9e1c9d440000e8d8c4"},
-		{"wrong middle part", "5f0c8c9e1c9d440000e8d8c3/redirects/5f0c8c9e1c9d440000e8d8c4"},
-		{"too few parts", "5f0c8c9e1c9d440000e8d8c3"},
-		{"empty site ID", "/pages/5f0c8c9e1c9d440000e8d8c4"},
-		{"empty page ID", "5f0c8c9e1c9d440000e8d8c3/pages/"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := ExtractIDsFromPageResourceID(tt.resourceID)
-			if err == nil {
-				t.Errorf("ExtractIDsFromPageResourceID(%q) error = nil, want error", tt.resourceID)
-			}
-		})
-	}
-}
-
-// TestErrorMessagesAreActionable verifies error messages contain guidance
-func TestPageErrorMessagesAreActionable(t *testing.T) {
-	tests := []struct {
-		name     string
-		testFunc func() error
-		contains []string
-	}{
-		{
-			"ValidatePageID empty",
-			func() error { return ValidatePageID("") },
-			[]string{"required", "24-character"},
-		},
-		{
-			"ValidatePageID invalid format",
-			func() error { return ValidatePageID("invalid") },
-			[]string{"invalid format", "24-character", "lowercase"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.testFunc()
-			if err == nil {
-				t.Errorf("%s: expected error, got nil", tt.name)
-				return
-			}
-
-			errMsg := err.Error()
-			for _, expectedStr := range tt.contains {
-				if !strings.Contains(errMsg, expectedStr) {
-					t.Errorf("%s: error message missing %q. Got: %s", tt.name, expectedStr, errMsg)
-				}
-			}
-		})
-	}
-}
-
-// TestGetPages_Valid tests retrieving pages successfully
-func TestGetPages_Valid(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Errorf("Expected GET, got %s", r.Method)
+func TestValidatePageID_Format(t *testing.T) {
+	for _, id := range []string{"5f0c8c9e1c9d440000e8d8c4", "507f1f77bcf86cd799439011", "abcdef0123456789abcdef01"} {
+		if err := ValidatePageID(id); err != nil {
+			t.Errorf("ValidatePageID(%q) = %v", id, err)
 		}
-		if !strings.Contains(r.URL.Path, "/pages") {
-			t.Errorf("Expected /pages in path, got %s", r.URL.Path)
+	}
+	if err := ValidatePageID(""); err == nil || !strings.Contains(err.Error(), "required") ||
+		!strings.Contains(err.Error(), "24-character") {
+		t.Errorf("empty: %v", err)
+	}
+	for _, id := range []string{
+		"5f0c8c9e1c9d", "5f0c8c9e1c9d440000e8d8c4000", "5F0C8C9E1C9D440000E8D8C4",
+		"5g0c8c9e1c9d440000e8d8c4", "5f0c8c9e-1c9d-4400-00e8d8c4",
+	} {
+		if err := ValidatePageID(id); err == nil || !strings.Contains(err.Error(), "invalid format") {
+			t.Errorf("ValidatePageID(%q) = %v, want invalid format", id, err)
 		}
+	}
+}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		response := PagesResponse{
-			Pages: []Page{
-				{
-					ID:          "page1",
-					SiteID:      "5f0c8c9e1c9d440000e8d8c3",
-					Title:       "Home",
-					Slug:        "home",
-					CreatedOn:   "2024-01-01T00:00:00Z",
-					LastUpdated: "2024-01-02T00:00:00Z",
-					Archived:    false,
-					Draft:       false,
+func TestValidateLocaleID(t *testing.T) {
+	if err := ValidateLocaleID(""); err != nil {
+		t.Errorf("empty locale must be allowed: %v", err)
+	}
+	if err := ValidateLocaleID(testLocaleID); err != nil {
+		t.Errorf("valid locale: %v", err)
+	}
+	if err := ValidateLocaleID("en-US"); err == nil || !strings.Contains(err.Error(), "localeId has invalid format") {
+		t.Errorf("expected invalid format, got %v", err)
+	}
+}
+
+func TestPageResourceIDRoundTrip(t *testing.T) {
+	id := GeneratePageResourceID(testPageSiteID, testPageID)
+	if id != testPageSiteID+"/pages/"+testPageID {
+		t.Fatalf("unexpected id %q", id)
+	}
+	siteID, pageID, err := ExtractIDsFromPageResourceID(id)
+	if err != nil || siteID != testPageSiteID || pageID != testPageID {
+		t.Fatalf("round trip: %q %q %v", siteID, pageID, err)
+	}
+	for _, bad := range []string{
+		"", testPageSiteID + "/" + testPageID, testPageSiteID + "/redirects/" + testPageID, testPageSiteID,
+		"/pages/" + testPageID, testPageSiteID + "/pages/",
+	} {
+		if _, _, err := ExtractIDsFromPageResourceID(bad); err == nil {
+			t.Errorf("expected error for %q", bad)
+		}
+	}
+}
+
+// pageListServer serves total pages across paginated requests and records the queries it saw.
+func pageListServer(t *testing.T, total int) (server *httptest.Server, queries *[]string) {
+	t.Helper()
+	var seen []string
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v2/sites/"+testPageSiteID+"/pages" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		seen = append(seen, r.URL.RawQuery)
+		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+		if limit <= 0 || limit > 100 {
+			t.Errorf("limit must be 1..100, got %d", limit)
+		}
+		var pages []Page
+		for i := offset; i < total && i < offset+limit; i++ {
+			pages = append(
+				pages,
+				Page{
+					ID:     fmt.Sprintf("%024d", i),
+					SiteID: testPageSiteID,
+					Title:  fmt.Sprintf("Page %d", i),
+					Slug:   fmt.Sprintf("page-%d", i),
 				},
-				{
-					ID:          "page2",
-					SiteID:      "5f0c8c9e1c9d440000e8d8c3",
-					Title:       "About",
-					Slug:        "about",
-					CreatedOn:   "2024-01-01T00:00:00Z",
-					LastUpdated: "2024-01-02T00:00:00Z",
-					Archived:    false,
-					Draft:       false,
-				},
-			},
+			)
 		}
-		_ = json.NewEncoder(w).Encode(response)
+		resp := PagesResponse{Pages: pages}
+		resp.Pagination.Limit, resp.Pagination.Offset, resp.Pagination.Total = limit, offset, total
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
-	defer server.Close()
+	t.Cleanup(server.Close)
+	return server, &seen
+}
 
-	// Override the API base URL for this test
-	oldURL := getPagesBaseURL
-	getPagesBaseURL = server.URL
-	defer func() { getPagesBaseURL = oldURL }()
+func TestListPages_FollowsPagination(t *testing.T) {
+	server, queries := pageListServer(t, 250)
+	client := useMockAPI(t, server)
 
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	result, err := GetPages(ctx, client, "5f0c8c9e1c9d440000e8d8c3")
+	pages, err := ListPages(context.Background(), client, testPageSiteID, "")
 	if err != nil {
-		t.Fatalf("GetPages failed: %v", err)
+		t.Fatalf("ListPages: %v", err)
 	}
-
-	if len(result.Pages) != 2 {
-		t.Errorf("Expected 2 pages, got %d", len(result.Pages))
+	if len(pages) != 250 {
+		t.Fatalf("expected 250 pages, got %d", len(pages))
 	}
-	if result.Pages[0].ID != "page1" {
-		t.Errorf("Expected page1, got %s", result.Pages[0].ID)
+	if pages[249].Title != "Page 249" || pages[0].Title != "Page 0" {
+		t.Errorf("pages out of order: first=%q last=%q", pages[0].Title, pages[249].Title)
 	}
-	if result.Pages[0].Title != "Home" {
-		t.Errorf("Expected title 'Home', got %s", result.Pages[0].Title)
+	if len(*queries) != 3 {
+		t.Errorf("expected 3 requests (100+100+50), got %d: %v", len(*queries), *queries)
 	}
-}
-
-// TestGetPages_NotFound tests 404 handling
-func TestGetPages_NotFound(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte("site not found"))
-	}))
-	defer server.Close()
-
-	oldURL := getPagesBaseURL
-	getPagesBaseURL = server.URL
-	defer func() { getPagesBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	_, err := GetPages(ctx, client, "nonexistent")
-	if err == nil {
-		t.Error("Expected error for 404, got nil")
-	}
-	if !strings.Contains(err.Error(), "not found") {
-		t.Errorf("Expected 'not found' in error, got: %v", err)
-	}
-}
-
-// TestGetPages_EmptyList tests successful response with no pages
-func TestGetPages_EmptyList(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		response := PagesResponse{
-			Pages: []Page{},
+	for _, q := range *queries {
+		if strings.Contains(q, "localeId") {
+			t.Errorf("localeId must be omitted when empty: %q", q)
 		}
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-	defer server.Close()
+	}
+}
 
-	oldURL := getPagesBaseURL
-	getPagesBaseURL = server.URL
-	defer func() { getPagesBaseURL = oldURL }()
+func TestListPages_ExactMultipleStopsAtTotal(t *testing.T) {
+	server, queries := pageListServer(t, 200)
+	client := useMockAPI(t, server)
 
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	result, err := GetPages(ctx, client, "5f0c8c9e1c9d440000e8d8c3")
+	pages, err := ListPages(context.Background(), client, testPageSiteID, testLocaleID)
 	if err != nil {
-		t.Fatalf("GetPages failed: %v", err)
+		t.Fatalf("ListPages: %v", err)
 	}
-
-	if len(result.Pages) != 0 {
-		t.Errorf("Expected 0 pages, got %d", len(result.Pages))
+	if len(pages) != 200 || len(*queries) != 2 {
+		t.Errorf("expected 200 pages in 2 requests, got %d pages, queries %v", len(pages), *queries)
+	}
+	for _, q := range *queries {
+		if !strings.Contains(q, "localeId="+testLocaleID) {
+			t.Errorf("expected localeId in query, got %q", q)
+		}
 	}
 }
 
-// TestGetPage_Valid tests retrieving a single page successfully
-func TestGetPage_Valid(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			t.Errorf("Expected GET, got %s", r.Method)
-		}
-		if !strings.Contains(r.URL.Path, "/pages/") {
-			t.Errorf("Expected /pages/ in path, got %s", r.URL.Path)
-		}
+func TestListPages_EmptyAndErrors(t *testing.T) {
+	server, _ := pageListServer(t, 0)
+	client := useMockAPI(t, server)
+	pages, err := ListPages(context.Background(), client, testPageSiteID, "")
+	if err != nil || pages == nil || len(pages) != 0 {
+		t.Fatalf("expected empty non-nil slice, got %v %v", pages, err)
+	}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		page := Page{
-			ID:           "page1",
-			SiteID:       "5f0c8c9e1c9d440000e8d8c3",
-			Title:        "Home",
-			Slug:         "home",
-			ParentID:     "",
-			CollectionID: "",
-			CreatedOn:    "2024-01-01T00:00:00Z",
-			LastUpdated:  "2024-01-02T00:00:00Z",
-			Archived:     false,
-			Draft:        false,
+	for _, status := range []int{
+		http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError,
+	} {
+		errServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(status)
+			_, _ = w.Write([]byte("error body"))
+		}))
+		errClient := useMockAPI(t, errServer)
+		_, err := ListPages(context.Background(), errClient, testPageSiteID, "")
+		errServer.Close()
+		if err == nil {
+			t.Errorf("status %d: expected error", status)
+			continue
 		}
-		_ = json.NewEncoder(w).Encode(page)
+		var apiErr *APIError
+		if !asAPIError(err, &apiErr) || apiErr.StatusCode != status {
+			t.Errorf("status %d: expected APIError, got %v", status, err)
+		}
+	}
+}
+
+func TestGetPageMetadata(t *testing.T) {
+	var gotQuery string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/v2/pages/"+testPageID {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		gotQuery = r.URL.RawQuery
+		_, _ = w.Write([]byte(`{"id":"` + testPageID + `","siteId":"` + testPageSiteID + `","title":"Home","slug":"home",` +
+			`"parentId":"5f0c8c9e1c9d440000e8d8c5","collectionId":"5f0c8c9e1c9d440000e8d8c6",` +
+			`"createdOn":"2024-01-01T00:00:00Z","lastUpdated":"2024-01-02T00:00:00Z",` +
+			`"archived":false,"draft":true,"canBranch":true,"isBranch":false,"branchId":null,` +
+			`"seo":{"title":"SEO Home","description":"SEO desc"},` +
+			`"openGraph":{"title":"OG Home","titleCopied":false,"description":"OG desc","descriptionCopied":true},` +
+			`"localeId":"` + testLocaleID + `","publishedPath":"/home"}`))
 	}))
 	defer server.Close()
+	client := useMockAPI(t, server)
 
-	oldURL := getPageBaseURL
-	getPageBaseURL = server.URL
-	defer func() { getPageBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	result, err := GetPage(ctx, client, "page1")
+	page, err := GetPageMetadata(context.Background(), client, testPageID, "", "")
 	if err != nil {
-		t.Fatalf("GetPage failed: %v", err)
+		t.Fatalf("GetPageMetadata: %v", err)
+	}
+	if gotQuery != "" {
+		t.Errorf("expected no query, got %q", gotQuery)
+	}
+	if page.Title != "Home" || page.ParentID != "5f0c8c9e1c9d440000e8d8c5" || !page.Draft || !page.CanBranch ||
+		page.SEO == nil || page.SEO.Description != "SEO desc" || page.OpenGraph == nil || !page.OpenGraph.DescriptionCopied ||
+		page.LocaleID != testLocaleID || page.PublishedPath != "/home" {
+		t.Errorf("unexpected page %+v", page)
 	}
 
-	if result.ID != "page1" {
-		t.Errorf("Expected ID page1, got %s", result.ID)
+	if _, err := GetPageMetadata(context.Background(), client, testPageID, testLocaleID, testLocaleID); err != nil {
+		t.Fatal(err)
 	}
-	if result.Title != "Home" {
-		t.Errorf("Expected title 'Home', got %s", result.Title)
-	}
-	if result.Slug != "home" {
-		t.Errorf("Expected slug 'home', got %s", result.Slug)
+	if gotQuery != "localeId="+testLocaleID+"&translatable="+testLocaleID {
+		t.Errorf("translatable must be sent verbatim as the locale ID, got query %q", gotQuery)
 	}
 }
 
-// TestGetPage_NotFound tests 404 handling for single page
-func TestGetPage_NotFound(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestGetPageMetadata_NotFoundIsTyped(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		_, _ = w.Write([]byte("page not found"))
 	}))
 	defer server.Close()
+	client := useMockAPI(t, server)
 
-	oldURL := getPageBaseURL
-	getPageBaseURL = server.URL
-	defer func() { getPageBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	_, err := GetPage(ctx, client, "nonexistent")
-	if err == nil {
-		t.Error("Expected error for 404, got nil")
-	}
-	if !strings.Contains(err.Error(), "not found") {
-		t.Errorf("Expected 'not found' in error, got: %v", err)
+	if _, err := GetPageMetadata(context.Background(), client, testPageID, "", ""); !IsNotFound(err) {
+		t.Fatalf("expected IsNotFound, got %v", err)
 	}
 }
 
-// TestGetPage_WithParentAndCollection tests page with optional fields
-func TestGetPage_WithParentAndCollection(t *testing.T) {
+func TestPutPageMetadata(t *testing.T) {
+	var gotQuery, gotBody string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		page := Page{
-			ID:           "page1",
-			SiteID:       "5f0c8c9e1c9d440000e8d8c3",
-			Title:        "Nested Page",
-			Slug:         "nested",
-			ParentID:     "parent123",
-			CollectionID: "collection456",
-			CreatedOn:    "2024-01-01T00:00:00Z",
-			LastUpdated:  "2024-01-02T00:00:00Z",
-			Archived:     false,
-			Draft:        true,
+		if r.Method != http.MethodPut || r.URL.Path != "/v2/pages/"+testPageID {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
-		_ = json.NewEncoder(w).Encode(page)
-	}))
-	defer server.Close()
-
-	oldURL := getPageBaseURL
-	getPageBaseURL = server.URL
-	defer func() { getPageBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	result, err := GetPage(ctx, client, "page1")
-	if err != nil {
-		t.Fatalf("GetPage failed: %v", err)
-	}
-
-	if result.ParentID != "parent123" {
-		t.Errorf("Expected ParentID parent123, got %s", result.ParentID)
-	}
-	if result.CollectionID != "collection456" {
-		t.Errorf("Expected CollectionID collection456, got %s", result.CollectionID)
-	}
-	if !result.Draft {
-		t.Error("Expected Draft to be true, got false")
-	}
-}
-
-// TestGetPages_Unauthorized tests 401 handling
-func TestGetPages_Unauthorized(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
-		_, _ = w.Write([]byte("unauthorized"))
-	}))
-	defer server.Close()
-
-	oldURL := getPagesBaseURL
-	getPagesBaseURL = server.URL
-	defer func() { getPagesBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	_, err := GetPages(ctx, client, "5f0c8c9e1c9d440000e8d8c3")
-	if err == nil {
-		t.Error("Expected error for 401, got nil")
-	}
-	if !strings.Contains(err.Error(), "unauthorized") {
-		t.Errorf("Expected 'unauthorized' in error, got: %v", err)
-	}
-}
-
-// TestGetPages_Forbidden tests 403 handling
-func TestGetPages_Forbidden(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
-		_, _ = w.Write([]byte("forbidden"))
-	}))
-	defer server.Close()
-
-	oldURL := getPagesBaseURL
-	getPagesBaseURL = server.URL
-	defer func() { getPagesBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	_, err := GetPages(ctx, client, "5f0c8c9e1c9d440000e8d8c3")
-	if err == nil {
-		t.Error("Expected error for 403, got nil")
-	}
-	if !strings.Contains(err.Error(), "forbidden") {
-		t.Errorf("Expected 'forbidden' in error, got: %v", err)
-	}
-}
-
-// TestGetPages_ServerError tests 500 handling
-func TestGetPages_ServerError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte("server error"))
-	}))
-	defer server.Close()
-
-	oldURL := getPagesBaseURL
-	getPagesBaseURL = server.URL
-	defer func() { getPagesBaseURL = oldURL }()
-
-	client := &http.Client{Timeout: 30 * time.Second}
-	ctx := context.Background()
-
-	_, err := GetPages(ctx, client, "5f0c8c9e1c9d440000e8d8c3")
-	if err == nil {
-		t.Error("Expected error for 500, got nil")
-	}
-	if !strings.Contains(err.Error(), "server error") {
-		t.Errorf("Expected 'server error' in error, got: %v", err)
-	}
-}
-
-// TestPageDataRead_NotFound tests that Read() returns empty ID when page is not found.
-// This is critical for Pulumi to detect resource deletion and trigger recreation.
-func TestPageDataRead_NotFound(t *testing.T) {
-	// t.Setenv automatically restores the original value after the test
-	t.Setenv("WEBFLOW_API_TOKEN", "wfp_1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcd")
-
-	// Setup mock server that returns 404 for GetPage
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Path, "/pages/") {
-			w.WriteHeader(http.StatusNotFound)
-			_, _ = w.Write([]byte("page not found"))
-			return
+		if r.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("Content-Type = %q", r.Header.Get("Content-Type"))
 		}
-		t.Errorf("Unexpected request path: %s", r.URL.Path)
-		w.WriteHeader(http.StatusInternalServerError)
+		gotQuery = r.URL.RawQuery
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		_ = json.NewEncoder(w).Encode(Page{ID: testPageID, Title: "New", Slug: "home"})
 	}))
 	defer server.Close()
+	client := useMockAPI(t, server)
 
-	// Override API base URL
-	oldURL := getPageBaseURL
-	getPageBaseURL = server.URL
-	defer func() { getPageBaseURL = oldURL }()
-
-	// Create PageData resource
-	pageData := &PageData{}
-	ctx := context.Background()
-
-	// Create a test request as if Pulumi is calling Read()
-	state := PageDataState{
-		PageDataArgs: PageDataArgs{
-			SiteID: "5f0c8c9e1c9d440000e8d8c3",
-			PageID: "5f0c8c9e1c9d440000e8d8c4", // Valid format page ID
-		},
+	body := PageMetadataUpdateRequest{
+		Title: ptr("New"), SEO: &PageSEOUpdate{Description: ptr("d")},
+		OpenGraph: &PageOpenGraphUpdate{TitleCopied: ptr(false)},
 	}
 
-	req := infer.ReadRequest[PageDataArgs, PageDataState]{
-		ID:    "5f0c8c9e1c9d440000e8d8c3/pages/5f0c8c9e1c9d440000e8d8c4",
-		State: state,
-	}
-
-	// Call Read() - should return empty ID for "not found" error
-	response, err := pageData.Read(ctx, req)
-	// Verify no error is returned (not found is handled gracefully)
+	page, err := PutPageMetadata(context.Background(), client, testPageID, testLocaleID, body)
 	if err != nil {
-		t.Errorf("Read() returned error for not found case, expected nil: %v", err)
+		t.Fatalf("PutPageMetadata: %v", err)
 	}
-
-	// Verify that ID is empty (signals deletion to Pulumi)
-	if response.ID != "" {
-		t.Errorf("Read() returned ID = %q, expected empty string to signal deletion", response.ID)
+	if gotQuery != "localeId="+testLocaleID || page.Title != "New" {
+		t.Errorf("query=%q page=%+v", gotQuery, page)
+	}
+	want := `{"title":"New","seo":{"description":"d"},"openGraph":{"titleCopied":false}}`
+	if gotBody != want {
+		t.Errorf("update request must only contain set fields:\n got %s\nwant %s", gotBody, want)
+	}
+	if _, err := PutPageMetadata(context.Background(), client, testPageID, "", body); err != nil {
+		t.Fatal(err)
+	}
+	if gotQuery != "" {
+		t.Errorf("expected no query without locale, got %q", gotQuery)
 	}
 }

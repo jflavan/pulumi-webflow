@@ -9,15 +9,214 @@ import com.pulumi.deployment.Deployment;
 import com.pulumi.deployment.InvokeOptions;
 import com.pulumi.deployment.InvokeOutputOptions;
 import io.github.jdetmar.pulumi.webflow.Utilities;
+import io.github.jdetmar.pulumi.webflow.inputs.GetAnalyticsTimeOnPageArgs;
+import io.github.jdetmar.pulumi.webflow.inputs.GetAnalyticsTimeOnPagePlainArgs;
+import io.github.jdetmar.pulumi.webflow.inputs.GetAnalyticsTopDimensionsArgs;
+import io.github.jdetmar.pulumi.webflow.inputs.GetAnalyticsTopDimensionsPlainArgs;
+import io.github.jdetmar.pulumi.webflow.inputs.GetAnalyticsTopEventsArgs;
+import io.github.jdetmar.pulumi.webflow.inputs.GetAnalyticsTopEventsPlainArgs;
+import io.github.jdetmar.pulumi.webflow.inputs.GetAnalyticsTopPagesArgs;
+import io.github.jdetmar.pulumi.webflow.inputs.GetAnalyticsTopPagesPlainArgs;
+import io.github.jdetmar.pulumi.webflow.inputs.GetAnalyticsTrafficArgs;
+import io.github.jdetmar.pulumi.webflow.inputs.GetAnalyticsTrafficPlainArgs;
 import io.github.jdetmar.pulumi.webflow.inputs.GetAuthorizedUserArgs;
 import io.github.jdetmar.pulumi.webflow.inputs.GetAuthorizedUserPlainArgs;
+import io.github.jdetmar.pulumi.webflow.inputs.GetPageArgs;
+import io.github.jdetmar.pulumi.webflow.inputs.GetPagePlainArgs;
+import io.github.jdetmar.pulumi.webflow.inputs.GetPageSchemaMarkupArgs;
+import io.github.jdetmar.pulumi.webflow.inputs.GetPageSchemaMarkupPlainArgs;
+import io.github.jdetmar.pulumi.webflow.inputs.GetPagesArgs;
+import io.github.jdetmar.pulumi.webflow.inputs.GetPagesPlainArgs;
 import io.github.jdetmar.pulumi.webflow.inputs.GetTokenInfoArgs;
 import io.github.jdetmar.pulumi.webflow.inputs.GetTokenInfoPlainArgs;
+import io.github.jdetmar.pulumi.webflow.outputs.GetAnalyticsTimeOnPageResult;
+import io.github.jdetmar.pulumi.webflow.outputs.GetAnalyticsTopDimensionsResult;
+import io.github.jdetmar.pulumi.webflow.outputs.GetAnalyticsTopEventsResult;
+import io.github.jdetmar.pulumi.webflow.outputs.GetAnalyticsTopPagesResult;
+import io.github.jdetmar.pulumi.webflow.outputs.GetAnalyticsTrafficResult;
 import io.github.jdetmar.pulumi.webflow.outputs.GetAuthorizedUserResult;
+import io.github.jdetmar.pulumi.webflow.outputs.GetPageResult;
+import io.github.jdetmar.pulumi.webflow.outputs.GetPageSchemaMarkupResult;
+import io.github.jdetmar.pulumi.webflow.outputs.GetPagesResult;
 import io.github.jdetmar.pulumi.webflow.outputs.GetTokenInfoResult;
 import java.util.concurrent.CompletableFuture;
 
 public final class WebflowFunctions {
+    /**
+     * Returns the average time visitors spend on a page of a Webflow site, as a single value or bucketed by day or week (Analyze API, beta). Use the &#39;pagePath&#39; filter to target one page. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static Output<GetAnalyticsTimeOnPageResult> getAnalyticsTimeOnPage(GetAnalyticsTimeOnPageArgs args) {
+        return getAnalyticsTimeOnPage(args, InvokeOptions.Empty);
+    }
+    /**
+     * Returns the average time visitors spend on a page of a Webflow site, as a single value or bucketed by day or week (Analyze API, beta). Use the &#39;pagePath&#39; filter to target one page. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static CompletableFuture<GetAnalyticsTimeOnPageResult> getAnalyticsTimeOnPagePlain(GetAnalyticsTimeOnPagePlainArgs args) {
+        return getAnalyticsTimeOnPagePlain(args, InvokeOptions.Empty);
+    }
+    /**
+     * Returns the average time visitors spend on a page of a Webflow site, as a single value or bucketed by day or week (Analyze API, beta). Use the &#39;pagePath&#39; filter to target one page. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static Output<GetAnalyticsTimeOnPageResult> getAnalyticsTimeOnPage(GetAnalyticsTimeOnPageArgs args, InvokeOptions options) {
+        return Deployment.getInstance().invoke("webflow:index:getAnalyticsTimeOnPage", TypeShape.of(GetAnalyticsTimeOnPageResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Returns the average time visitors spend on a page of a Webflow site, as a single value or bucketed by day or week (Analyze API, beta). Use the &#39;pagePath&#39; filter to target one page. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static Output<GetAnalyticsTimeOnPageResult> getAnalyticsTimeOnPage(GetAnalyticsTimeOnPageArgs args, InvokeOutputOptions options) {
+        return Deployment.getInstance().invoke("webflow:index:getAnalyticsTimeOnPage", TypeShape.of(GetAnalyticsTimeOnPageResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Returns the average time visitors spend on a page of a Webflow site, as a single value or bucketed by day or week (Analyze API, beta). Use the &#39;pagePath&#39; filter to target one page. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static CompletableFuture<GetAnalyticsTimeOnPageResult> getAnalyticsTimeOnPagePlain(GetAnalyticsTimeOnPagePlainArgs args, InvokeOptions options) {
+        return Deployment.getInstance().invokeAsync("webflow:index:getAnalyticsTimeOnPage", TypeShape.of(GetAnalyticsTimeOnPageResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Returns the top values of a chosen dimension (country, region, device type, OS, browser, language, locale, referrer, traffic source, UTM parameters or audience) for a Webflow site, ranked by sessions or users (Analyze API, beta). Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static Output<GetAnalyticsTopDimensionsResult> getAnalyticsTopDimensions(GetAnalyticsTopDimensionsArgs args) {
+        return getAnalyticsTopDimensions(args, InvokeOptions.Empty);
+    }
+    /**
+     * Returns the top values of a chosen dimension (country, region, device type, OS, browser, language, locale, referrer, traffic source, UTM parameters or audience) for a Webflow site, ranked by sessions or users (Analyze API, beta). Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static CompletableFuture<GetAnalyticsTopDimensionsResult> getAnalyticsTopDimensionsPlain(GetAnalyticsTopDimensionsPlainArgs args) {
+        return getAnalyticsTopDimensionsPlain(args, InvokeOptions.Empty);
+    }
+    /**
+     * Returns the top values of a chosen dimension (country, region, device type, OS, browser, language, locale, referrer, traffic source, UTM parameters or audience) for a Webflow site, ranked by sessions or users (Analyze API, beta). Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static Output<GetAnalyticsTopDimensionsResult> getAnalyticsTopDimensions(GetAnalyticsTopDimensionsArgs args, InvokeOptions options) {
+        return Deployment.getInstance().invoke("webflow:index:getAnalyticsTopDimensions", TypeShape.of(GetAnalyticsTopDimensionsResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Returns the top values of a chosen dimension (country, region, device type, OS, browser, language, locale, referrer, traffic source, UTM parameters or audience) for a Webflow site, ranked by sessions or users (Analyze API, beta). Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static Output<GetAnalyticsTopDimensionsResult> getAnalyticsTopDimensions(GetAnalyticsTopDimensionsArgs args, InvokeOutputOptions options) {
+        return Deployment.getInstance().invoke("webflow:index:getAnalyticsTopDimensions", TypeShape.of(GetAnalyticsTopDimensionsResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Returns the top values of a chosen dimension (country, region, device type, OS, browser, language, locale, referrer, traffic source, UTM parameters or audience) for a Webflow site, ranked by sessions or users (Analyze API, beta). Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static CompletableFuture<GetAnalyticsTopDimensionsResult> getAnalyticsTopDimensionsPlain(GetAnalyticsTopDimensionsPlainArgs args, InvokeOptions options) {
+        return Deployment.getInstance().invokeAsync("webflow:index:getAnalyticsTopDimensions", TypeShape.of(GetAnalyticsTopDimensionsResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the &#39;referrer&#39; filter, nor the &#39;nextCollectionId&#39;, &#39;nextItemSlug&#39;, &#39;nextPageId&#39;, &#39;previousCollectionId&#39;, &#39;previousItemSlug&#39; and &#39;previousPageId&#39; filter dimensions. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static Output<GetAnalyticsTopEventsResult> getAnalyticsTopEvents(GetAnalyticsTopEventsArgs args) {
+        return getAnalyticsTopEvents(args, InvokeOptions.Empty);
+    }
+    /**
+     * Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the &#39;referrer&#39; filter, nor the &#39;nextCollectionId&#39;, &#39;nextItemSlug&#39;, &#39;nextPageId&#39;, &#39;previousCollectionId&#39;, &#39;previousItemSlug&#39; and &#39;previousPageId&#39; filter dimensions. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static CompletableFuture<GetAnalyticsTopEventsResult> getAnalyticsTopEventsPlain(GetAnalyticsTopEventsPlainArgs args) {
+        return getAnalyticsTopEventsPlain(args, InvokeOptions.Empty);
+    }
+    /**
+     * Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the &#39;referrer&#39; filter, nor the &#39;nextCollectionId&#39;, &#39;nextItemSlug&#39;, &#39;nextPageId&#39;, &#39;previousCollectionId&#39;, &#39;previousItemSlug&#39; and &#39;previousPageId&#39; filter dimensions. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static Output<GetAnalyticsTopEventsResult> getAnalyticsTopEvents(GetAnalyticsTopEventsArgs args, InvokeOptions options) {
+        return Deployment.getInstance().invoke("webflow:index:getAnalyticsTopEvents", TypeShape.of(GetAnalyticsTopEventsResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the &#39;referrer&#39; filter, nor the &#39;nextCollectionId&#39;, &#39;nextItemSlug&#39;, &#39;nextPageId&#39;, &#39;previousCollectionId&#39;, &#39;previousItemSlug&#39; and &#39;previousPageId&#39; filter dimensions. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static Output<GetAnalyticsTopEventsResult> getAnalyticsTopEvents(GetAnalyticsTopEventsArgs args, InvokeOutputOptions options) {
+        return Deployment.getInstance().invoke("webflow:index:getAnalyticsTopEvents", TypeShape.of(GetAnalyticsTopEventsResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Returns the most-fired events of a Webflow site, ranked by how often they fired, with an optional daily time series per event (Analyze API, beta). The top-events report does not support the &#39;referrer&#39; filter, nor the &#39;nextCollectionId&#39;, &#39;nextItemSlug&#39;, &#39;nextPageId&#39;, &#39;previousCollectionId&#39;, &#39;previousItemSlug&#39; and &#39;previousPageId&#39; filter dimensions. Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static CompletableFuture<GetAnalyticsTopEventsResult> getAnalyticsTopEventsPlain(GetAnalyticsTopEventsPlainArgs args, InvokeOptions options) {
+        return Deployment.getInstance().invokeAsync("webflow:index:getAnalyticsTopEvents", TypeShape.of(GetAnalyticsTopEventsResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Returns the most-visited pages of a Webflow site, ranked by sessions, users or pageviews, with an optional daily pageview time series per page (Analyze API, beta). Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static Output<GetAnalyticsTopPagesResult> getAnalyticsTopPages(GetAnalyticsTopPagesArgs args) {
+        return getAnalyticsTopPages(args, InvokeOptions.Empty);
+    }
+    /**
+     * Returns the most-visited pages of a Webflow site, ranked by sessions, users or pageviews, with an optional daily pageview time series per page (Analyze API, beta). Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static CompletableFuture<GetAnalyticsTopPagesResult> getAnalyticsTopPagesPlain(GetAnalyticsTopPagesPlainArgs args) {
+        return getAnalyticsTopPagesPlain(args, InvokeOptions.Empty);
+    }
+    /**
+     * Returns the most-visited pages of a Webflow site, ranked by sessions, users or pageviews, with an optional daily pageview time series per page (Analyze API, beta). Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static Output<GetAnalyticsTopPagesResult> getAnalyticsTopPages(GetAnalyticsTopPagesArgs args, InvokeOptions options) {
+        return Deployment.getInstance().invoke("webflow:index:getAnalyticsTopPages", TypeShape.of(GetAnalyticsTopPagesResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Returns the most-visited pages of a Webflow site, ranked by sessions, users or pageviews, with an optional daily pageview time series per page (Analyze API, beta). Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static Output<GetAnalyticsTopPagesResult> getAnalyticsTopPages(GetAnalyticsTopPagesArgs args, InvokeOutputOptions options) {
+        return Deployment.getInstance().invoke("webflow:index:getAnalyticsTopPages", TypeShape.of(GetAnalyticsTopPagesResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Returns the most-visited pages of a Webflow site, ranked by sessions, users or pageviews, with an optional daily pageview time series per page (Analyze API, beta). Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static CompletableFuture<GetAnalyticsTopPagesResult> getAnalyticsTopPagesPlain(GetAnalyticsTopPagesPlainArgs args, InvokeOptions options) {
+        return Deployment.getInstance().invokeAsync("webflow:index:getAnalyticsTopPages", TypeShape.of(GetAnalyticsTopPagesResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Returns a daily time series of sessions, users or pageviews for a Webflow site over a chosen window, optionally filtered by device, country, page, traffic source, referrer, browser or UTM parameters (Analyze API, beta). Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static Output<GetAnalyticsTrafficResult> getAnalyticsTraffic(GetAnalyticsTrafficArgs args) {
+        return getAnalyticsTraffic(args, InvokeOptions.Empty);
+    }
+    /**
+     * Returns a daily time series of sessions, users or pageviews for a Webflow site over a chosen window, optionally filtered by device, country, page, traffic source, referrer, browser or UTM parameters (Analyze API, beta). Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static CompletableFuture<GetAnalyticsTrafficResult> getAnalyticsTrafficPlain(GetAnalyticsTrafficPlainArgs args) {
+        return getAnalyticsTrafficPlain(args, InvokeOptions.Empty);
+    }
+    /**
+     * Returns a daily time series of sessions, users or pageviews for a Webflow site over a chosen window, optionally filtered by device, country, page, traffic source, referrer, browser or UTM parameters (Analyze API, beta). Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static Output<GetAnalyticsTrafficResult> getAnalyticsTraffic(GetAnalyticsTrafficArgs args, InvokeOptions options) {
+        return Deployment.getInstance().invoke("webflow:index:getAnalyticsTraffic", TypeShape.of(GetAnalyticsTrafficResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Returns a daily time series of sessions, users or pageviews for a Webflow site over a chosen window, optionally filtered by device, country, page, traffic source, referrer, browser or UTM parameters (Analyze API, beta). Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static Output<GetAnalyticsTrafficResult> getAnalyticsTraffic(GetAnalyticsTrafficArgs args, InvokeOutputOptions options) {
+        return Deployment.getInstance().invoke("webflow:index:getAnalyticsTraffic", TypeShape.of(GetAnalyticsTrafficResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Returns a daily time series of sessions, users or pageviews for a Webflow site over a chosen window, optionally filtered by device, country, page, traffic source, referrer, browser or UTM parameters (Analyze API, beta). Requires the &#39;sites:read&#39; scope and a Webflow workspace with the Analyze add-on. Webflow allows one Analyze request in flight per access token; concurrent requests are retried. The reporting window must start on or after 2025-04-09 and span at most 100 days.
+     * 
+     */
+    public static CompletableFuture<GetAnalyticsTrafficResult> getAnalyticsTrafficPlain(GetAnalyticsTrafficPlainArgs args, InvokeOptions options) {
+        return Deployment.getInstance().invokeAsync("webflow:index:getAnalyticsTraffic", TypeShape.of(GetAnalyticsTrafficResult.class), args, Utilities.withVersion(options));
+    }
     /**
      * Retrieves information about the user who authorized the current Webflow API token. This is useful for auditing and understanding which user&#39;s credentials are being used. Requires the &#39;authorized_user:read&#39; scope.
      * 
@@ -68,49 +267,154 @@ public final class WebflowFunctions {
         return Deployment.getInstance().invokeAsync("webflow:index:getAuthorizedUser", TypeShape.of(GetAuthorizedUserResult.class), args, Utilities.withVersion(options));
     }
     /**
-     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+     * Reads the metadata (title, slug, SEO, Open Graph, timestamps, flags) of a single Webflow page. Pages cannot be created via the API; they are built in the Webflow Designer. Requires the pages:read scope.
+     * 
+     */
+    public static Output<GetPageResult> getPage(GetPageArgs args) {
+        return getPage(args, InvokeOptions.Empty);
+    }
+    /**
+     * Reads the metadata (title, slug, SEO, Open Graph, timestamps, flags) of a single Webflow page. Pages cannot be created via the API; they are built in the Webflow Designer. Requires the pages:read scope.
+     * 
+     */
+    public static CompletableFuture<GetPageResult> getPagePlain(GetPagePlainArgs args) {
+        return getPagePlain(args, InvokeOptions.Empty);
+    }
+    /**
+     * Reads the metadata (title, slug, SEO, Open Graph, timestamps, flags) of a single Webflow page. Pages cannot be created via the API; they are built in the Webflow Designer. Requires the pages:read scope.
+     * 
+     */
+    public static Output<GetPageResult> getPage(GetPageArgs args, InvokeOptions options) {
+        return Deployment.getInstance().invoke("webflow:index:getPage", TypeShape.of(GetPageResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Reads the metadata (title, slug, SEO, Open Graph, timestamps, flags) of a single Webflow page. Pages cannot be created via the API; they are built in the Webflow Designer. Requires the pages:read scope.
+     * 
+     */
+    public static Output<GetPageResult> getPage(GetPageArgs args, InvokeOutputOptions options) {
+        return Deployment.getInstance().invoke("webflow:index:getPage", TypeShape.of(GetPageResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Reads the metadata (title, slug, SEO, Open Graph, timestamps, flags) of a single Webflow page. Pages cannot be created via the API; they are built in the Webflow Designer. Requires the pages:read scope.
+     * 
+     */
+    public static CompletableFuture<GetPageResult> getPagePlain(GetPagePlainArgs args, InvokeOptions options) {
+        return Deployment.getInstance().invokeAsync("webflow:index:getPage", TypeShape.of(GetPageResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Reads the JSON-LD schema markup (structured data) of a Webflow page, optionally for a secondary locale, using the Pages schema markup API (beta). When a secondary locale has no markup of its own, the primary locale&#39;s markup is returned and &#39;isInherited&#39; is true. Requires the &#39;pages:read&#39; scope.
+     * 
+     */
+    public static Output<GetPageSchemaMarkupResult> getPageSchemaMarkup(GetPageSchemaMarkupArgs args) {
+        return getPageSchemaMarkup(args, InvokeOptions.Empty);
+    }
+    /**
+     * Reads the JSON-LD schema markup (structured data) of a Webflow page, optionally for a secondary locale, using the Pages schema markup API (beta). When a secondary locale has no markup of its own, the primary locale&#39;s markup is returned and &#39;isInherited&#39; is true. Requires the &#39;pages:read&#39; scope.
+     * 
+     */
+    public static CompletableFuture<GetPageSchemaMarkupResult> getPageSchemaMarkupPlain(GetPageSchemaMarkupPlainArgs args) {
+        return getPageSchemaMarkupPlain(args, InvokeOptions.Empty);
+    }
+    /**
+     * Reads the JSON-LD schema markup (structured data) of a Webflow page, optionally for a secondary locale, using the Pages schema markup API (beta). When a secondary locale has no markup of its own, the primary locale&#39;s markup is returned and &#39;isInherited&#39; is true. Requires the &#39;pages:read&#39; scope.
+     * 
+     */
+    public static Output<GetPageSchemaMarkupResult> getPageSchemaMarkup(GetPageSchemaMarkupArgs args, InvokeOptions options) {
+        return Deployment.getInstance().invoke("webflow:index:getPageSchemaMarkup", TypeShape.of(GetPageSchemaMarkupResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Reads the JSON-LD schema markup (structured data) of a Webflow page, optionally for a secondary locale, using the Pages schema markup API (beta). When a secondary locale has no markup of its own, the primary locale&#39;s markup is returned and &#39;isInherited&#39; is true. Requires the &#39;pages:read&#39; scope.
+     * 
+     */
+    public static Output<GetPageSchemaMarkupResult> getPageSchemaMarkup(GetPageSchemaMarkupArgs args, InvokeOutputOptions options) {
+        return Deployment.getInstance().invoke("webflow:index:getPageSchemaMarkup", TypeShape.of(GetPageSchemaMarkupResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Reads the JSON-LD schema markup (structured data) of a Webflow page, optionally for a secondary locale, using the Pages schema markup API (beta). When a secondary locale has no markup of its own, the primary locale&#39;s markup is returned and &#39;isInherited&#39; is true. Requires the &#39;pages:read&#39; scope.
+     * 
+     */
+    public static CompletableFuture<GetPageSchemaMarkupResult> getPageSchemaMarkupPlain(GetPageSchemaMarkupPlainArgs args, InvokeOptions options) {
+        return Deployment.getInstance().invokeAsync("webflow:index:getPageSchemaMarkup", TypeShape.of(GetPageSchemaMarkupResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Lists all pages of a Webflow site with their metadata, following API pagination. Useful for discovering page IDs for the PageMetadata, PageContent and PageCustomCode resources. Requires the pages:read scope.
+     * 
+     */
+    public static Output<GetPagesResult> getPages(GetPagesArgs args) {
+        return getPages(args, InvokeOptions.Empty);
+    }
+    /**
+     * Lists all pages of a Webflow site with their metadata, following API pagination. Useful for discovering page IDs for the PageMetadata, PageContent and PageCustomCode resources. Requires the pages:read scope.
+     * 
+     */
+    public static CompletableFuture<GetPagesResult> getPagesPlain(GetPagesPlainArgs args) {
+        return getPagesPlain(args, InvokeOptions.Empty);
+    }
+    /**
+     * Lists all pages of a Webflow site with their metadata, following API pagination. Useful for discovering page IDs for the PageMetadata, PageContent and PageCustomCode resources. Requires the pages:read scope.
+     * 
+     */
+    public static Output<GetPagesResult> getPages(GetPagesArgs args, InvokeOptions options) {
+        return Deployment.getInstance().invoke("webflow:index:getPages", TypeShape.of(GetPagesResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Lists all pages of a Webflow site with their metadata, following API pagination. Useful for discovering page IDs for the PageMetadata, PageContent and PageCustomCode resources. Requires the pages:read scope.
+     * 
+     */
+    public static Output<GetPagesResult> getPages(GetPagesArgs args, InvokeOutputOptions options) {
+        return Deployment.getInstance().invoke("webflow:index:getPages", TypeShape.of(GetPagesResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Lists all pages of a Webflow site with their metadata, following API pagination. Useful for discovering page IDs for the PageMetadata, PageContent and PageCustomCode resources. Requires the pages:read scope.
+     * 
+     */
+    public static CompletableFuture<GetPagesResult> getPagesPlain(GetPagesPlainArgs args, InvokeOptions options) {
+        return Deployment.getInstance().invokeAsync("webflow:index:getPages", TypeShape.of(GetPagesResult.class), args, Utilities.withVersion(options));
+    }
+    /**
+     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings &gt; Apps &amp; integrations &gt; API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
      * 
      */
     public static Output<GetTokenInfoResult> getTokenInfo() {
         return getTokenInfo(GetTokenInfoArgs.Empty, InvokeOptions.Empty);
     }
     /**
-     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings &gt; Apps &amp; integrations &gt; API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
      * 
      */
     public static CompletableFuture<GetTokenInfoResult> getTokenInfoPlain() {
         return getTokenInfoPlain(GetTokenInfoPlainArgs.Empty, InvokeOptions.Empty);
     }
     /**
-     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings &gt; Apps &amp; integrations &gt; API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
      * 
      */
     public static Output<GetTokenInfoResult> getTokenInfo(GetTokenInfoArgs args) {
         return getTokenInfo(args, InvokeOptions.Empty);
     }
     /**
-     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings &gt; Apps &amp; integrations &gt; API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
      * 
      */
     public static CompletableFuture<GetTokenInfoResult> getTokenInfoPlain(GetTokenInfoPlainArgs args) {
         return getTokenInfoPlain(args, InvokeOptions.Empty);
     }
     /**
-     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings &gt; Apps &amp; integrations &gt; API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
      * 
      */
     public static Output<GetTokenInfoResult> getTokenInfo(GetTokenInfoArgs args, InvokeOptions options) {
         return Deployment.getInstance().invoke("webflow:index:getTokenInfo", TypeShape.of(GetTokenInfoResult.class), args, Utilities.withVersion(options));
     }
     /**
-     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings &gt; Apps &amp; integrations &gt; API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
      * 
      */
     public static Output<GetTokenInfoResult> getTokenInfo(GetTokenInfoArgs args, InvokeOutputOptions options) {
         return Deployment.getInstance().invoke("webflow:index:getTokenInfo", TypeShape.of(GetTokenInfoResult.class), args, Utilities.withVersion(options));
     }
     /**
-     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+     * Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings &gt; Apps &amp; integrations &gt; API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
      * 
      */
     public static CompletableFuture<GetTokenInfoResult> getTokenInfoPlain(GetTokenInfoPlainArgs args, InvokeOptions options) {

@@ -4,7 +4,7 @@ This file provides guidance for Claude Code when working on this repository.
 
 ## Project Overview
 
-This is a Pulumi native provider for Webflow, allowing users to manage Webflow resources (sites, redirects, robots.txt) as infrastructure-as-code.
+This is a Pulumi native provider for Webflow, allowing users to manage Webflow resources as infrastructure-as-code. The registered resources and functions live in `provider/provider.go`; today that is Site, Redirect, RobotsTxt, Collection, CollectionField, CollectionItem, PageData, PageContent, Webhook, Asset, AssetFolder, RegisteredScript, InlineScript, SiteCustomCode, PageCustomCode and EcommerceSettings, plus the `getTokenInfo` and `getAuthorizedUser` functions. Check `provider.go` rather than this list when the exact set matters.
 
 ## Guiding Principle
 
@@ -87,7 +87,12 @@ The Java SDK requires post-processing after generation because `pulumi-java-gen`
 
 The Makefile automatically runs the post-processing script after Java SDK generation.
 
-**Maven Central coordinates:** `io.github.jdetmar.pulumi:pulumi-webflow`
+**`sdk/java/build.gradle` is generated and gitignored.** It is produced by `make codegen`
+(`pulumi package gen-sdk --language java` followed by the patch script) and is not committed;
+only `sdk/java/src/` and `settings.gradle` are tracked. Do not hand-edit it or try to commit it -
+change `scripts/patch-java-build-gradle.py` instead.
+
+**Maven Central coordinates:** `io.github.jdetmar.pulumi:pulumi-webflow` (Java package `io.github.jdetmar.pulumi.webflow`)
 
 ### Testing
 
@@ -101,12 +106,18 @@ make test_provider
 To test provider changes with a real Pulumi stack:
 
 ```bash
-# Build and install the provider locally
-make provider && install -m 755 bin/pulumi-resource-webflow ~/.pulumi/plugins/resource-webflow-v1.0.0-alpha.0/
+# Build and install the provider locally.
+# Use the plugin directory for the version your stack's SDK requests
+# (e.g. v0.10.1 for a stack using the published 0.10.1 SDK):
+make provider && install -m 755 bin/pulumi-resource-webflow ~/.pulumi/plugins/resource-webflow-v0.10.1/
 
 # Test with your stack
 cd /path/to/your/stack && pulumi preview --diff
 ```
+
+The dev build reports the Makefile's default `PROVIDER_VERSION` (`1.0.0-alpha.0+dev`), so a
+locally linked SDK (`yarn link` / `pip install -e sdk/python`) will look for
+`resource-webflow-v1.0.0-alpha.0/` instead.
 
 **IMPORTANT:** Use `install` instead of `cp` when copying the provider binary. On macOS, `cp` preserves certain extended attributes that cause the binary to be killed by the OS security system, resulting in "exit status -1" errors.
 
@@ -115,7 +126,7 @@ cd /path/to/your/stack && pulumi preview --diff
 ```
 provider/           # Go provider implementation
   ├── provider.go   # Main provider setup
-  ├── *_resource.go # Resource implementations (redirect, robotstxt, site)
+  ├── *_resource.go # Resource implementations (site, redirect, robotstxt, collection*, page*, webhook, asset*, *script*, *customcode, ecommerce)
   └── cmd/          # Provider binary entry point + schema.json
 
 sdk/                # Generated SDK code (DO NOT edit manually)
@@ -143,6 +154,6 @@ Tools are managed via [mise](https://mise.jdx.dev/). Key versions in `.config/mi
 - Go (latest)
 - Node.js 20.x
 - Python 3.11
-- .NET 6.0
+- .NET 10 SDK (the C# package is compiled for net8.0 and net10.0)
 - Java 11 (Corretto)
 - Gradle 7.6.6

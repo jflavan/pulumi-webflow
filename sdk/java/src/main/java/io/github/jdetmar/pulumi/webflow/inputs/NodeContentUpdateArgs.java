@@ -15,14 +15,14 @@ public final class NodeContentUpdateArgs extends com.pulumi.resources.ResourceAr
     public static final NodeContentUpdateArgs Empty = new NodeContentUpdateArgs();
 
     /**
-     * The unique identifier for the DOM node to update. This ID comes from the page&#39;s DOM structure and must exist on the page. Retrieve node IDs using GET /pages/{page_id}/dom endpoint.
+     * The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
      * 
      */
     @Import(name="nodeId", required=true)
     private Output<String> nodeId;
 
     /**
-     * @return The unique identifier for the DOM node to update. This ID comes from the page&#39;s DOM structure and must exist on the page. Retrieve node IDs using GET /pages/{page_id}/dom endpoint.
+     * @return The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
      * 
      */
     public Output<String> nodeId() {
@@ -30,14 +30,14 @@ public final class NodeContentUpdateArgs extends com.pulumi.resources.ResourceAr
     }
 
     /**
-     * The new text content for the node. This will replace the existing text content in the specified node. Only applicable to text nodes or elements containing text.
+     * The new HTML content for the node (required, non-empty). The HTML tags must match the node&#39;s current content as returned by GET /v2/pages/{page_id}/dom (e.g., &#39;&lt;h1&gt;Hello&lt;/h1&gt;&#39; for a heading). An empty string does not clear the node; Webflow rejects it.
      * 
      */
     @Import(name="text", required=true)
     private Output<String> text;
 
     /**
-     * @return The new text content for the node. This will replace the existing text content in the specified node. Only applicable to text nodes or elements containing text.
+     * @return The new HTML content for the node (required, non-empty). The HTML tags must match the node&#39;s current content as returned by GET /v2/pages/{page_id}/dom (e.g., &#39;&lt;h1&gt;Hello&lt;/h1&gt;&#39; for a heading). An empty string does not clear the node; Webflow rejects it.
      * 
      */
     public Output<String> text() {
@@ -70,7 +70,7 @@ public final class NodeContentUpdateArgs extends com.pulumi.resources.ResourceAr
         }
 
         /**
-         * @param nodeId The unique identifier for the DOM node to update. This ID comes from the page&#39;s DOM structure and must exist on the page. Retrieve node IDs using GET /pages/{page_id}/dom endpoint.
+         * @param nodeId The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
          * 
          * @return builder
          * 
@@ -81,7 +81,7 @@ public final class NodeContentUpdateArgs extends com.pulumi.resources.ResourceAr
         }
 
         /**
-         * @param nodeId The unique identifier for the DOM node to update. This ID comes from the page&#39;s DOM structure and must exist on the page. Retrieve node IDs using GET /pages/{page_id}/dom endpoint.
+         * @param nodeId The unique identifier for the DOM node to update. Retrieve node IDs using GET /v2/pages/{page_id}/dom.
          * 
          * @return builder
          * 
@@ -91,7 +91,7 @@ public final class NodeContentUpdateArgs extends com.pulumi.resources.ResourceAr
         }
 
         /**
-         * @param text The new text content for the node. This will replace the existing text content in the specified node. Only applicable to text nodes or elements containing text.
+         * @param text The new HTML content for the node (required, non-empty). The HTML tags must match the node&#39;s current content as returned by GET /v2/pages/{page_id}/dom (e.g., &#39;&lt;h1&gt;Hello&lt;/h1&gt;&#39; for a heading). An empty string does not clear the node; Webflow rejects it.
          * 
          * @return builder
          * 
@@ -102,7 +102,7 @@ public final class NodeContentUpdateArgs extends com.pulumi.resources.ResourceAr
         }
 
         /**
-         * @param text The new text content for the node. This will replace the existing text content in the specified node. Only applicable to text nodes or elements containing text.
+         * @param text The new HTML content for the node (required, non-empty). The HTML tags must match the node&#39;s current content as returned by GET /v2/pages/{page_id}/dom (e.g., &#39;&lt;h1&gt;Hello&lt;/h1&gt;&#39; for a heading). An empty string does not clear the node; Webflow rejects it.
          * 
          * @return builder
          * 

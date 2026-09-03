@@ -13,19 +13,19 @@ namespace Community.Pulumi.Webflow
     public static class GetTokenInfo
     {
         /// <summary>
-        /// Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+        /// Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings &gt; Apps &amp; integrations &gt; API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
         /// </summary>
         public static Task<GetTokenInfoResult> InvokeAsync(GetTokenInfoArgs? args = null, InvokeOptions? options = null)
             => global::Pulumi.Deployment.Instance.InvokeAsync<GetTokenInfoResult>("webflow:index:getTokenInfo", args ?? new GetTokenInfoArgs(), options.WithDefaults());
 
         /// <summary>
-        /// Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+        /// Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings &gt; Apps &amp; integrations &gt; API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
         /// </summary>
         public static Output<GetTokenInfoResult> Invoke(InvokeOptions? options = null)
             => global::Pulumi.Deployment.Instance.Invoke<GetTokenInfoResult>("webflow:index:getTokenInfo", InvokeArgs.Empty, options.WithDefaults());
 
         /// <summary>
-        /// Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access.
+        /// Retrieves information about the current Webflow API token, including authorization details, scopes, rate limits, and the authorized resources. This is useful for validating your API token configuration and understanding what resources it can access. IMPORTANT: the underlying GET /v2/token/introspect endpoint only accepts Data Client App (OAuth) access tokens. A site API token (Site settings &gt; Apps &amp; integrations &gt; API access) receives a 4xx error from it, so this function requires the provider to be configured with an OAuth access token issued to a Data Client App.
         /// </summary>
         public static Output<GetTokenInfoResult> Invoke(InvokeOutputOptions options)
             => global::Pulumi.Deployment.Instance.Invoke<GetTokenInfoResult>("webflow:index:getTokenInfo", InvokeArgs.Empty, options.WithDefaults());

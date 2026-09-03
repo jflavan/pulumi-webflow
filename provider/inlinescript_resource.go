@@ -10,8 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
-	"time"
 
 	p "github.com/pulumi/pulumi-go-provider"
 	"github.com/pulumi/pulumi-go-provider/infer"
@@ -31,8 +29,8 @@ type InlineScriptArgs struct {
 	// Version is the Semantic Version (SemVer) string for the script.
 	// Format: "major.minor.patch" (e.g., "1.0.0", "2.3.1")
 	Version string `pulumi:"scriptVersion"`
-	// DisplayName is the user-facing name for the script (1-50 alphanumeric characters).
-	// Example: "CmsSlider", "AnalyticsScript", "MyCustomScript123"
+	// DisplayName is the user-facing name for the script (1-50 letters, digits or spaces).
+	// Example: "CMS Slider", "AnalyticsScript", "MyCustomScript123"
 	DisplayName string `pulumi:"displayName"`
 	// CanCopy indicates whether the script can be copied on site duplication.
 	// Default: false
@@ -63,9 +61,18 @@ type InlineScriptState struct {
 // Annotate adds descriptions and constraints to the InlineScript resource.
 func (r *InlineScript) Annotate(a infer.Annotator) {
 	a.SetToken("index", "InlineScript")
-	a.Describe(r, "Manages inline custom code scripts in the Webflow script registry. "+
-		"This resource allows you to register and manage inline JavaScript code that can be "+
-		"deployed across your Webflow site with version control.")
+	a.Describe(r, "Registers inline JavaScript in a Webflow site's script registry "+
+		"(POST /v2/sites/{site_id}/registered_scripts/inline). Registered scripts are applied to a site "+
+		"or page with the SiteCustomCode and PageCustomCode resources.\n\n"+
+		customCodeScopesNote+"\n\n"+
+		"**IMPORTANT LIMITATION:** Webflow has no endpoint to update or unregister a registered script. "+
+		"Registrations are versioned and permanent (a site can hold up to 800). "+
+		"Changing sourceCode, displayName, scriptVersion, canCopy or integrityHash therefore registers "+
+		"a new script (a new version when only scriptVersion changes) and the previous registration "+
+		"remains in the registry. Destroying the resource is a logged no-op: the script stays registered "+
+		"and Pulumi simply stops managing it. Applied code is removed by SiteCustomCode and PageCustomCode. "+
+		"The list endpoint does not return sourceCode, so after an import the source is unknown until "+
+		"it is set in the program; Diff does not report a change for it in that case.")
 }
 
 // Annotate adds descriptions to the InlineScriptArgs fields.
@@ -80,19 +87,21 @@ func (args *InlineScriptArgs) Annotate(a infer.Annotator) {
 		"The inline JavaScript code to register, limited to 2000 characters. "+
 			"This code will be directly embedded in your Webflow site. "+
 			"If your script exceeds 2000 characters, consider hosting it externally "+
-			"and using the RegisteredScript resource with a hostedLocation instead.")
+			"and using the RegisteredScript resource with a hostedLocation instead. "+
+			"Webflow does not return the source code when listing scripts, so it cannot be read back after import.")
 
 	a.Describe(&args.Version,
 		"The Semantic Version (SemVer) string for the script "+
-			"(e.g., '1.0.0', '2.3.1'). "+
-			"This helps track different versions of your script. "+
+			"(e.g., '1.0.0', '2.3.1'). Required by the Webflow register endpoint. "+
+			"Registered scripts are versioned: changing this value registers a new version of the script "+
+			"and the previous version remains registered. "+
 			"See https://semver.org/ for more information on semantic versioning.")
 
 	a.Describe(&args.DisplayName,
-		"The user-facing name for the script (1-50 alphanumeric characters). "+
-			"This name is used to identify the script in the Webflow interface. "+
-			"Only letters (A-Z, a-z) and numbers (0-9) are allowed. "+
-			"Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'.")
+		"The user-facing name for the script (1-50 characters: letters, digits and spaces). "+
+			"This name is used to identify the script in the Webflow interface and derives the scriptId. "+
+			"Changing it registers a new script; the previous registration remains. "+
+			"Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'.")
 
 	a.Describe(&args.CanCopy,
 		"Indicates whether the script can be copied when the site is duplicated. "+
@@ -126,21 +135,38 @@ func (state *InlineScriptState) Annotate(a infer.Annotator) {
 			"This is automatically updated by Webflow when the script is modified and is read-only.")
 }
 
+// Check validates the known inputs at preview time. Values that are still unknown
+// (computed from other resources) are skipped and validated again in Create.
+func (r *InlineScript) Check(
+	ctx context.Context, req infer.CheckRequest,
+) (infer.CheckResponse[InlineScriptArgs], error) {
+	inputs, failures, err := checkStrings[InlineScriptArgs](ctx, req.NewInputs,
+		stringValidator{"siteId", ValidateSiteID},
+		stringValidator{"sourceCode", ValidateSourceCode},
+		stringValidator{"scriptVersion", ValidateVersion},
+		stringValidator{"displayName", ValidateScriptDisplayName},
+		stringValidator{"integrityHash", validateOptionalIntegrityHash},
+	)
+	return infer.CheckResponse[InlineScriptArgs]{Inputs: inputs, Failures: failures}, err
+}
+
 // Diff determines what changes need to be made to the inline script resource.
-// NOTE: Webflow API does not support updating inline scripts (no PATCH endpoint).
-// All changes require replacement (delete + recreate).
+// Webflow has neither an update nor a delete endpoint for registered scripts, so every
+// change is a replacement that registers a new script (or a new version of it); the
+// previous registration stays in the registry because Delete cannot remove it.
 func (r *InlineScript) Diff(
 	ctx context.Context, req infer.DiffRequest[InlineScriptArgs, InlineScriptState],
 ) (infer.DiffResponse, error) {
 	diff := infer.DiffResponse{}
 	detailedDiff := map[string]p.PropertyDiff{}
 
-	// All field changes trigger replacement since Webflow API doesn't support PATCH
 	if req.State.SiteID != req.Inputs.SiteID {
 		detailedDiff["siteId"] = p.PropertyDiff{Kind: p.UpdateReplace}
 	}
 
-	if req.State.SourceCode != req.Inputs.SourceCode {
+	// The list endpoint never returns sourceCode, so after an import the state value is
+	// empty: that means "unknown", not "different", and must not force a replacement.
+	if req.State.SourceCode != "" && req.State.SourceCode != req.Inputs.SourceCode {
 		detailedDiff["sourceCode"] = p.PropertyDiff{Kind: p.UpdateReplace}
 	}
 
@@ -148,95 +174,82 @@ func (r *InlineScript) Diff(
 		detailedDiff["displayName"] = p.PropertyDiff{Kind: p.UpdateReplace}
 	}
 
-	if req.State.IntegrityHash != req.Inputs.IntegrityHash {
+	// integrityHash is optional: an omitted input means "don't care", so only an
+	// explicitly configured hash that differs from the registered one forces a replace.
+	if req.Inputs.IntegrityHash != "" && req.State.IntegrityHash != req.Inputs.IntegrityHash {
 		detailedDiff["integrityHash"] = p.PropertyDiff{Kind: p.UpdateReplace}
 	}
 
-	// Compare version - only if state has a non-empty version.
-	// If state version is empty (from old state before field was required),
-	// check if the current state outputs have version set.
-	stateVersion := req.State.Version
-	inputVersion := req.Inputs.Version
-	if stateVersion != "" && inputVersion != "" && stateVersion != inputVersion {
+	// An empty state version means Read could not recover it (the list endpoint may omit
+	// version, e.g. right after import) or the state predates scriptVersion: unknown, not
+	// different.
+	if req.State.Version != "" && req.Inputs.Version != "" && req.State.Version != req.Inputs.Version {
 		detailedDiff["scriptVersion"] = p.PropertyDiff{Kind: p.UpdateReplace}
 	}
 
+	// canCopy defaults to false in Webflow, so an omitted input (false) matches a freshly
+	// registered script; a difference means it was configured explicitly or changed out of band.
 	if req.State.CanCopy != req.Inputs.CanCopy {
 		detailedDiff["canCopy"] = p.PropertyDiff{Kind: p.UpdateReplace}
 	}
 
-	// If any changes were detected, all require replacement
+	// The new registration is created before the old resource is dropped from state
+	// (Pulumi's default order): Delete is a no-op, so nothing is gained by deleting first.
 	if len(detailedDiff) > 0 {
 		diff.HasChanges = true
-		diff.DeleteBeforeReplace = true
 		diff.DetailedDiff = detailedDiff
 	}
 
 	return diff, nil
 }
 
-// Create creates a new inline script on the Webflow site.
+// validateInlineScriptArgs validates fully-resolved inputs at apply time.
+func validateInlineScriptArgs(args InlineScriptArgs) error {
+	checks := []error{
+		ValidateSiteID(args.SiteID),
+		ValidateSourceCode(args.SourceCode),
+		ValidateVersion(args.Version),
+		ValidateScriptDisplayName(args.DisplayName),
+		validateOptionalIntegrityHash(args.IntegrityHash),
+	}
+	for _, err := range checks {
+		if err != nil {
+			return fmt.Errorf("validation failed for InlineScript resource: %w", err)
+		}
+	}
+	return nil
+}
+
+// Create registers a new inline script on the Webflow site.
 func (r *InlineScript) Create(
 	ctx context.Context, req infer.CreateRequest[InlineScriptArgs],
 ) (infer.CreateResponse[InlineScriptState], error) {
-	// Validate inputs BEFORE generating resource ID
-	if err := ValidateSiteID(req.Inputs.SiteID); err != nil {
-		return infer.CreateResponse[InlineScriptState]{},
-			fmt.Errorf("validation failed for InlineScript resource: %w", err)
-	}
-	if err := ValidateSourceCode(req.Inputs.SourceCode); err != nil {
-		return infer.CreateResponse[InlineScriptState]{},
-			fmt.Errorf("validation failed for InlineScript resource: %w", err)
-	}
-	if err := ValidateVersion(req.Inputs.Version); err != nil {
-		return infer.CreateResponse[InlineScriptState]{},
-			fmt.Errorf("validation failed for InlineScript resource: %w", err)
-	}
-	if err := ValidateScriptDisplayName(req.Inputs.DisplayName); err != nil {
-		return infer.CreateResponse[InlineScriptState]{},
-			fmt.Errorf("validation failed for InlineScript resource: %w", err)
-	}
-	// IntegrityHash is optional for inline scripts, but validate if provided
-	if req.Inputs.IntegrityHash != "" {
-		if err := ValidateIntegrityHash(req.Inputs.IntegrityHash); err != nil {
-			return infer.CreateResponse[InlineScriptState]{},
-				fmt.Errorf("validation failed for InlineScript resource: %w", err)
-		}
-	}
+	state := InlineScriptState{InlineScriptArgs: req.Inputs}
 
-	state := InlineScriptState{
-		InlineScriptArgs: req.Inputs,
-		CreatedOn:        "", // Will be populated after creation
-		LastUpdated:      "", // Will be populated after creation
-	}
-
-	// During preview, return expected state without making API calls
+	// During preview, return the inputs without calling the API. The ID and the
+	// Webflow-assigned outputs (scriptId, hostedLocation, timestamps) are unknown until
+	// apply, so an empty ID is returned and dependents see unknown values. Inputs may be
+	// unknown, so full validation is deferred to apply time (Check validated known values).
 	if req.DryRun {
-		// Set a preview timestamp
-		now := time.Now().Format(time.RFC3339)
-		state.CreatedOn = now
-		state.LastUpdated = now
-		// Generate a predictable ID for dry-run
-		previewID := fmt.Sprintf("preview-%d", time.Now().Unix())
-		state.ScriptID = previewID
-		return infer.CreateResponse[InlineScriptState]{
-			ID:     GenerateInlineScriptResourceID(req.Inputs.SiteID, previewID),
-			Output: state,
-		}, nil
+		return infer.CreateResponse[InlineScriptState]{Output: state}, nil
 	}
 
-	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	if err := validateInlineScriptArgs(req.Inputs); err != nil {
+		return infer.CreateResponse[InlineScriptState]{}, err
+	}
+
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.CreateResponse[InlineScriptState]{}, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API
-	response, err := PostInlineScript(
-		ctx, client, req.Inputs.SiteID,
-		req.Inputs.SourceCode, req.Inputs.Version, req.Inputs.DisplayName,
-		req.Inputs.CanCopy, req.Inputs.IntegrityHash,
-	)
+	response, err := PostInlineScript(ctx, client, req.Inputs.SiteID, InlineScriptRequest{
+		SourceCode:    req.Inputs.SourceCode,
+		Version:       req.Inputs.Version,
+		DisplayName:   req.Inputs.DisplayName,
+		CanCopy:       req.Inputs.CanCopy,
+		IntegrityHash: req.Inputs.IntegrityHash,
+	})
 	if err != nil {
 		return infer.CreateResponse[InlineScriptState]{},
 			fmt.Errorf("failed to create inline script: %w", err)
@@ -249,95 +262,86 @@ func (r *InlineScript) Create(
 				"this is unexpected and may indicate an API issue")
 	}
 
-	// Update state with values from API response
+	// Outputs come from the API response only. The integrity hash Webflow reports is
+	// recorded in state (Diff ignores it unless the user configured one explicitly).
 	state.ScriptID = response.ID
 	state.HostedLocation = response.HostedLocation
+	if response.IntegrityHash != "" {
+		state.IntegrityHash = response.IntegrityHash
+	}
 	state.CreatedOn = response.CreatedOn
 	state.LastUpdated = response.LastUpdated
 
-	resourceID := GenerateInlineScriptResourceID(req.Inputs.SiteID, response.ID)
-
 	return infer.CreateResponse[InlineScriptState]{
-		ID:     resourceID,
+		ID:     GenerateInlineScriptResourceID(req.Inputs.SiteID, response.ID),
 		Output: state,
 	}, nil
 }
 
 // Read retrieves the current state of an inline script from Webflow.
-// Used for drift detection and import operations.
+// Used for drift detection and import operations (empty inputs and state).
 // Note: The list endpoint (GET /registered_scripts) is shared between hosted and inline scripts.
 func (r *InlineScript) Read(
 	ctx context.Context, req infer.ReadRequest[InlineScriptArgs, InlineScriptState],
 ) (infer.ReadResponse[InlineScriptArgs, InlineScriptState], error) {
-	// Extract siteID and scriptID from resource ID
 	siteID, scriptID, err := ExtractIDsFromInlineScriptResourceID(req.ID)
 	if err != nil {
 		return infer.ReadResponse[InlineScriptArgs, InlineScriptState]{},
 			fmt.Errorf("invalid resource ID: %w", err)
 	}
+	if err := validateScriptResourceIDs(siteID, scriptID); err != nil {
+		return infer.ReadResponse[InlineScriptArgs, InlineScriptState]{},
+			fmt.Errorf("invalid resource ID: %w", err)
+	}
 
-	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
+	client, err := GetHTTPClient(ctx, currentProviderVersion())
 	if err != nil {
 		return infer.ReadResponse[InlineScriptArgs, InlineScriptState]{},
 			fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	// Call Webflow API to get all scripts for this site
-	// The list endpoint is shared between hosted and inline scripts
-	response, err := GetRegisteredScripts(ctx, client, siteID)
+	// Locate the script in the site's registered scripts (the list endpoint is shared
+	// between hosted and inline scripts), following pagination.
+	foundScript, err := FindRegisteredScript(ctx, client, siteID, scriptID)
 	if err != nil {
-		// Resource not found - return empty ID to signal deletion
-		if strings.Contains(err.Error(), "not found") {
-			return infer.ReadResponse[InlineScriptArgs, InlineScriptState]{
-				ID: "",
-			}, nil
+		// Only "not found" (site or script gone) signals deletion; every other failure
+		// (network, auth, rate limiting, 5xx) is propagated.
+		if IsNotFound(err) {
+			return infer.ReadResponse[InlineScriptArgs, InlineScriptState]{ID: ""}, nil
 		}
 		return infer.ReadResponse[InlineScriptArgs, InlineScriptState]{},
-			fmt.Errorf("failed to read registered scripts: %w", err)
+			fmt.Errorf("failed to read inline script: %w", err)
 	}
 
-	// Find the specific script in the list
-	var foundScript *RegisteredScript
-	for i, script := range response.RegisteredScripts {
-		if script.ID == scriptID {
-			foundScript = &response.RegisteredScripts[i]
-			break
-		}
-	}
-
-	// If script not found, return empty ID to signal deletion
-	if foundScript == nil {
-		return infer.ReadResponse[InlineScriptArgs, InlineScriptState]{
-			ID: "",
-		}, nil
-	}
-
-	// Build current state from API response
-	// Note: Webflow's list scripts API may not return all fields,
-	// so we preserve values from the existing inputs/state when API returns empty.
+	// The list endpoint may omit version. Fall back to the configured or recorded value;
+	// when neither exists (import) it stays empty, which Diff treats as unknown rather
+	// than inventing a version that was never registered.
 	version := foundScript.Version
 	if version == "" {
-		switch {
-		case req.Inputs.Version != "":
-			version = req.Inputs.Version
-		case req.State.Version != "":
-			version = req.State.Version
-		default:
-			version = "0.0.0"
-			p.GetLogger(ctx).Warningf(
-				"InlineScript '%s': Webflow API did not return version and no previous state available. "+
-					"Using fallback version '0.0.0'. The actual registered script version may differ. "+
-					"To set the correct version, update your Pulumi configuration with the actual version.",
-				foundScript.DisplayName,
-			)
-		}
+		version = req.Inputs.Version
+	}
+	if version == "" {
+		version = req.State.Version
 	}
 
-	// Preserve sourceCode from inputs/state since the list endpoint may not return it
+	// The list endpoint never returns sourceCode: keep the configured or recorded value.
+	// After an import both are empty and Diff treats the empty state value as unknown.
 	sourceCode := req.Inputs.SourceCode
 	if sourceCode == "" {
 		sourceCode = req.State.SourceCode
+	}
+
+	// The registered hash goes into state so drift is visible; the list endpoint may omit
+	// it, in which case the previously recorded value is kept. Inputs only carry the hash
+	// when the user configured one — an omitted integrityHash stays omitted so that Read
+	// never turns a "don't care" input into a managed value.
+	stateHash := foundScript.IntegrityHash
+	if stateHash == "" {
+		stateHash = req.State.IntegrityHash
+	}
+	inputHash := req.Inputs.IntegrityHash
+	if inputHash != "" {
+		inputHash = stateHash
 	}
 
 	currentInputs := InlineScriptArgs{
@@ -346,7 +350,7 @@ func (r *InlineScript) Read(
 		Version:       version,
 		DisplayName:   foundScript.DisplayName,
 		CanCopy:       foundScript.CanCopy,
-		IntegrityHash: foundScript.IntegrityHash,
+		IntegrityHash: inputHash,
 	}
 	currentState := InlineScriptState{
 		InlineScriptArgs: currentInputs,
@@ -355,6 +359,7 @@ func (r *InlineScript) Read(
 		CreatedOn:        foundScript.CreatedOn,
 		LastUpdated:      foundScript.LastUpdated,
 	}
+	currentState.IntegrityHash = stateHash
 
 	return infer.ReadResponse[InlineScriptArgs, InlineScriptState]{
 		ID:     req.ID,
@@ -372,32 +377,20 @@ func (r *InlineScript) Update(
 	return infer.UpdateResponse[InlineScriptState]{},
 		errors.New("inline scripts cannot be updated in-place: " +
 			"Webflow API does not support PATCH for inline scripts. " +
-			"All changes require replacement (delete + recreate). " +
+			"All changes require replacement (a new registration). " +
 			"If you see this error, please report it as a provider bug")
 }
 
-// Delete removes an inline script from the Webflow site.
-// Uses the same DELETE endpoint as hosted scripts: DELETE /v2/sites/{site_id}/registered_scripts/{script_id}
+// Delete is a logged no-op: the Webflow API has no endpoint to unregister a script, so the
+// registration stays in the site's registry and Pulumi simply stops managing it. No HTTP
+// request is made.
 func (r *InlineScript) Delete(
 	ctx context.Context, req infer.DeleteRequest[InlineScriptState],
 ) (infer.DeleteResponse, error) {
-	// Extract siteID and scriptID from resource ID
 	siteID, scriptID, err := ExtractIDsFromInlineScriptResourceID(req.ID)
 	if err != nil {
 		return infer.DeleteResponse{}, fmt.Errorf("invalid resource ID: %w", err)
 	}
-
-	// Get HTTP client
-	client, err := GetHTTPClient(ctx, providerVersion)
-	if err != nil {
-		return infer.DeleteResponse{}, fmt.Errorf("failed to create HTTP client: %w", err)
-	}
-
-	// Call Webflow API (handles 404 gracefully for idempotency)
-	// Uses the same delete endpoint as hosted scripts
-	if err := DeleteRegisteredScript(ctx, client, siteID, scriptID); err != nil {
-		return infer.DeleteResponse{}, fmt.Errorf("failed to delete inline script: %w", err)
-	}
-
+	scriptDeleteNoOpWarning(ctx, "InlineScript", siteID, scriptID)
 	return infer.DeleteResponse{}, nil
 }

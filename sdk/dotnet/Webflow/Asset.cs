@@ -11,91 +11,97 @@ using Pulumi;
 namespace Community.Pulumi.Webflow
 {
     /// <summary>
-    /// Manages assets (images, files, documents) for a Webflow site. This resource allows you to upload and manage files that can be used in your Webflow site. Note: Assets are immutable - changing any property will delete and recreate the asset.
+    /// Uploads and manages an asset (image, file, document) in a Webflow site. Create registers the asset metadata with Webflow and then uploads the file bytes from fileSource to Webflow's storage. Assets are immutable: changing any input, or changing the content of a local fileSource, replaces the asset. After 'pulumi import' the fileSource and fileHash are unknown; set them in your program and the first refresh adopts them without replacing the asset.
     /// </summary>
     [WebflowResourceType("webflow:index:Asset")]
     public partial class Asset : global::Pulumi.CustomResource
     {
         /// <summary>
-        /// The Webflow-assigned asset ID (read-only). This unique identifier can be used to reference the asset in API calls.
+        /// The Webflow-assigned asset ID (read-only).
         /// </summary>
         [Output("assetId")]
         public Output<string?> AssetId { get; private set; } = null!;
 
         /// <summary>
-        /// The direct S3 URL for the asset (read-only). This is the raw S3 location where the file is stored.
+        /// The direct S3 URL for the asset (read-only).
         /// </summary>
         [Output("assetUrl")]
         public Output<string?> AssetUrl { get; private set; } = null!;
 
         /// <summary>
-        /// The MIME type of the asset (read-only). Examples: 'image/png', 'image/jpeg', 'application/pdf'. Determined by the fileName extension.
+        /// The MIME type of the asset (read-only), e.g., 'image/png', 'application/pdf'.
         /// </summary>
         [Output("contentType")]
         public Output<string?> ContentType { get; private set; } = null!;
 
         /// <summary>
-        /// The timestamp when the asset metadata was created (RFC3339 format, read-only). This is set when the asset is registered with Webflow.
+        /// The timestamp when the asset metadata was created (RFC3339 format, read-only).
         /// </summary>
         [Output("createdOn")]
         public Output<string?> CreatedOn { get; private set; } = null!;
 
         /// <summary>
-        /// MD5 hash of the file content (required). Webflow uses this hash to identify and deduplicate assets. Generate using: md5sum &lt;filename&gt; (Linux) or md5 &lt;filename&gt; (macOS). Example: 'd41d8cd98f00b204e9800998ecf8427e'.
+        /// MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
         /// </summary>
         [Output("fileHash")]
-        public Output<string> FileHash { get; private set; } = null!;
+        public Output<string?> FileHash { get; private set; } = null!;
 
         /// <summary>
-        /// The name of the file to upload, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. The file name must not exceed 255 characters and should not contain invalid characters (&lt;, &gt;, :, ", |, ?, *).
+        /// The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain &lt;, &gt;, :, ", |, ?, *.
         /// </summary>
         [Output("fileName")]
         public Output<string> FileName { get; private set; } = null!;
 
         /// <summary>
-        /// The source of the file to upload. For the current implementation, this is a reference field. In future versions, this may support URLs or local file paths for automatic upload. Examples: 'https://example.com/logo.png', '/path/to/local/file.png'.
+        /// Where the file bytes come from: a local file path (resolved relative to the Pulumi program's working directory, e.g., './assets/logo.png') or an http(s) URL (e.g., 'https://example.com/logo.png'). The content is read at apply time, MD5-hashed and uploaded to Webflow.
         /// </summary>
         [Output("fileSource")]
-        public Output<string?> FileSource { get; private set; } = null!;
+        public Output<string> FileSource { get; private set; } = null!;
 
         /// <summary>
-        /// The Webflow CDN URL where the asset will be hosted (read-only). This URL becomes accessible after completing the S3 upload. Example: 'https://assets.website-files.com/.../logo.png'.
+        /// The ID of the asset folder the asset belongs to, or empty when it is at the site root (read-only).
+        /// </summary>
+        [Output("folderId")]
+        public Output<string?> FolderId { get; private set; } = null!;
+
+        /// <summary>
+        /// The Webflow CDN URL where the asset is hosted (read-only). Example: 'https://cdn.prod.website-files.com/.../logo.png'.
         /// </summary>
         [Output("hostedUrl")]
         public Output<string?> HostedUrl { get; private set; } = null!;
 
         /// <summary>
-        /// The timestamp when the asset was last modified (RFC3339 format, read-only). For most assets, this will be the same as createdOn since assets are immutable.
+        /// The timestamp when the asset was last modified (RFC3339 format, read-only).
         /// </summary>
         [Output("lastUpdated")]
         public Output<string?> LastUpdated { get; private set; } = null!;
 
         /// <summary>
-        /// Optional folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset will be placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
+        /// Optional asset folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset is placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
         /// </summary>
         [Output("parentFolder")]
         public Output<string?> ParentFolder { get; private set; } = null!;
 
         /// <summary>
-        /// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
+        /// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings.
         /// </summary>
         [Output("siteId")]
         public Output<string> SiteId { get; private set; } = null!;
 
         /// <summary>
-        /// The size of the asset in bytes (read-only). This is the actual size of the uploaded file.
+        /// The size of the uploaded file in bytes (read-only).
         /// </summary>
         [Output("size")]
         public Output<int?> Size { get; private set; } = null!;
 
         /// <summary>
-        /// AWS S3 POST form fields required to complete the upload (read-only). Include these as form fields when POSTing the file to uploadUrl. Keys: acl, bucket, key, Content-Type, X-Amz-Algorithm, X-Amz-Credential, X-Amz-Date, Policy, X-Amz-Signature, success_action_status, Cache-Control.
+        /// The signed AWS S3 POST form fields used for the upload (read-only, secret).
         /// </summary>
         [Output("uploadDetails")]
         public Output<ImmutableDictionary<string, string>?> UploadDetails { get; private set; } = null!;
 
         /// <summary>
-        /// The presigned S3 URL for uploading the file content (read-only). Use this URL along with uploadDetails to complete the asset upload. See AWS S3 POST documentation: https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPOST.html
+        /// The presigned S3 URL the file was uploaded to (read-only, secret). The provider performs the upload; this is recorded for reference only.
         /// </summary>
         [Output("uploadUrl")]
         public Output<string?> UploadUrl { get; private set; } = null!;
@@ -124,6 +130,11 @@ namespace Community.Pulumi.Webflow
             {
                 Version = Utilities.Version,
                 PluginDownloadURL = "github://api.github.com/JDetmar/pulumi-webflow",
+                AdditionalSecretOutputs =
+                {
+                    "uploadDetails",
+                    "uploadUrl",
+                },
             };
             var merged = CustomResourceOptions.Merge(defaultOptions, options);
             // Override the ID if one was specified for consistency with other language SDKs.
@@ -147,31 +158,31 @@ namespace Community.Pulumi.Webflow
     public sealed class AssetArgs : global::Pulumi.ResourceArgs
     {
         /// <summary>
-        /// MD5 hash of the file content (required). Webflow uses this hash to identify and deduplicate assets. Generate using: md5sum &lt;filename&gt; (Linux) or md5 &lt;filename&gt; (macOS). Example: 'd41d8cd98f00b204e9800998ecf8427e'.
+        /// MD5 hash of the file content. Computed automatically from fileSource; if you set it explicitly it must match the actual content. For local files, a content change (different hash) replaces the asset.
         /// </summary>
-        [Input("fileHash", required: true)]
-        public Input<string> FileHash { get; set; } = null!;
+        [Input("fileHash")]
+        public Input<string>? FileHash { get; set; }
 
         /// <summary>
-        /// The name of the file to upload, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. The file name must not exceed 255 characters and should not contain invalid characters (&lt;, &gt;, :, ", |, ?, *).
+        /// The name of the file as it will appear in Webflow, including the extension. Examples: 'logo.png', 'hero-image.jpg', 'document.pdf'. Webflow requires file names to be less than 100 characters; the name must not contain &lt;, &gt;, :, ", |, ?, *.
         /// </summary>
         [Input("fileName", required: true)]
         public Input<string> FileName { get; set; } = null!;
 
         /// <summary>
-        /// The source of the file to upload. For the current implementation, this is a reference field. In future versions, this may support URLs or local file paths for automatic upload. Examples: 'https://example.com/logo.png', '/path/to/local/file.png'.
+        /// Where the file bytes come from: a local file path (resolved relative to the Pulumi program's working directory, e.g., './assets/logo.png') or an http(s) URL (e.g., 'https://example.com/logo.png'). The content is read at apply time, MD5-hashed and uploaded to Webflow.
         /// </summary>
-        [Input("fileSource")]
-        public Input<string>? FileSource { get; set; }
+        [Input("fileSource", required: true)]
+        public Input<string> FileSource { get; set; } = null!;
 
         /// <summary>
-        /// Optional folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset will be placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
+        /// Optional asset folder ID where the asset will be organized in the Webflow Assets panel. If not specified, the asset is placed at the root level. Example: '5f0c8c9e1c9d440000e8d8c4'.
         /// </summary>
         [Input("parentFolder")]
         public Input<string>? ParentFolder { get; set; }
 
         /// <summary>
-        /// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings. This field will be validated before making any API calls.
+        /// The Webflow site ID (24-character lowercase hexadecimal string, e.g., '5f0c8c9e1c9d440000e8d8c3'). You can find your site ID in the Webflow dashboard under Site Settings.
         /// </summary>
         [Input("siteId", required: true)]
         public Input<string> SiteId { get; set; } = null!;

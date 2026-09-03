@@ -7,32 +7,32 @@
 package provider
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"strings"
-	"time"
+	"unicode/utf8"
+
+	p "github.com/pulumi/pulumi-go-provider"
 )
 
 // RegisteredScript represents a registered custom code script in Webflow.
 // This struct matches the Webflow API v2 response format for registered scripts.
+// The list endpoint returns both hosted and inline scripts in this shape.
 type RegisteredScript struct {
-	ID             string `json:"id,omitempty"`          // Human-readable ID derived from display name (read-only)
-	DisplayName    string `json:"displayName"`           // User-facing name for the script (1-50 alphanumeric chars)
-	HostedLocation string `json:"hostedLocation"`        // URI for externally hosted script
-	IntegrityHash  string `json:"integrityHash"`         // Sub-Resource Integrity Hash (SRI)
-	CanCopy        bool   `json:"canCopy"`               // Whether script can be copied on site duplication
-	Version        string `json:"version"`               // Semantic Version (SemVer) string
-	CreatedOn      string `json:"createdOn,omitempty"`   // Timestamp when created (read-only)
-	LastUpdated    string `json:"lastUpdated,omitempty"` // Timestamp when last updated (read-only)
+	ID             string `json:"id,omitempty"`             // Human-readable ID derived from display name (read-only)
+	DisplayName    string `json:"displayName"`              // User-facing name for the script (1-50 alphanumeric chars)
+	HostedLocation string `json:"hostedLocation,omitempty"` // URI for the hosted script (Webflow-set for inline)
+	IntegrityHash  string `json:"integrityHash,omitempty"`  // Sub-Resource Integrity Hash (SRI)
+	CanCopy        bool   `json:"canCopy"`                  // Whether script can be copied on site duplication
+	Version        string `json:"version"`                  // Semantic Version (SemVer) string
+	CreatedOn      string `json:"createdOn,omitempty"`      // Timestamp when created (read-only)
+	LastUpdated    string `json:"lastUpdated,omitempty"`    // Timestamp when last updated (read-only)
 }
 
-// RegisteredScriptsResponse represents the Webflow API response for listing registered scripts.
+// RegisteredScriptsResponse represents one page of the Webflow list registered scripts response.
 type RegisteredScriptsResponse struct {
 	RegisteredScripts []RegisteredScript `json:"registeredScripts"`
 	Pagination        PaginationInfo     `json:"pagination,omitempty"`
@@ -45,7 +45,7 @@ type PaginationInfo struct {
 	Total  int `json:"total"`
 }
 
-// RegisteredScriptRequest represents the request body for POST/PATCH registered scripts.
+// RegisteredScriptRequest represents the request body for POST /registered_scripts/hosted.
 type RegisteredScriptRequest struct {
 	DisplayName    string `json:"displayName"`
 	HostedLocation string `json:"hostedLocation"`
@@ -54,28 +54,33 @@ type RegisteredScriptRequest struct {
 	Version        string `json:"version"`
 }
 
-// displayNamePattern validates that display names are between 1-50 alphanumeric characters.
-var displayNamePattern = regexp.MustCompile(`^[a-zA-Z0-9]{1,50}$`)
+// maxDisplayNameLength is the maximum number of characters in a script display name.
+const maxDisplayNameLength = 50
 
-// ValidateScriptDisplayName validates that a displayName is a valid Webflow script name.
-// Must be 1-50 alphanumeric characters.
+// displayNamePattern validates that display names are 1-50 letters, digits or spaces.
+// Webflow's own request example is "CMS Slider", so spaces must be accepted; anything
+// stricter is left to the API.
+var displayNamePattern = regexp.MustCompile(`^[a-zA-Z0-9 ]{1,50}$`)
+
+// ValidateScriptDisplayName validates that a displayName is a valid Webflow script name:
+// 1-50 characters made of letters, digits and spaces.
 // Returns actionable error messages that explain what's wrong and how to fix it.
 func ValidateScriptDisplayName(name string) error {
 	if name == "" {
 		return errors.New("displayName is required but was not provided. " +
-			"Please provide a user-facing name for the script between 1 and 50 alphanumeric characters. " +
-			"Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'")
+			"Please provide a user-facing name for the script between 1 and 50 characters " +
+			"(letters, digits and spaces). " +
+			"Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'")
 	}
-	if len(name) > 50 {
-		return fmt.Errorf("displayName is too long: got %d characters, maximum is 50. "+
+	if n := utf8.RuneCountInString(name); n > maxDisplayNameLength {
+		return fmt.Errorf("displayName is too long: got %d characters, maximum is %d. "+
 			"Please shorten the name. "+
-			"Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'", len(name))
+			"Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'", n, maxDisplayNameLength)
 	}
 	if !displayNamePattern.MatchString(name) {
 		return fmt.Errorf("displayName contains invalid characters: got '%s'. "+
-			"Allowed characters: A-Z, a-z, 0-9. Spaces and special characters are not allowed. "+
-			"Example valid names: 'CmsSlider', 'AnalyticsScript', 'MyCustomScript123'. "+
-			"Please use only alphanumeric characters", name)
+			"Allowed characters: A-Z, a-z, 0-9 and spaces. "+
+			"Example valid names: 'CMS Slider', 'AnalyticsScript', 'MyCustomScript123'", name)
 	}
 	return nil
 }
@@ -132,6 +137,18 @@ func ValidateVersion(version string) error {
 	return nil
 }
 
+// validateScriptResourceIDs validates the IDs parsed from a RegisteredScript or InlineScript
+// resource ID before they are used to build API URLs.
+func validateScriptResourceIDs(siteID, scriptID string) error {
+	if err := ValidateSiteID(siteID); err != nil {
+		return err
+	}
+	if scriptID == "" {
+		return errors.New("script ID in resource ID cannot be empty")
+	}
+	return nil
+}
+
 // GenerateRegisteredScriptResourceID generates a Pulumi resource ID for a RegisteredScript resource.
 // Format: {siteID}/registered_scripts/{scriptID}
 func GenerateRegisteredScriptResourceID(siteID, scriptID string) string {
@@ -139,424 +156,103 @@ func GenerateRegisteredScriptResourceID(siteID, scriptID string) string {
 }
 
 // ExtractIDsFromRegisteredScriptResourceID extracts the siteID and scriptID from a RegisteredScript resource ID.
-// Expected format: {siteID}/registered_scripts/{scriptID}
+// Expected format: {siteID}/registered_scripts/{scriptID}. Both IDs must be non-empty.
 func ExtractIDsFromRegisteredScriptResourceID(resourceID string) (siteID, scriptID string, err error) {
+	return splitScriptResourceID(resourceID, "registered_scripts")
+}
+
+// splitScriptResourceID parses "{siteID}/{segment}/{scriptID}" resource IDs.
+func splitScriptResourceID(resourceID, segment string) (siteID, scriptID string, err error) {
 	if resourceID == "" {
 		return "", "", errors.New("resourceId cannot be empty")
 	}
 
-	parts := strings.Split(resourceID, "/")
-	if len(parts) < 3 || parts[1] != "registered_scripts" {
+	parts := strings.SplitN(resourceID, "/", 3)
+	if len(parts) != 3 || parts[1] != segment || parts[0] == "" || parts[2] == "" {
 		return "", "",
-			fmt.Errorf("invalid resource ID format: expected {siteId}/registered_scripts/{scriptId}, got: %s", resourceID)
+			fmt.Errorf("invalid resource ID format: expected {siteId}/%s/{scriptId}, got: %s", segment, resourceID)
 	}
 
-	siteID = parts[0]
-	scriptID = strings.Join(parts[2:], "/") // Handle scriptID that might contain slashes
-
-	return siteID, scriptID, nil
+	return parts[0], parts[2], nil
 }
 
-// getRegisteredScriptsBaseURL is used internally for testing to override the API base URL.
-var getRegisteredScriptsBaseURL = ""
-
-// GetRegisteredScripts retrieves all registered scripts for a Webflow site.
-// It calls GET /v2/sites/{site_id}/registered_scripts endpoint.
-// Returns the parsed response or an error if the request fails.
-func GetRegisteredScripts(ctx context.Context, client *http.Client, siteID string) (*RegisteredScriptsResponse, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
+// GetRegisteredScripts retrieves one page of the scripts registered to a Webflow site.
+// It calls GET /v2/sites/{site_id}/registered_scripts, adding ?offset=N when offset > 0.
+// The response's pagination block says how many scripts exist in total.
+// Use FindRegisteredScript to locate a specific script across pages.
+func GetRegisteredScripts(
+	ctx context.Context, client *http.Client, siteID string, offset int,
+) (*RegisteredScriptsResponse, error) {
+	url := apiURL("/v2/sites/%s/registered_scripts", siteID)
+	if offset > 0 {
+		url = apiURL("/v2/sites/%s/registered_scripts?offset=%d", siteID, offset)
 	}
-
-	baseURL := webflowAPIBaseURL
-	if getRegisteredScriptsBaseURL != "" {
-		baseURL = getRegisteredScriptsBaseURL
+	var out RegisteredScriptsResponse
+	if _, err := doRequest(ctx, client, http.MethodGet, url, nil, &out); err != nil {
+		return nil, err
 	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s/registered_scripts", baseURL, siteID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			// Check for Retry-After header from previous response, or use exponential backoff
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "GET", url, http.NoBody)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			// Enhanced rate limiting error message with clear delay information
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			// Check for Retry-After header for the next retry
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var response RegisteredScriptsResponse
-		if err := json.Unmarshal(body, &response); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &response, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &out, nil
 }
 
-// postRegisteredScriptBaseURL is used internally for testing to override the API base URL.
-var postRegisteredScriptBaseURL = ""
+// FindRegisteredScript looks up a registered (hosted or inline) script by ID, following the
+// list endpoint's pagination (total/limit/offset) until the script is found or the list is
+// exhausted. When the script does not exist the returned error satisfies IsNotFound.
+func FindRegisteredScript(
+	ctx context.Context, client *http.Client, siteID, scriptID string,
+) (*RegisteredScript, error) {
+	offset := 0
+	for {
+		page, err := GetRegisteredScripts(ctx, client, siteID, offset)
+		if err != nil {
+			return nil, err
+		}
+		for i := range page.RegisteredScripts {
+			if page.RegisteredScripts[i].ID == scriptID {
+				script := page.RegisteredScripts[i]
+				return &script, nil
+			}
+		}
+		// Advance by the number of items actually returned so a server that ignores
+		// or clamps offset cannot make this loop forever.
+		n := len(page.RegisteredScripts)
+		offset += n
+		if n == 0 || offset >= page.Pagination.Total {
+			return nil, fmt.Errorf("registered script '%s' on site '%s': %w", scriptID, siteID, ErrNotFound)
+		}
+	}
+}
 
-// PostRegisteredScript creates a new registered script for a Webflow site.
-// It calls POST /v2/sites/{site_id}/registered_scripts/hosted endpoint.
-// Returns the created script or an error if the request fails.
+// PostRegisteredScript registers an externally hosted script on a Webflow site.
+// It calls POST /v2/sites/{site_id}/registered_scripts/hosted.
 func PostRegisteredScript(
-	ctx context.Context, client *http.Client,
-	siteID, displayName, hostedLocation, integrityHash, version string, canCopy bool,
+	ctx context.Context, client *http.Client, siteID string, request RegisteredScriptRequest,
 ) (*RegisteredScript, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
+	var out RegisteredScript
+	if _, err := doRequest(ctx, client, http.MethodPost,
+		apiURL("/v2/sites/%s/registered_scripts/hosted", siteID), request, &out); err != nil {
+		return nil, err
 	}
-
-	baseURL := webflowAPIBaseURL
-	if postRegisteredScriptBaseURL != "" {
-		baseURL = postRegisteredScriptBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s/registered_scripts/hosted", baseURL, siteID)
-
-	requestBody := RegisteredScriptRequest{
-		DisplayName:    displayName,
-		HostedLocation: hostedLocation,
-		IntegrityHash:  integrityHash,
-		CanCopy:        canCopy,
-		Version:        version,
-	}
-
-	bodyBytes, err := json.Marshal(requestBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request body: %w", err)
-	}
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			// Check for Retry-After header from previous response, or use exponential backoff
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(bodyBytes))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			// Enhanced rate limiting error message with clear delay information
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			// Check for Retry-After header for the next retry
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses (accept both 200 and 201 as success)
-		if resp.StatusCode != 200 && resp.StatusCode != 201 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var script RegisteredScript
-		if err := json.Unmarshal(body, &script); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &script, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+	return &out, nil
 }
 
-// patchRegisteredScriptBaseURL is used internally for testing to override the API base URL.
-var patchRegisteredScriptBaseURL = ""
+// Note: the Webflow Data API has no endpoint to delete or unregister a registered script.
+// The custom code reference lists only List Registered Scripts, Register Hosted Script,
+// Register Inline Script and List Custom Code Blocks, so registrations are permanent (a
+// site can hold up to 800). RegisteredScript.Delete and InlineScript.Delete are therefore
+// no-ops; applied code is removed through SiteCustomCode and PageCustomCode instead.
 
-// PatchRegisteredScript updates an existing registered script for a Webflow site.
-// It calls PATCH /v2/sites/{site_id}/registered_scripts/{script_id} endpoint.
-// Returns the updated script or an error if the request fails.
-//
-// Deprecated: Webflow API does not actually support PATCH for registered scripts.
-// This endpoint returns 404 Not Found. All RegisteredScript changes now trigger
-// replacement (delete + recreate) via the Diff method. This function is kept for
-// backwards compatibility but should not be used.
-func PatchRegisteredScript(
-	ctx context.Context, client *http.Client,
-	siteID, scriptID, displayName, hostedLocation, integrityHash, version string, canCopy bool,
-) (*RegisteredScript, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("context cancelled: %w", err)
-	}
-
-	baseURL := webflowAPIBaseURL
-	if patchRegisteredScriptBaseURL != "" {
-		baseURL = patchRegisteredScriptBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s/registered_scripts/%s", baseURL, siteID, scriptID)
-
-	requestBody := RegisteredScriptRequest{
-		DisplayName:    displayName,
-		HostedLocation: hostedLocation,
-		IntegrityHash:  integrityHash,
-		CanCopy:        canCopy,
-		Version:        version,
-	}
-
-	bodyBytes, err := json.Marshal(requestBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request body: %w", err)
-	}
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			// Check for Retry-After header from previous response, or use exponential backoff
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "PATCH", url, bytes.NewReader(bodyBytes))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			// Enhanced rate limiting error message with clear delay information
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			// Check for Retry-After header for the next retry
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return nil, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// Handle error responses
-		if resp.StatusCode != 200 {
-			return nil, handleWebflowError(resp.StatusCode, body)
-		}
-
-		var script RegisteredScript
-		if err := json.Unmarshal(body, &script); err != nil {
-			return nil, fmt.Errorf("failed to parse response: %w", err)
-		}
-
-		return &script, nil
-	}
-
-	return nil, fmt.Errorf("max retries exceeded: %w", lastErr)
+// scriptDeleteNoOpWarning logs that a registered script stays registered after Delete.
+func scriptDeleteNoOpWarning(ctx context.Context, resource, siteID, scriptID string) {
+	p.GetLogger(ctx).Warningf(
+		"%s '%s' on site '%s': the Webflow API has no endpoint to unregister a script, so the "+
+			"registration stays in the site's script registry (Pulumi simply stops managing it). "+
+			"Scripts applied via SiteCustomCode or PageCustomCode are removed by those resources.",
+		resource, scriptID, siteID)
 }
 
-// deleteRegisteredScriptBaseURL is used internally for testing to override the API base URL.
-var deleteRegisteredScriptBaseURL = ""
-
-// DeleteRegisteredScript removes a registered script from a Webflow site.
-// It calls DELETE /v2/sites/{site_id}/registered_scripts/{script_id} endpoint.
-// Returns nil on success (including 404 for idempotency) or an error if the request fails.
-func DeleteRegisteredScript(ctx context.Context, client *http.Client, siteID, scriptID string) error {
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("context cancelled: %w", err)
-	}
-
-	baseURL := webflowAPIBaseURL
-	if deleteRegisteredScriptBaseURL != "" {
-		baseURL = deleteRegisteredScriptBaseURL
-	}
-
-	url := fmt.Sprintf("%s/v2/sites/%s/registered_scripts/%s", baseURL, siteID, scriptID)
-
-	var lastErr error
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if attempt > 0 {
-			// Check for Retry-After header from previous response, or use exponential backoff
-			backoff := time.Duration(1<<(attempt-1)) * time.Second
-			select {
-			case <-ctx.Done():
-				return fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-			case <-time.After(backoff):
-			}
-		}
-
-		req, err := http.NewRequestWithContext(ctx, "DELETE", url, http.NoBody)
-		if err != nil {
-			return fmt.Errorf("failed to create request: %w", err)
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = handleNetworkError(err)
-			continue
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		_ = resp.Body.Close() // Close immediately after reading
-		if err != nil {
-			lastErr = fmt.Errorf("failed to read response body: %w", err)
-			continue
-		}
-
-		// Handle rate limiting with retry
-		if resp.StatusCode == 429 {
-			retryAfter := resp.Header.Get("Retry-After")
-			var waitTime time.Duration
-			if retryAfter != "" {
-				waitTime = getRetryAfterDuration(retryAfter, time.Duration(1<<uint(attempt))*time.Second)
-			} else {
-				waitTime = time.Duration(1<<uint(attempt)) * time.Second
-			}
-
-			// Enhanced rate limiting error message with clear delay information
-			lastErr = fmt.Errorf("rate limited: Webflow API rate limit exceeded (HTTP 429). "+
-				"The provider will automatically retry with exponential backoff. "+
-				"Retry attempt %d of %d, waiting %v before next attempt. "+
-				"If this error persists, please wait a few minutes before trying again or contact Webflow support",
-				attempt+1, maxRetries+1, waitTime)
-
-			// Check for Retry-After header for the next retry
-			if attempt < maxRetries {
-				select {
-				case <-ctx.Done():
-					return fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-				case <-time.After(waitTime):
-				}
-			}
-			continue
-		}
-
-		// 204 No Content is success
-		// 404 Not Found is also success (idempotent delete)
-		if resp.StatusCode == 204 || resp.StatusCode == 404 {
-			return nil
-		}
-
-		// Handle other error responses
-		return handleWebflowError(resp.StatusCode, body)
-	}
-
-	return fmt.Errorf("max retries exceeded: %w", lastErr)
-}
+// customCodeScopesNote is the shared documentation on token requirements for the custom
+// code endpoints.
+const customCodeScopesNote = "**Authentication:** this resource calls Webflow custom code endpoints, which " +
+	"require an OAuth Data Client app token with the `custom_code:read` and `custom_code:write` scopes. " +
+	"Webflow documents that these scopes are available only to Data Client apps: site API tokens " +
+	"cannot access custom code endpoints. "
