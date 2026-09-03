@@ -94,6 +94,8 @@ sdk/dotnet: $(SCHEMA_FILE)
 	$(require_version)
 	rm -rf $@
 	$(PULUMI) package gen-sdk --language dotnet $(SCHEMA_FILE) --version "${VERSION_GENERIC}"
+	# The generator hardcodes net6.0; compile the package for net8.0 and net10.0 instead.
+	python3 scripts/patch-dotnet-csproj.py $@/$(NUGET_PKG_NAME).csproj
 
 sdk/go: ${SCHEMA_FILE}
 	$(require_version)
@@ -197,6 +199,11 @@ lint:
 .PHONY: check_examples
 check_examples:
 	./scripts/check-examples.sh
+
+# Build every C# example against the local .NET SDK sources (compiles the SDK for net8.0 and net10.0).
+.PHONY: check_dotnet_examples
+check_dotnet_examples:
+	./scripts/check-dotnet-examples.sh
 
 .PHONY: install
 install:: install_nodejs_sdk install_dotnet_sdk

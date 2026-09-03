@@ -4,6 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Pulumi;
 using Community.Pulumi.Webflow;
+// Pulumi also defines an Asset type; alias the Webflow resource to avoid the ambiguity.
+using WebflowAsset = Community.Pulumi.Webflow.Asset;
 
 // Asset Example - Uploading Files to Webflow
 //
@@ -20,7 +22,7 @@ class Program
     static Task<int> Main() => Deployment.RunAsync(() =>
     {
         // Create a Pulumi config object
-        var config = new Config();
+        var config = new Pulumi.Config();
 
         // Get configuration values
         var siteId = config.RequireSecret("siteId");
@@ -28,7 +30,7 @@ class Program
         var heroImageUrl = config.Get("heroImageUrl");
 
         // Example 1: Upload a local file shipped with this example
-        var logoAsset = new Asset("company-logo", new AssetArgs
+        var logoAsset = new WebflowAsset("company-logo", new AssetArgs
         {
             SiteId = siteId,
             FileName = "logo.svg",
@@ -37,10 +39,10 @@ class Program
 
         // Example 2: Upload from a URL, optionally into a folder
         // Set `pulumi config set heroImageUrl https://.../hero.jpg` to enable it.
-        Asset? heroAsset = null;
+        WebflowAsset? heroAsset = null;
         if (!string.IsNullOrEmpty(heroImageUrl))
         {
-            heroAsset = new Asset("hero-image", new AssetArgs
+            heroAsset = new WebflowAsset("hero-image", new AssetArgs
             {
                 SiteId = siteId,
                 FileName = "hero-banner.jpg",
@@ -50,7 +52,7 @@ class Program
         }
 
         // Example 3: Bulk upload of local files
-        var iconAssets = new List<Asset>();
+        var iconAssets = new List<WebflowAsset>();
         var icons = new[]
         {
             new { Name = "icon-home", FileName = "icon-home.svg", FileSource = "./assets/icons/home.svg" },
@@ -59,7 +61,7 @@ class Program
 
         foreach (var icon in icons)
         {
-            var asset = new Asset(icon.Name, new AssetArgs
+            var asset = new WebflowAsset(icon.Name, new AssetArgs
             {
                 SiteId = siteId,
                 FileName = icon.FileName,

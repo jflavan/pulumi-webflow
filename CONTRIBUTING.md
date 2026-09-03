@@ -27,7 +27,7 @@ Thank you for your interest in contributing to the Pulumi Webflow provider!
 - Go 1.24.7+
 - Node.js 20.x
 - Python 3.11
-- .NET 8.0 (for C# examples)
+- .NET 10 SDK (builds the C# SDK for net8.0 and net10.0, and the C# examples)
 - Java 11 (for Java examples)
 
 **Recommended:** Use [mise](https://mise.jdx.dev/) - it will install all required versions automatically.

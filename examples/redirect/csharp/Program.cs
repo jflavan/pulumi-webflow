@@ -10,7 +10,7 @@ class Program
     static Task<int> Main() => Deployment.RunAsync(() =>
     {
         // Create a Pulumi config object
-        var config = new Config();
+        var config = new Pulumi.Config();
 
         // Get configuration values
         var siteId = config.RequireSecret("siteId");

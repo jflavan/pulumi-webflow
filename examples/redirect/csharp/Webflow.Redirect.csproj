@@ -8,6 +8,14 @@
 
   <ItemGroup>
     <PackageReference Include="Pulumi" Version="3.76.1" />
+  </ItemGroup>
+  <!-- Inside this repository the example builds against the local SDK (like the Go examples'
+       replace directive); elsewhere it uses the published package. -->
+  <ItemGroup Condition="Exists('$(MSBuildThisFileDirectory)../../../sdk/dotnet/Community.Pulumi.Webflow.csproj')">
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../../../sdk/dotnet/Community.Pulumi.Webflow.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="!Exists('$(MSBuildThisFileDirectory)../../../sdk/dotnet/Community.Pulumi.Webflow.csproj')">
     <PackageReference Include="Community.Pulumi.Webflow" Version="0.10.1" />
   </ItemGroup>
+
 </Project>

@@ -56,7 +56,7 @@ Before you begin, make sure you have:
 - **TypeScript**: [Node.js](https://nodejs.org/) 18.x or later
 - **Python**: [Python](https://www.python.org/downloads/) 3.9 or later
 - **Go**: [Go](https://golang.org/dl/) 1.24.7 or later
-- **C#**: [.NET](https://dotnet.microsoft.com/download) 6.0 or later
+- **C#**: [.NET](https://dotnet.microsoft.com/download) 8.0 or later (the package is compiled for .NET 8 and .NET 10)
 - **Java**: [Java](https://adoptopenjdk.net/) 11 or later
 
 ### 3. **Webflow Account**

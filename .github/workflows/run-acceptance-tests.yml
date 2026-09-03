@@ -225,6 +225,9 @@ jobs:
       - name: Type-check TypeScript examples against the built SDK
         run: make check_examples
 
+      - name: Build C# examples against the .NET SDK sources (net8.0 and net10.0)
+        run: make check_dotnet_examples
+
   lint:
     runs-on: ubuntu-latest
     name: lint

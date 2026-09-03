@@ -24,6 +24,7 @@ All notable changes to the Pulumi Webflow provider will be documented in this fi
 - fix!(asset): `Asset` resources created by an earlier release without `fileSource` never uploaded a file; they are re-created on the first `pulumi up`. Run `pulumi import` for assets whose IDs must be kept.
 - fix!(config): explicit `webflow:apiToken` now takes precedence over `WEBFLOW_API_TOKEN`; the environment variable is only a fallback.
 - The Go module now requires Go 1.26 (dependency upgrade to pulumi-go-provider v1.6 and pulumi/sdk v3.260).
+- feat!(dotnet): the `Community.Pulumi.Webflow` NuGet package is now compiled for `net8.0` and `net10.0` (previously `net6.0` only). Projects on .NET 6 or 7, which are out of support, must move to .NET 8 or later. Building the SDK requires the .NET 10 SDK.
 
 ### Features
 
