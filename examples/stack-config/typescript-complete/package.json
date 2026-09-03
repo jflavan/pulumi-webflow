@@ -2,6 +2,7 @@
   "name": "webflow-multi-environment",
   "version": "1.0.0",
   "description": "Multi-environment Webflow site deployment with stack-specific configuration",
+  "license": "MIT",
   "main": "bin/index.js",
   "typings": "bin/index.d.ts",
   "scripts": {

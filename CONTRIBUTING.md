@@ -225,7 +225,14 @@ This project follows our [Code of Conduct](CODE-OF-CONDUCT.md). Please be respec
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the same license as the project (see [LICENSE](LICENSE)).
+This project is licensed under the [MIT License](LICENSE). By contributing, you agree that your contributions will be licensed under the MIT License as well. New source files should carry the same header as the existing ones:
+
+```
+// Copyright 2025, Justin Detmar.
+// SPDX-License-Identifier: MIT
+```
+
+(`golangci-lint` enforces this header on Go files under `provider/`.)
 
 ---
 

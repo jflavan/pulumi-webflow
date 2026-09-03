@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2025, Justin Detmar.
+# SPDX-License-Identifier: MIT
+
 set -euo pipefail
 
 # This script can be simplified to use go when https://github.com/jdx/mise/discussions/6374 is fixed

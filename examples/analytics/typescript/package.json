@@ -2,6 +2,7 @@
   "name": "webflow-analytics-example",
   "version": "0.0.1",
   "description": "Webflow Analyze API (getAnalytics*) functions example in TypeScript",
+  "license": "MIT",
   "main": "index.ts",
   "scripts": {
     "build": "tsc",

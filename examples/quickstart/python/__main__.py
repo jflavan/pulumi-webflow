@@ -1,3 +1,6 @@
+# Copyright 2025, Justin Detmar.
+# SPDX-License-Identifier: MIT
+
 """
 Webflow Pulumi Provider Quickstart - Python
 

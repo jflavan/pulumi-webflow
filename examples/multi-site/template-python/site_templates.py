@@ -1,3 +1,6 @@
+# Copyright 2025, Justin Detmar.
+# SPDX-License-Identifier: MIT
+
 """Reusable site templates for Webflow multi-site management.
 
 This module provides factory functions for creating standardized site

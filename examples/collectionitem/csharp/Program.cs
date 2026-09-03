@@ -1,3 +1,6 @@
+// Copyright 2025, Justin Detmar.
+// SPDX-License-Identifier: MIT
+
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;

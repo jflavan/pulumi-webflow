@@ -2,6 +2,7 @@
   "name": "webflow-robotstxt-example",
   "version": "0.0.1",
   "description": "Webflow RobotsTxt resource example in TypeScript",
+  "license": "MIT",
   "main": "index.ts",
   "scripts": {
     "build": "tsc",

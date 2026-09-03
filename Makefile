@@ -88,7 +88,8 @@ sdk/python: $(SCHEMA_FILE)
 	$(PULUMI) package gen-sdk --language python $(SCHEMA_FILE) --version "${VERSION_GENERIC}"
 	# Pulumi SDK generator doesn't set version in setup.py, so we patch it manually
 	sed -i.bak 's/VERSION = "0.0.0"/VERSION = "${VERSION_GENERIC}"/' ${PACKDIR}/python/setup.py && rm ${PACKDIR}/python/setup.py.bak
-	cp README.md ${PACKDIR}/python/
+	# setuptools picks up LICENSE automatically, so the wheel and sdist carry the MIT text.
+	cp README.md LICENSE ${PACKDIR}/python/
 
 sdk/dotnet: $(SCHEMA_FILE)
 	$(require_version)
@@ -166,7 +167,7 @@ nodejs_sdk: sdk/nodejs
 
 .PHONY: python_sdk
 python_sdk: sdk/python
-	cp README.md ${PACKDIR}/python/
+	cp README.md LICENSE ${PACKDIR}/python/
 	cd ${PACKDIR}/python/ && \
 		rm -rf ./bin/ ../python.bin/ && cp -R . ../python.bin && mv ../python.bin ./bin && \
 		python3 -m venv venv && \

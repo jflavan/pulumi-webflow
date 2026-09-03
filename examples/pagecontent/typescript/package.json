@@ -2,6 +2,7 @@
   "name": "webflow-pagecontent-example",
   "version": "0.0.1",
   "description": "Webflow PageContent resource example in TypeScript",
+  "license": "MIT",
   "main": "index.ts",
   "scripts": {
     "build": "tsc",

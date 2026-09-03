@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright 2025, Justin Detmar.
+# SPDX-License-Identifier: MIT
+
 """
 Post-process the generated Java SDK build.gradle for Maven Central publishing.
 

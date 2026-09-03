@@ -2,6 +2,7 @@
   "name": "webflow-assetfolder-example",
   "version": "0.0.1",
   "description": "Webflow AssetFolder resource example in TypeScript",
+  "license": "MIT",
   "main": "index.ts",
   "scripts": {
     "build": "tsc",

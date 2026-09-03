@@ -1,3 +1,6 @@
+// Copyright 2025, Justin Detmar.
+// SPDX-License-Identifier: MIT
+
 import * as pulumi from "@pulumi/pulumi";
 import * as webflow from "@jdetmar/pulumi-webflow";
 import * as fs from "fs";

@@ -59,7 +59,7 @@ All notable changes to the Pulumi Webflow provider will be documented in this fi
 - fix: "not found" is detected from the HTTP status, never from error text; validation runs after the dry-run branch so previews with unknown inputs work; `pulumi preview` no longer shows fabricated IDs, timestamps or currencies for any resource - values Webflow assigns on create are shown as unknown outputs.
 - fix(release): publish the Node SDK from `sdk/nodejs/bin` (previous releases shipped no JavaScript); publish steps can fail the workflow; SLSA attestation covers the archives; actions pinned to SHAs.
 - fix(build): correct the `-X` version symbol, so Makefile builds report their version; `make test_all` runs the integration harness.
-- fix(docs): examples compile again in all five languages (removed `shortName` input, `scriptVersion`, correct Go/C#/Java package paths, real version pins); install commands include `--server`; NuGet package name corrected; license aligned to MIT everywhere.
+- fix(docs): examples compile again in all five languages (removed `shortName` input, `scriptVersion`, correct Go/C#/Java package paths, real version pins); install commands include `--server`; NuGet package name corrected; license aligned to MIT everywhere (LICENSE file, package metadata for every SDK, the Python package now ships the LICENSE text, and every example, script and tool source file carries the MIT SPDX header).
 
 ## [v0.10.1] - 2026-03-19
 

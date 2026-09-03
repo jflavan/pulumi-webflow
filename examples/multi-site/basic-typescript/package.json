@@ -2,6 +2,7 @@
   "name": "webflow-multi-site-basic-typescript",
   "version": "0.0.1",
   "description": "Multi-Site Management Example - TypeScript (Basic)",
+  "license": "MIT",
   "main": "bin/index.js",
   "typings": "bin/index.d.ts",
   "scripts": {

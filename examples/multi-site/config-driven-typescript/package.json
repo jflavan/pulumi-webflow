@@ -2,6 +2,7 @@
   "name": "webflow-multi-site-config-driven",
   "version": "0.0.1",
   "description": "Multi-Site Management Example - TypeScript (Configuration-Driven)",
+  "license": "MIT",
   "main": "bin/index.js",
   "typings": "bin/index.d.ts",
   "scripts": {

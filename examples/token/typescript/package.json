@@ -2,6 +2,7 @@
   "name": "webflow-token-example",
   "version": "0.0.1",
   "description": "Webflow Token data sources example in TypeScript",
+  "license": "MIT",
   "main": "index.ts",
   "scripts": {
     "build": "tsc",

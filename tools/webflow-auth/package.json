@@ -2,6 +2,7 @@
   "name": "webflow-auth",
   "version": "1.0.0",
   "description": "One-time OAuth token generator for Webflow Pulumi Provider",
+  "license": "MIT",
   "main": "dist/index.js",
   "scripts": {
     "start": "ts-node src/index.ts",

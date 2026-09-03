@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2025, Justin Detmar.
+# SPDX-License-Identifier: MIT
+
 # Type-check every TypeScript example against the locally built Node.js SDK.
 #
 # For each examples/*/typescript* directory that has a package.json this script:

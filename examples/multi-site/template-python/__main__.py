@@ -1,3 +1,6 @@
+# Copyright 2025, Justin Detmar.
+# SPDX-License-Identifier: MIT
+
 import pulumi
 import pulumi_webflow as webflow
 from site_templates import (

@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright 2025, Justin Detmar.
+# SPDX-License-Identifier: MIT
+
 # Build every C# example against the local .NET SDK sources.
 #
 # Each examples/*/csharp project references ../../../sdk/dotnet/Community.Pulumi.Webflow.csproj

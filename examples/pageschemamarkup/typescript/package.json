@@ -2,6 +2,7 @@
   "name": "webflow-pageschemamarkup-example",
   "version": "0.0.1",
   "description": "Webflow PageSchemaMarkup resource and getPageSchemaMarkup function example in TypeScript",
+  "license": "MIT",
   "main": "index.ts",
   "scripts": {
     "build": "tsc",

@@ -1,3 +1,6 @@
+// Copyright 2025, Justin Detmar.
+// SPDX-License-Identifier: MIT
+
 import express from "express";
 import open from "open";
 import * as dotenv from "dotenv";
